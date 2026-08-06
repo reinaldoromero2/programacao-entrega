@@ -27,9 +27,19 @@ This script: (1) builds API dist via esbuild, (2) commits all changes locally wi
   - Start: `node --enable-source-maps artifacts/api-server/dist/index.mjs`
   - Auto-deploy: yes (triggers on mirror push)
   - Manual trigger: `curl -X POST -H "Authorization: Bearer $RENDER_API_KEY" https://api.render.com/v1/services/srv-d9n4levlk1mc73dns1n0/deploys -d '{"clearCache":"do_not_clear"}'`
+  - Render API key: stored in `RENDER_API_KEY` env var (shared)
 
 ## DB
-- **Render Postgres**: `entrega-db` (free tier, **expires Aug 31 2026** — migrate to Neon before then)
+- **Neon**: `neondb` — free tier permanente (migrado do Render Postgres em ago/2026)
+  - Host: `ep-polished-pine-acx4sj76-pooler.sa-east-1.aws.neon.tech`
+  - DATABASE_URL set in Render env vars via API
+  - ⚠️ Render Postgres `entrega-db` expires 31/ago/2026 — ALREADY MIGRATED, do not use
+
+## DB Migration tooling
+- `scripts/migrate-node.mjs` — migração cross-version via Node.js pg (bypasses pg_dump version mismatch)
+  - Use when `pg_dump` fails with "server version mismatch" (Render runs PG 18, Replit has pg_dump 16)
+  - Requires: schema created via `drizzle push` first, then run script to copy data
+- `RENDER_API_KEY` env var available for Render API calls (update env vars, trigger deploys, check status)
 
 ## Why mirror uses pre-built dist
 Render's TypeScript build was using a cached/old compiled output. Pre-committing `artifacts/api-server/dist/index.mjs` and using `pnpm install` (no compile) as build command ensures Render always runs the exact binary we tested.
