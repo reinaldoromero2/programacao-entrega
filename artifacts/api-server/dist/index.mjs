@@ -56385,11 +56385,12 @@ router2.get("/entregas/resumo-mensal", async (req, res) => {
   const canceladasTotal = cancelRows.length;
   const canceladasRipack = cancelRows.filter((r) => r.frete === "RIPACK").length;
   const canceladasTerceiros = cancelRows.filter((r) => r.frete === "TRANSPORTADORA" || r.frete === "3\xBA").length;
+  const canceladasComFrete = cancelRows.filter((r) => r.frete !== null).length;
   const total = freteRows.length;
-  const ripackAtivas = freteRows.filter((r) => r.frete === "RIPACK").length;
-  const terceirosAtivas = freteRows.filter((r) => r.frete === "TRANSPORTADORA" || r.frete === "3\xBA").length;
+  const ripackAtivas = freteRows.filter((r) => r.frete === "RIPACK").length - canceladasRipack;
+  const terceirosAtivas = freteRows.filter((r) => r.frete === "TRANSPORTADORA" || r.frete === "3\xBA").length - canceladasTerceiros;
   const coletaAtivas = freteRows.filter((r) => r.frete === "COLETA").length;
-  const ativasTotal = total;
+  const ativasTotal = total - canceladasComFrete;
   const diasUteis = diasUteisNoMes(ano, mesNum);
   const mediaPorDia = diasUteis > 0 ? Math.round(ativasTotal / diasUteis * 10) / 10 : 0;
   const pct = (n, d) => d > 0 ? Math.round(n / d * 1e3) / 10 : 0;

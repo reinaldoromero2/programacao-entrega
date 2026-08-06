@@ -254,13 +254,14 @@ router.get("/entregas/resumo-mensal", async (req, res): Promise<void> => {
   const canceladasTotal = cancelRows.length;
   const canceladasRipack = cancelRows.filter((r) => r.frete === "RIPACK").length;
   const canceladasTerceiros = cancelRows.filter((r) => r.frete === "TRANSPORTADORA" || r.frete === "3º").length;
+  // cancelled entries that have a frete value (to subtract from totals)
+  const canceladasComFrete = cancelRows.filter((r) => r.frete !== null).length;
 
-  // Active = has frete AND not cancelled (frete-mensal counts them independently, so we mirror that)
-  const total = freteRows.length;
-  const ripackAtivas = freteRows.filter((r) => r.frete === "RIPACK").length;
-  const terceirosAtivas = freteRows.filter((r) => r.frete === "TRANSPORTADORA" || r.frete === "3º").length;
+  const total = freteRows.length; // all entries with frete (including cancelled)
+  const ripackAtivas = freteRows.filter((r) => r.frete === "RIPACK").length - canceladasRipack;
+  const terceirosAtivas = freteRows.filter((r) => r.frete === "TRANSPORTADORA" || r.frete === "3º").length - canceladasTerceiros;
   const coletaAtivas = freteRows.filter((r) => r.frete === "COLETA").length;
-  const ativasTotal = total;
+  const ativasTotal = total - canceladasComFrete;
 
   const diasUteis = diasUteisNoMes(ano, mesNum);
   const mediaPorDia = diasUteis > 0 ? Math.round((ativasTotal / diasUteis) * 10) / 10 : 0;
