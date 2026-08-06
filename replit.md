@@ -38,6 +38,19 @@ Requer `GITHUB_PERSONAL_ACCESS_TOKEN` no Replit Secrets (conta `reinaldoromero2`
 
 **Nota:** `gitPush` do Replit **não funciona** para o repo fonte (`reinaldoromero02/Data-Fill-Tool`) por incompatibilidade de credencial. Sempre use `scripts/deploy.sh`.
 
+### Verificar o deploy
+
+`deploy.sh` executa o smoke test automaticamente ao final. Para rodar manualmente:
+
+```bash
+bash scripts/check-deploy.sh <release-id>
+```
+
+O smoke test verifica:
+1. **Build output** — `artifacts/api-server/dist/index.mjs` existe e não está vazio
+2. **Mirror sincronizado** — SHA do GitHub mirror bate com o HEAD local
+3. **Revisão correta em produção** — `/api/healthz` reporta o `release` exato desta build (polling por até 6 min)
+
 ### Serviços em produção
 - **Render** (API + frontend): https://data-fill-tool.onrender.com
 - **Vercel** (frontend): https://programacao-entrega.vercel.app

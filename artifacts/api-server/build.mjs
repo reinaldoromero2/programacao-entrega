@@ -4,11 +4,22 @@ import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
 import { rm } from "node:fs/promises";
+import { execSync } from "node:child_process";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
+
+// Embed the release ID set by deploy.sh so the running instance can report it.
+// Falls back to a git-SHA-based value for local dev builds.
+const BUILD_RELEASE = process.env.DEPLOY_RELEASE_ID || (() => {
+  try {
+    return `dev-${execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim()}`;
+  } catch {
+    return "dev";
+  }
+})();
 
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
@@ -102,6 +113,10 @@ async function buildAll() {
       "electron",
     ],
     sourcemap: "linked",
+    define: {
+      // Replaced at bundle time with the release ID from deploy.sh (or a dev fallback)
+      __BUILD_RELEASE__: JSON.stringify(BUILD_RELEASE),
+    },
     plugins: [
       // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
       esbuildPluginPino({ transports: ["pino-pretty"] })

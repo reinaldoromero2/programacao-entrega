@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # deploy.sh — Fluxo completo de deploy:
-#   1. Build do dist da API
+#   1. Build do dist da API (com RELEASE_ID embutido)
 #   2. Commit local (source + dist)
-#   3. Force-push para o mirror → Render faz auto-deploy
+#   3. Force-push para o mirror → Render roda o dist pré-compilado
+#   4. Smoke test: aguarda produção reportar o RELEASE_ID esperado
 #
 # Uso: bash scripts/deploy.sh
 # Requer: GITHUB_PERSONAL_ACCESS_TOKEN (conta reinaldoromero2)
@@ -11,6 +12,7 @@ set -euo pipefail
 
 TOKEN="${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
 MIRROR_REPO="reinaldoromero2/programacao-entrega"
+DIST_FILE="artifacts/api-server/dist/index.mjs"
 
 if [ -z "$TOKEN" ]; then
   echo "❌ GITHUB_PERSONAL_ACCESS_TOKEN não está definido"
@@ -18,15 +20,27 @@ if [ -z "$TOKEN" ]; then
   exit 1
 fi
 
+# Generate a stable release ID at deploy start — used throughout the workflow
+# so the build, the commit, and the production check all reference the same value.
+RELEASE_ID=$(date -u '+%Y%m%d%H%M%S')
+
 echo "========================================="
 echo " Deploy — $(date -u '+%Y-%m-%d %H:%M UTC')"
+echo " Release: ${RELEASE_ID}"
 echo "========================================="
 
 # ── 1. Build ──────────────────────────────────
 echo ""
 echo "🔨 [1/3] Buildando API (esbuild)..."
-pnpm --filter @workspace/api-server run build
-echo "   ✓ artifacts/api-server/dist/index.mjs atualizado"
+# Pass the release ID so esbuild can embed it in the bundle
+DEPLOY_RELEASE_ID="${RELEASE_ID}" pnpm --filter @workspace/api-server run build
+
+# Verify build output exists and is non-empty
+if [ ! -s "${DIST_FILE}" ]; then
+  echo "❌ Build falhou: ${DIST_FILE} não encontrado ou vazio"
+  exit 1
+fi
+echo "   ✓ ${DIST_FILE} atualizado ($(wc -c < "${DIST_FILE}") bytes)"
 
 # ── 2. Commit local ───────────────────────────
 echo ""
@@ -40,10 +54,12 @@ git add -A
 if git diff --cached --quiet; then
   echo "   (nada novo — working tree limpa)"
 else
-  TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
-  git commit -m "deploy: ${TIMESTAMP}"
+  git commit -m "deploy: ${RELEASE_ID}"
   echo "   ✓ Commit criado"
 fi
+
+LOCAL_SHA=$(git rev-parse HEAD)
+echo "   ✓ HEAD local: ${LOCAL_SHA}"
 
 # ── 3. Push para o mirror ─────────────────────
 # O mirror (reinaldoromero2/programacao-entrega) é exclusivamente um alvo de deploy;
@@ -51,9 +67,20 @@ fi
 echo ""
 echo "🚀 [3/3] Enviando para mirror ${MIRROR_REPO}..."
 git push "https://${TOKEN}@github.com/${MIRROR_REPO}.git" main --force
-echo "   ✓ Mirror atualizado"
+
+# Verify the mirror received our commit
+MIRROR_SHA=$(git ls-remote "https://${TOKEN}@github.com/${MIRROR_REPO}.git" refs/heads/main | awk '{print $1}')
+if [ "${MIRROR_SHA}" != "${LOCAL_SHA}" ]; then
+  echo "❌ Push concluído mas SHA do mirror (${MIRROR_SHA}) difere do local (${LOCAL_SHA})"
+  exit 1
+fi
+echo "   ✓ Mirror atualizado — SHA confirmado: ${MIRROR_SHA}"
 
 echo ""
-echo "✅ Deploy enviado!"
-echo "   Render auto-deploys: https://dashboard.render.com"
-echo "   App em produção:     https://data-fill-tool.onrender.com"
+echo "✅ Push concluído! Aguardando Render iniciar e verificando produção..."
+echo "   (Ctrl+C para pular a verificação e monitorar manualmente em https://dashboard.render.com)"
+echo ""
+
+# Run the smoke test with the release ID so it can confirm production is
+# running exactly this build, not a stale previous release.
+bash "$(dirname "$0")/check-deploy.sh" "${RELEASE_ID}"
