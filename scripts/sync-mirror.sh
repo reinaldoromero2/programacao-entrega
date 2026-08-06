@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# ⚠️  DEPRECADO — Use `bash scripts/deploy.sh` no lugar deste script.
+#    deploy.sh faz build + commit + push completo para o mirror num único passo.
+#
+# Este script mantido apenas como fallback para sincronizar arquivos específicos
+# via GitHub API (útil se o git push direto não funcionar por alguma razão).
+#
 # Syncs changed files from source repo to the Vercel mirror repo via GitHub API.
 # Run after local changes + gitPush. Requires GITHUB_PERSONAL_ACCESS_TOKEN env var.
 

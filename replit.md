@@ -26,11 +26,29 @@ Uses Replit's built-in PostgreSQL. Schema is managed with Drizzle Kit.
 - Push schema changes: `cd lib/db && pnpm run push`
 - Tables: `entregas` (deliveries), `motoristas` (drivers)
 
+## Deploy para produção
+
+Um único comando faz tudo: build → commit → push para mirror → Render auto-deploya.
+
+```bash
+bash scripts/deploy.sh
+```
+
+Requer `GITHUB_PERSONAL_ACCESS_TOKEN` no Replit Secrets (conta `reinaldoromero2`).
+
+**Nota:** `gitPush` do Replit **não funciona** para o repo fonte (`reinaldoromero02/Data-Fill-Tool`) por incompatibilidade de credencial. Sempre use `scripts/deploy.sh`.
+
+### Serviços em produção
+- **Render** (API + frontend): https://data-fill-tool.onrender.com
+- **Vercel** (frontend): https://programacao-entrega.vercel.app
+- **Mirror repo**: `reinaldoromero2/programacao-entrega` (alvo do deploy)
+
 ## Key environment variables
 
 - `DATABASE_URL` — provided automatically by Replit
 - `SESSION_SECRET` — set in Replit Secrets
 - `PORT` — set per-artifact by Replit
+- `GITHUB_PERSONAL_ACCESS_TOKEN` — PAT da conta `reinaldoromero2`, usado por `deploy.sh`
 
 ## User preferences
 
