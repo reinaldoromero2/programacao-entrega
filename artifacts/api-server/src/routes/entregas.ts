@@ -90,20 +90,16 @@ router.post("/entregas/reorder", async (req, res): Promise<void> => {
     return;
   }
 
-  // Apply reorder in a transaction to keep sort_order consistent
+  // Single bulk UPDATE using UNNEST — avoids N round-trips to the DB
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    for (let index = 0; index < ids.length; index++) {
-      await client.query(
-        "UPDATE entregas SET sort_order = $1 WHERE id = $2",
-        [index, ids[index]]
-      );
-    }
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
+    await client.query(
+      `UPDATE entregas
+         SET sort_order = c.new_order
+         FROM (SELECT UNNEST($1::int[]) AS id, UNNEST($2::int[]) AS new_order) AS c
+        WHERE entregas.id = c.id`,
+      [ids, ids.map((_, i) => i)]
+    );
   } finally {
     client.release();
   }

@@ -47,8 +47,8 @@ echo ""
 echo "📦 [2/3] Verificando mudanças para commitar..."
 
 # Garante identidade git (necessário no ambiente Replit)
-git config user.email "deploy@replit.local" 2>/dev/null || true
-git config user.name  "Replit Deploy"       2>/dev/null || true
+git config user.email "300593588+reinaldoromero2@users.noreply.github.com" 2>/dev/null || true
+git config user.name  "Reinaldo Romero" 2>/dev/null || true
 
 git add -A
 if git diff --cached --quiet; then

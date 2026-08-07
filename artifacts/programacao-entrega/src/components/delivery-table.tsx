@@ -119,12 +119,28 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
     if (direction === "down" && index === sortedEntregas.length - 1) return;
     const newIndex = direction === "up" ? index - 1 : index + 1;
     const newOrder = [...sortedEntregas];
-    const temp = newOrder[index];
-    newOrder[index] = newOrder[newIndex];
-    newOrder[newIndex] = temp;
-    reorderEntregas.mutate({ data: { ids: newOrder.map(e => e.id) } }, {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListEntregasQueryKey({ date }) })
-    });
+    [newOrder[index], newOrder[newIndex]] = [newOrder[newIndex], newOrder[index]];
+
+    // Optimistic update: swap sortOrders in cache immediately so UI moves instantly
+    const queryKey = getListEntregasQueryKey({ date });
+    const previous = queryClient.getQueryData(queryKey);
+    const itemA = sortedEntregas[index];
+    const itemB = sortedEntregas[newIndex];
+    queryClient.setQueryData(queryKey, (old: Entrega[] | undefined) =>
+      old?.map(e => {
+        if (e.id === itemA.id) return { ...e, sortOrder: itemB.sortOrder };
+        if (e.id === itemB.id) return { ...e, sortOrder: itemA.sortOrder };
+        return e;
+      })
+    );
+
+    reorderEntregas.mutate(
+      { data: { ids: newOrder.map(e => e.id) } },
+      {
+        onError: () => queryClient.setQueryData(queryKey, previous),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+      }
+    );
   };
 
   const template = gridTemplate(colWidths);
