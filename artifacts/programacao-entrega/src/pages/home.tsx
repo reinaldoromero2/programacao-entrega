@@ -13,6 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MotoristasModal } from "@/components/motoristas-modal";
 import { RelatorioModal } from "@/components/relatorio-modal";
+import { BackupButtons } from "@/components/backup-buttons";
 import { useSavePdf } from "@/hooks/use-save-pdf";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 
@@ -134,6 +135,9 @@ export default function Home() {
               Instalar
             </Button>
           )}
+
+          {/* Backup — export / import Excel */}
+          <BackupButtons />
 
           {/* Motoristas button */}
           <MotoristasModal />
