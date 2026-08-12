@@ -327,6 +327,118 @@ router.get("/entregas/motorista-relatorio", async (req, res): Promise<void> => {
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
 });
 
+// ─── Export — full DB dump as Excel ──────────────────────────────────────────
+router.get("/entregas/export", async (_req, res, next): Promise<void> => {
+  try {
+    const rows = await db
+      .select()
+      .from(entregasTable)
+      .orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
+
+    const header = ["DATA","CLIENTE","HORÁRIO","OBS","MOTORISTA","PLACA","UNIDADE","NF","CG","V","DIVERGÊNCIAS","FRETE","CONFIRMADO","ORDEM"];
+    const data = [
+      header,
+      ...rows.map(r => [
+        r.date, r.cliente, r.hrs ?? "", r.obs ?? "",
+        r.motorista ?? "", r.placa ?? "", r.unidade,
+        r.nf, r.cg, r.v ?? "", r.divergencias ?? "",
+        r.frete ?? "", r.checked, r.sortOrder,
+      ]),
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "Entregas");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+    const today = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="backup-entregas-${today}.xlsx"`);
+    res.send(buf);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Import — full DB restore from Excel ─────────────────────────────────────
+router.post("/entregas/import", upload.single("file"), async (req, res, next): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: "Nenhum arquivo enviado" });
+      return;
+    }
+
+    const wb = XLSX.read(req.file.buffer, { type: "buffer" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+    const toInsert = jsonRows
+      .map((row, i) => ({
+        date:         String(row["DATA"]         ?? "").trim(),
+        cliente:      String(row["CLIENTE"]      ?? "").trim(),
+        hrs:          row["HORÁRIO"]     ? String(row["HORÁRIO"]).trim()     : null,
+        obs:          row["OBS"]         ? String(row["OBS"]).trim()         : null,
+        motorista:    row["MOTORISTA"]   ? String(row["MOTORISTA"]).trim()   : null,
+        placa:        row["PLACA"]       ? String(row["PLACA"]).trim()       : null,
+        unidade:      String(row["UNIDADE"]      ?? "MATRIZ").trim(),
+        nf:           String(row["NF"]           ?? "none").trim(),
+        cg:           String(row["CG"]           ?? "none").trim(),
+        v:            row["V"]           ? String(row["V"]).trim()           : null,
+        divergencias: row["DIVERGÊNCIAS"] ? String(row["DIVERGÊNCIAS"]).trim() : null,
+        frete:        row["FRETE"]       ? String(row["FRETE"]).trim()       : null,
+        checked:      String(row["CONFIRMADO"]   ?? "none").trim(),
+        sortOrder:    parseInt(String(row["ORDEM"] ?? i), 10) || i,
+      }))
+      .filter(r => r.date && r.cliente);
+
+    if (toInsert.length === 0) {
+      res.status(400).json({ error: "Nenhuma linha válida encontrada no arquivo" });
+      return;
+    }
+
+    // Full replace — single transaction with UNNEST bulk insert
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM entregas");
+      await client.query(
+        `INSERT INTO entregas
+           (date, cliente, hrs, obs, motorista, placa, unidade, nf, cg, v, divergencias, frete, checked, sort_order)
+         SELECT * FROM UNNEST(
+           $1::text[],$2::text[],$3::text[],$4::text[],$5::text[],$6::text[],
+           $7::text[],$8::text[],$9::text[],$10::text[],$11::text[],$12::text[],
+           $13::text[],$14::int[]
+         )`,
+        [
+          toInsert.map(r => r.date),
+          toInsert.map(r => r.cliente),
+          toInsert.map(r => r.hrs),
+          toInsert.map(r => r.obs),
+          toInsert.map(r => r.motorista),
+          toInsert.map(r => r.placa),
+          toInsert.map(r => r.unidade),
+          toInsert.map(r => r.nf),
+          toInsert.map(r => r.cg),
+          toInsert.map(r => r.v),
+          toInsert.map(r => r.divergencias),
+          toInsert.map(r => r.frete),
+          toInsert.map(r => r.checked),
+          toInsert.map(r => r.sortOrder),
+        ],
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    res.json({ ok: true, imported: toInsert.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/entregas/:id", async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = GetEntregaParams.safeParse({ id: parseInt(rawId, 10) });
@@ -396,118 +508,6 @@ router.delete("/entregas/:id", async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
-});
-
-// ─── Export — full DB dump as Excel ──────────────────────────────────────────
-router.get("/entregas/export", async (_req, res, next): Promise<void> => {
-  try {
-    const rows = await db
-      .select()
-      .from(entregasTable)
-      .orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
-
-    const header = ["DATA","CLIENTE","HORÁRIO","OBS","MOTORISTA","PLACA","UNIDADE","NF","CG","V","DIVERGÊNCIAS","FRETE","CONFIRMADO","ORDEM"];
-    const data = [
-      header,
-      ...rows.map(r => [
-        r.date, r.cliente, r.hrs ?? "", r.obs ?? "",
-        r.motorista ?? "", r.placa ?? "", r.unidade,
-        r.nf, r.cg, r.v ?? "", r.divergencias ?? "",
-        r.frete ?? "", r.checked, r.sortOrder,
-      ]),
-    ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "Entregas");
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-
-    const today = new Date().toISOString().slice(0, 10);
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="backup-entregas-${today}.xlsx"`);
-    res.send(buf);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ─── Import — full DB restore from Excel ─────────────────────────────────────
-router.post("/entregas/import", upload.single("file"), async (req, res, next): Promise<void> => {
-  try {
-    if (!req.file) {
-      res.status(400).json({ error: "Nenhum arquivo enviado" });
-      return;
-    }
-
-    const wb = XLSX.read(req.file.buffer, { type: "buffer" });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
-
-    const toInsert = jsonRows
-      .map((row, i) => ({
-        date:        String(row["DATA"]        ?? "").trim(),
-        cliente:     String(row["CLIENTE"]     ?? "").trim(),
-        hrs:         row["HORÁRIO"]    ? String(row["HORÁRIO"]).trim()    : null,
-        obs:         row["OBS"]        ? String(row["OBS"]).trim()        : null,
-        motorista:   row["MOTORISTA"]  ? String(row["MOTORISTA"]).trim()  : null,
-        placa:       row["PLACA"]      ? String(row["PLACA"]).trim()      : null,
-        unidade:     String(row["UNIDADE"]     ?? "MATRIZ").trim(),
-        nf:          String(row["NF"]          ?? "none").trim(),
-        cg:          String(row["CG"]          ?? "none").trim(),
-        v:           row["V"]          ? String(row["V"]).trim()          : null,
-        divergencias:row["DIVERGÊNCIAS"]? String(row["DIVERGÊNCIAS"]).trim(): null,
-        frete:       row["FRETE"]      ? String(row["FRETE"]).trim()      : null,
-        checked:     String(row["CONFIRMADO"]  ?? "none").trim(),
-        sortOrder:   parseInt(String(row["ORDEM"] ?? i), 10) || i,
-      }))
-      .filter(r => r.date && r.cliente);
-
-    if (toInsert.length === 0) {
-      res.status(400).json({ error: "Nenhuma linha válida encontrada no arquivo" });
-      return;
-    }
-
-    // Full replace — single transaction with UNNEST bulk insert
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("DELETE FROM entregas");
-      await client.query(
-        `INSERT INTO entregas
-           (date, cliente, hrs, obs, motorista, placa, unidade, nf, cg, v, divergencias, frete, checked, sort_order)
-         SELECT * FROM UNNEST(
-           $1::text[],$2::text[],$3::text[],$4::text[],$5::text[],$6::text[],
-           $7::text[],$8::text[],$9::text[],$10::text[],$11::text[],$12::text[],
-           $13::text[],$14::int[]
-         )`,
-        [
-          toInsert.map(r => r.date),
-          toInsert.map(r => r.cliente),
-          toInsert.map(r => r.hrs),
-          toInsert.map(r => r.obs),
-          toInsert.map(r => r.motorista),
-          toInsert.map(r => r.placa),
-          toInsert.map(r => r.unidade),
-          toInsert.map(r => r.nf),
-          toInsert.map(r => r.cg),
-          toInsert.map(r => r.v),
-          toInsert.map(r => r.divergencias),
-          toInsert.map(r => r.frete),
-          toInsert.map(r => r.checked),
-          toInsert.map(r => r.sortOrder),
-        ],
-      );
-      await client.query("COMMIT");
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
-    }
-
-    res.json({ ok: true, imported: toInsert.length });
-  } catch (err) {
-    next(err);
-  }
 });
 
 export default router;
