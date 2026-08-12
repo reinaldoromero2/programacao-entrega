@@ -179,9 +179,14 @@ router.get("/entregas/frete-mensal", async (req, res): Promise<void> => {
 // ─── Resumo Mensal ────────────────────────────────────────────────────────────
 function diasUteisNoMes(ano: number, mes: number): number {
   // Brazilian national fixed holidays (MM-DD)
-  const fixedHolidays = new Set([
+  const nationalHolidays = new Set([
     "01-01","04-21","05-01","09-07","10-12","11-02","11-15","11-20","12-25",
   ]);
+  // São Paulo state fixed holiday (MM-DD)
+  const spStateHolidays = new Set([
+    "07-09", // Revolução Constitucionalista de 1932
+  ]);
+  const fixedHolidays = new Set([...nationalHolidays, ...spStateHolidays]);
   // Easter-based holidays (calculated per year)
   const easterHolidays = getEasterBasedHolidays(ano);
 
