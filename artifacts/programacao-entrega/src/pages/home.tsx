@@ -4,7 +4,6 @@ import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Printer, WifiOff, RefreshCw, FolderDown, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
 import { useListEntregas, getListEntregasQueryKey } from "@workspace/api-client-react";
 import { DeliveryTable } from "@/components/delivery-table";
 import { PrintView } from "@/components/print-view";
@@ -20,9 +19,7 @@ import { usePwaInstall } from "@/hooks/use-pwa-install";
 export default function Home() {
   const [date, setDate] = useState<Date>(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const isOnline = useOnlineStatus();
-  const queryClient = useQueryClient();
   const { savePdf, status: pdfStatus, resetLocation } = useSavePdf();
   const { canInstall, install } = usePwaInstall();
 
@@ -37,10 +34,8 @@ export default function Home() {
   const goNextDay = () => setDate((d) => addDays(d, 1));
   const goToToday = () => setDate(new Date());
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: getListEntregasQueryKey({ date: dateStr }) });
-    setIsRefreshing(false);
+  const handleRefresh = () => {
+    window.location.reload();
   };
 
   const handlePrint = () => window.print();
@@ -150,12 +145,12 @@ export default function Home() {
             variant="outline"
             size="sm"
             onClick={handleRefresh}
-            disabled={isRefreshing || !isOnline}
+            disabled={!isOnline}
             className="h-9 gap-2 text-slate-700 border-slate-300 hover:bg-slate-100 disabled:opacity-50"
             data-testid="button-refresh"
-            title={!isOnline ? "Sem conexão" : "Atualizar dados"}
+            title={!isOnline ? "Sem conexão" : "Recarregar página"}
           >
-            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+            <RefreshCw className="w-4 h-4" />
             Atualizar
           </Button>
 
