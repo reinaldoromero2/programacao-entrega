@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { get, set } from "idb-keyval";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -74,6 +74,15 @@ export function useSavePdf() {
   const handleRef = useRef<FileSystemFileHandle | null>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
 
+  // Pre-load the stored handle at mount time so it's already in memory
+  // before the user clicks. This keeps the user-gesture token intact
+  // when we later call requestPermission inside the click handler.
+  useEffect(() => {
+    get<FileSystemFileHandle>(IDB_KEY).then(stored => {
+      if (stored) handleRef.current = stored;
+    });
+  }, []);
+
   const savePdf = useCallback(async (entregas: Entrega[], dateStr: string) => {
     if (!("showSaveFilePicker" in window)) {
       alert("Seu navegador não suporta salvar arquivos diretamente. Use Chrome ou Edge.");
@@ -82,12 +91,8 @@ export function useSavePdf() {
 
     setStatus("saving");
     try {
-      // Try to restore handle from IndexedDB
-      if (!handleRef.current) {
-        const stored = await get<FileSystemFileHandle>(IDB_KEY);
-        if (stored) handleRef.current = stored;
-      }
-
+      // Handle already pre-loaded by useEffect — no IDB await here
+      // so the user-gesture token stays alive for requestPermission.
       let fileHandle = handleRef.current;
       let needPicker = !fileHandle;
 
