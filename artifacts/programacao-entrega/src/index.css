@@ -290,7 +290,7 @@
 @media print {
   @page {
     size: A4 landscape;
-    margin: 10mm 8mm;
+    margin: 12mm 10mm;
   }
 
   body {
@@ -310,113 +310,72 @@
   /* ── Page layout ── */
   .print-page {
     width: 100%;
-    font-family: Arial, sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
     font-size: 9pt;
     color: #000;
   }
 
-  /* ── Shared table base ── */
+  /* ── Title & date — plain text, matches PDF ── */
+  .print-heading {
+    font-size: 16pt;
+    font-weight: bold;
+    margin-bottom: 2mm;
+  }
+
+  .print-subheading {
+    font-size: 10pt;
+    color: #444;
+    margin-bottom: 5mm;
+  }
+
+  /* ── Table ── */
   .print-table {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
   }
 
-  /* ── Top header table ── */
-  .print-header-table {
-    margin-bottom: 0;
-    border: 2px solid #2b4590;
-  }
-
-  .print-date-cell {
-    width: 14%;
-    border: 2px solid #2b4590;
-    padding: 4px 6px;
-    text-align: center;
-    vertical-align: middle;
-    background: #d9e1f2;
-  }
-
-  .print-date-day {
-    font-size: 13pt;
-    font-weight: bold;
-    color: #000;
-  }
-
-  .print-date-week {
-    font-size: 7pt;
-    color: #333;
-    text-transform: uppercase;
-  }
-
-  .print-title-cell {
-    background: #2b4590;
-    color: #fff;
-    font-size: 14pt;
-    font-weight: bold;
-    text-align: center;
-    letter-spacing: 2px;
-    padding: 8px;
-    border: 2px solid #2b4590;
-  }
-
-  /* ── Data table ── */
-  .print-data-table {
-    border: 2px solid #2b4590;
-    border-top: none;
-  }
-
   /* ── Column widths ── */
-  .print-th-s        { width: 4%; }
-  .print-th-cliente  { width: 18%; }
-  .print-th-hrs      { width: 6%; }
-  .print-th-obs      { width: 10%; }
-  .print-th-motorista{ width: 20%; }
-  .print-th-v        { width: 5%; }
-  .print-th-unidade  { width: 12%; }
-  .print-th-nf       { width: 8%; }
-  .print-th-cg       { width: 8%; }
+  .print-col-num      { width: 4%; }
+  .print-col-cliente  { width: 20%; }
+  .print-col-hrs      { width: 6%; }
+  .print-col-obs      { width: 11%; }
+  .print-col-motorista{ width: 22%; }
+  .print-col-v        { width: 5%; }
+  .print-col-unidade  { width: 14%; }
+  .print-col-nf       { width: 9%; }
+  .print-col-cg       { width: 9%; }
 
-  /* ── Header row ── */
+  /* ── Header row — dark blue, white text ── */
   .print-header-row .print-th {
-    background: #d9e1f2;
-    border: 1px solid #2b4590;
-    padding: 4px 3px;
+    background: #1e40af !important;
+    color: #fff !important;
+    border: none;
+    padding: 5px 4px;
     text-align: center;
-    font-size: 8pt;
+    font-size: 8.5pt;
     font-weight: bold;
-    color: #000;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
   }
 
   /* ── Data rows ── */
-  .print-data-row .print-td {
-    border: 1px solid #aab4c8;
-    padding: 4px 4px;
+  .print-row .print-td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 4px 5px;
     font-size: 8.5pt;
     color: #000;
     vertical-align: middle;
-    height: 20pt;
+    height: 19pt;
     overflow: hidden;
   }
 
-  .print-empty-row .print-td {
-    height: 18pt;
+  /* Alternating row — matches PDF light gray */
+  .print-row-alt .print-td {
+    background: #f8fafc !important;
   }
 
-  /* ── Alignment helpers ── */
-  .print-td-center   { text-align: center; font-weight: bold; }
-  .print-td-cliente  { font-weight: bold; }
-  .print-td-motorista { font-size: 8pt; }
-
-  /* ── Cell colour fills ── */
-  .print-yellow { background: #ffff00 !important; }
-  .print-green  { background: #70ad47 !important; }
-  .print-blue   { background: #9dc3e6 !important; }
-
-  /* ── Check mark ── */
-  .print-check {
-    font-size: 10pt;
-    font-weight: bold;
-  }
+  /* ── Cell helpers ── */
+  .print-td-center { text-align: center; }
+  .print-td-bold   { font-weight: bold; }
+  .print-td-small  { font-size: 8pt; }
 }
