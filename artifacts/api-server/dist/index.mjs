@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-1a30036" });
+  res.json({ ...data, release: "dev-eda150f" });
 });
 var health_default = router;
 
@@ -106168,6 +106168,28 @@ router2.get("/entregas/divergencias", async (_req, res) => {
     placa: entregasTable.placa,
     divergencias: entregasTable.divergencias
   }).from(entregasTable).where(sql`${entregasTable.divergencias} IS NOT NULL AND ${entregasTable.divergencias} != ''`).orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
+  res.json(rows);
+});
+router2.get("/entregas/cancelados", async (req, res) => {
+  const mes = typeof req.query.mes === "string" ? req.query.mes : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+  const start = `${mes}-01`;
+  const end = `${mes}-31`;
+  const rows = await db.select({
+    id: entregasTable.id,
+    date: entregasTable.date,
+    cliente: entregasTable.cliente,
+    obs: entregasTable.obs,
+    frete: entregasTable.frete,
+    nf: entregasTable.nf,
+    cg: entregasTable.cg
+  }).from(entregasTable).where(sql`
+      ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+      AND (
+        UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+        OR ${entregasTable.nf} = 'x'
+        OR ${entregasTable.cg} = 'x'
+      )
+    `).orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
   res.json(rows);
 });
 router2.get("/entregas/frete-mensal", async (req, res) => {

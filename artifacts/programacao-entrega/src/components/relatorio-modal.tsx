@@ -62,6 +62,16 @@ interface FreteMensalData {
   canceladosTotal: number;
 }
 
+interface CanceladoItem {
+  id: number;
+  date: string;
+  cliente: string;
+  obs: string | null;
+  frete: string | null;
+  nf: string | null;
+  cg: string | null;
+}
+
 interface MotoristaResult {
   motorista: string;
   placa: string | null;
@@ -434,15 +444,31 @@ function FreteMensalTab() {
   const [data, setData] = useState<FreteMensalData | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [cancelados, setCancelados] = useState<CanceladoItem[] | null>(null);
+  const [loadingCancelados, setLoadingCancelados] = useState(false);
+  const [showCancelados, setShowCancelados] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     setFetchError(null);
+    setShowCancelados(false);
+    setCancelados(null);
     apiFetch<FreteMensalData>(`/api/entregas/frete-mensal?mes=${mes}`)
       .then(setData)
       .catch((err: unknown) => setFetchError(err instanceof Error ? err.message : "Erro"))
       .finally(() => setLoading(false));
   }, [mes]);
+
+  const handleCanceladosClick = () => {
+    if (showCancelados) { setShowCancelados(false); return; }
+    setShowCancelados(true);
+    if (cancelados !== null) return;
+    setLoadingCancelados(true);
+    apiFetch<CanceladoItem[]>(`/api/entregas/cancelados?mes=${mes}`)
+      .then(setCancelados)
+      .catch(() => setCancelados([]))
+      .finally(() => setLoadingCancelados(false));
+  };
 
   const prevMes = () => {
     const [ano, num] = mes.split("-").map(Number);
@@ -536,9 +562,16 @@ function FreteMensalTab() {
                         outerRadius={75}
                         label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
                         labelLine={false}
+                        onClick={(entry: { frete?: string }) => {
+                          if (entry.frete === "CANCELADOS") handleCanceladosClick();
+                        }}
                       >
                         {pieData.map((entry) => (
-                          <Cell key={entry.frete} fill={corOf(entry.frete)} />
+                          <Cell
+                            key={entry.frete}
+                            fill={corOf(entry.frete)}
+                            style={entry.frete === "CANCELADOS" ? { cursor: "pointer" } : undefined}
+                          />
                         ))}
                       </Pie>
                       <Tooltip formatter={(value, name) => [`${value}`, name as string]} />
@@ -558,13 +591,18 @@ function FreteMensalTab() {
                   ))}
 
                   {hasCancelados && (
-                    <div className="flex items-center justify-between px-2 py-1 rounded text-xs mt-1 border border-red-200" style={{ background: "#fef2f2" }}>
+                    <button
+                      onClick={handleCanceladosClick}
+                      className={`w-full flex items-center justify-between px-2 py-1 rounded text-xs mt-1 border transition-colors ${showCancelados ? "border-red-400 bg-red-100" : "border-red-200 hover:border-red-400 hover:bg-red-100"}`}
+                      style={{ background: showCancelados ? undefined : "#fef2f2" }}
+                      title="Clique para ver as cargas canceladas"
+                    >
                       <span className="flex items-center gap-1.5 font-semibold text-red-600">
                         <span className="w-2 h-2 rounded-full inline-block bg-red-600" />
                         CANCELADOS / X
                       </span>
                       <span className="font-bold text-red-700">{canceladosTotal}</span>
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
@@ -587,13 +625,61 @@ function FreteMensalTab() {
                         <Bar key={tipo} dataKey={tipo} stackId="a" fill={FRETE_CORES[tipo]} />
                       ))}
                       {hasCanceladosBar && (
-                        <Bar dataKey="CANCELADOS" stackId="b" fill={CANCELADOS_COR} />
+                        <Bar dataKey="CANCELADOS" stackId="b" fill={CANCELADOS_COR} onClick={handleCanceladosClick} style={{ cursor: "pointer" }} />
                       )}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               )}
             </div>
+            {/* ── Lista de cancelados ───────────────────────────────── */}
+            {showCancelados && (
+              <div className="rounded-lg border border-red-200 bg-red-50 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 bg-red-100 border-b border-red-200">
+                  <span className="text-xs font-semibold text-red-700 uppercase tracking-wide">
+                    Cargas Canceladas — {mesLabel(mes)}
+                  </span>
+                  <button onClick={() => setShowCancelados(false)} className="text-red-400 hover:text-red-700 text-lg leading-none">×</button>
+                </div>
+                {loadingCancelados && (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-5 h-5 text-red-500 animate-spin" />
+                  </div>
+                )}
+                {!loadingCancelados && cancelados !== null && cancelados.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-4 italic">Nenhum cancelamento encontrado.</p>
+                )}
+                {!loadingCancelados && cancelados && cancelados.length > 0 && (
+                  <div className="overflow-x-auto max-h-52 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-red-100">
+                        <tr>
+                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">Data</th>
+                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">Cliente</th>
+                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">Frete</th>
+                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">OBS</th>
+                          <th className="text-center px-3 py-1.5 text-red-700 font-semibold">NF</th>
+                          <th className="text-center px-3 py-1.5 text-red-700 font-semibold">CG</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cancelados.map((c, i) => (
+                          <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-red-50"}>
+                            <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.date.slice(8)}/{c.date.slice(5,7)}</td>
+                            <td className="px-3 py-1.5 font-medium text-slate-800 max-w-[160px] truncate">{c.cliente || "—"}</td>
+                            <td className="px-3 py-1.5 text-slate-600">{c.frete || "—"}</td>
+                            <td className="px-3 py-1.5 text-slate-600 uppercase">{c.obs || "—"}</td>
+                            <td className="px-3 py-1.5 text-center text-red-600 font-bold">{c.nf === "x" ? "✗" : ""}</td>
+                            <td className="px-3 py-1.5 text-center text-red-600 font-bold">{c.cg === "x" ? "✗" : ""}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end pt-1">
               <Button size="sm" onClick={exportExcel} className="gap-2 bg-green-700 hover:bg-green-800 text-white">
                 <Download className="w-4 h-4" />
