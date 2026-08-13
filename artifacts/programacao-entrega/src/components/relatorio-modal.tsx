@@ -218,6 +218,11 @@ function ResumoMensalTab() {
               <Pct value={data.terceiros.pct} color="#2563eb" />
             </Card>
 
+            {/* Coleta */}
+            <Card accent="#7c3aed" label="COLETA" value={data.coleta.total}>
+              <Pct value={data.coleta.pct} color="#7c3aed" />
+            </Card>
+
             {/* Dias úteis */}
             <Card accent="#7c3aed" label="Dias Úteis no Mês" value={data.diasUteis} sub="excl. finais de semana e feriados" />
 
