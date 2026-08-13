@@ -398,6 +398,52 @@ router.get("/entregas/motorista-relatorio", async (req, res): Promise<void> => {
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
 });
 
+// ─── Cliente relatório ────────────────────────────────────────────────────────
+router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
+  const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
+  const valor  = typeof req.query.valor  === "string" ? req.query.valor  : new Date().toISOString().slice(0, 7);
+
+  let whereExpr;
+  const cancelFilter = sql`NOT (
+    UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+    OR ${entregasTable.nf} = 'x'
+    OR ${entregasTable.cg} = 'x'
+  )`;
+
+  if (filtro === "dia") {
+    whereExpr = sql`${entregasTable.date} = ${valor}
+      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
+      AND ${cancelFilter}`;
+  } else if (filtro === "mes") {
+    whereExpr = sql`${entregasTable.date} >= ${valor + "-01"}
+      AND ${entregasTable.date} <= ${valor + "-31"}
+      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
+      AND ${cancelFilter}`;
+  } else {
+    whereExpr = sql`${entregasTable.date} >= ${valor + "-01-01"}
+      AND ${entregasTable.date} <= ${valor + "-12-31"}
+      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
+      AND ${cancelFilter}`;
+  }
+
+  const rows = await db
+    .select({ cliente: entregasTable.cliente })
+    .from(entregasTable)
+    .where(whereExpr);
+
+  const grouped = new Map<string, number>();
+  for (const row of rows) {
+    const k = row.cliente!.trim();
+    grouped.set(k, (grouped.get(k) ?? 0) + 1);
+  }
+
+  const resultado = Array.from(grouped.entries())
+    .map(([cliente, total]) => ({ cliente, total }))
+    .sort((a, b) => b.total - a.total);
+
+  res.json({ filtro, valor, resultado, totalViagens: rows.length });
+});
+
 // ─── Export — full DB dump as Excel ──────────────────────────────────────────
 router.get("/entregas/export", async (_req, res, next): Promise<void> => {
   try {

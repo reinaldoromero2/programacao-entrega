@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-18f5cc9" });
+  res.json({ ...data, release: "dev-870284c" });
 });
 var health_default = router;
 
@@ -106378,6 +106378,39 @@ router2.get("/entregas/motorista-relatorio", async (req, res) => {
     grouped.get(key).total++;
   }
   const resultado = Array.from(grouped.values()).sort((a, b) => b.total - a.total);
+  res.json({ filtro, valor, resultado, totalViagens: rows.length });
+});
+router2.get("/entregas/cliente-relatorio", async (req, res) => {
+  const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
+  const valor = typeof req.query.valor === "string" ? req.query.valor : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+  let whereExpr;
+  const cancelFilter = sql`NOT (
+    UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+    OR ${entregasTable.nf} = 'x'
+    OR ${entregasTable.cg} = 'x'
+  )`;
+  if (filtro === "dia") {
+    whereExpr = sql`${entregasTable.date} = ${valor}
+      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
+      AND ${cancelFilter}`;
+  } else if (filtro === "mes") {
+    whereExpr = sql`${entregasTable.date} >= ${valor + "-01"}
+      AND ${entregasTable.date} <= ${valor + "-31"}
+      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
+      AND ${cancelFilter}`;
+  } else {
+    whereExpr = sql`${entregasTable.date} >= ${valor + "-01-01"}
+      AND ${entregasTable.date} <= ${valor + "-12-31"}
+      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
+      AND ${cancelFilter}`;
+  }
+  const rows = await db.select({ cliente: entregasTable.cliente }).from(entregasTable).where(whereExpr);
+  const grouped = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const k = row.cliente.trim();
+    grouped.set(k, (grouped.get(k) ?? 0) + 1);
+  }
+  const resultado = Array.from(grouped.entries()).map(([cliente, total]) => ({ cliente, total })).sort((a, b) => b.total - a.total);
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
 });
 router2.get("/entregas/export", async (_req, res, next) => {
