@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-b3c900c" });
+  res.json({ ...data, release: "dev-18f5cc9" });
 });
 var health_default = router;
 
