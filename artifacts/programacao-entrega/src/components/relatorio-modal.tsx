@@ -463,7 +463,7 @@ function FreteMensalTab() {
   const handleCanceladosClick = () => {
     if (showCancelados) { setShowCancelados(false); return; }
     setShowCancelados(true);
-    if (cancelados !== null) return;
+    // Always re-fetch so stale/empty cache never hides real data
     setLoadingCancelados(true);
     apiFetch<CanceladoItem[]>(`/api/entregas/cancelados?mes=${mes}`)
       .then(setCancelados)
@@ -668,12 +668,12 @@ function FreteMensalTab() {
                         {cancelados.map((c, i) => (
                           <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-red-50"}>
                             <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.date.slice(8)}/{c.date.slice(5,7)}</td>
-                            <td className="px-3 py-1.5 font-medium text-slate-800 max-w-[160px] truncate">{c.cliente || "—"}</td>
-                            <td className="px-3 py-1.5 text-slate-600">{c.frete || "—"}</td>
-                            <td className="px-3 py-1.5 text-slate-600 uppercase">{c.obs || "—"}</td>
+                            <td className="px-3 py-1.5 font-medium text-slate-800 whitespace-nowrap">{c.cliente || "—"}</td>
+                            <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.frete || "—"}</td>
+                            <td className="px-3 py-1.5 text-slate-600 uppercase whitespace-nowrap">{c.obs || "—"}</td>
                             <td className="px-3 py-1.5 text-center text-red-600 font-bold">{c.nf === "x" ? "✗" : ""}</td>
                             <td className="px-3 py-1.5 text-center text-red-600 font-bold">{c.cg === "x" ? "✗" : ""}</td>
-                            <td className="px-3 py-1.5 text-slate-600 max-w-[160px] truncate">{c.divergencias || ""}</td>
+                            <td className="px-3 py-1.5 text-slate-600 min-w-[200px]">{c.divergencias || ""}</td>
                           </tr>
                         ))}
                       </tbody>
