@@ -70,6 +70,7 @@ interface CanceladoItem {
   frete: string | null;
   nf: string | null;
   cg: string | null;
+  divergencias: string | null;
 }
 
 interface MotoristaResult {
@@ -660,6 +661,7 @@ function FreteMensalTab() {
                           <th className="text-left px-3 py-1.5 text-red-700 font-semibold">OBS</th>
                           <th className="text-center px-3 py-1.5 text-red-700 font-semibold">NF</th>
                           <th className="text-center px-3 py-1.5 text-red-700 font-semibold">CG</th>
+                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">Divergências</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -671,6 +673,7 @@ function FreteMensalTab() {
                             <td className="px-3 py-1.5 text-slate-600 uppercase">{c.obs || "—"}</td>
                             <td className="px-3 py-1.5 text-center text-red-600 font-bold">{c.nf === "x" ? "✗" : ""}</td>
                             <td className="px-3 py-1.5 text-center text-red-600 font-bold">{c.cg === "x" ? "✗" : ""}</td>
+                            <td className="px-3 py-1.5 text-slate-600 max-w-[160px] truncate">{c.divergencias || ""}</td>
                           </tr>
                         ))}
                       </tbody>

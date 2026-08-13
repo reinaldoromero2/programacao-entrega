@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "20260813222547" });
+  res.json({ ...data, release: "dev-ffcc6e1" });
 });
 var health_default = router;
 
@@ -106181,7 +106181,8 @@ router2.get("/entregas/cancelados", async (req, res) => {
     obs: entregasTable.obs,
     frete: entregasTable.frete,
     nf: entregasTable.nf,
-    cg: entregasTable.cg
+    cg: entregasTable.cg,
+    divergencias: entregasTable.divergencias
   }).from(entregasTable).where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (

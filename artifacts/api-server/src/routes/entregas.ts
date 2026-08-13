@@ -135,13 +135,14 @@ router.get("/entregas/cancelados", async (req, res): Promise<void> => {
 
   const rows = await db
     .select({
-      id:      entregasTable.id,
-      date:    entregasTable.date,
-      cliente: entregasTable.cliente,
-      obs:     entregasTable.obs,
-      frete:   entregasTable.frete,
-      nf:      entregasTable.nf,
-      cg:      entregasTable.cg,
+      id:          entregasTable.id,
+      date:        entregasTable.date,
+      cliente:     entregasTable.cliente,
+      obs:         entregasTable.obs,
+      frete:       entregasTable.frete,
+      nf:          entregasTable.nf,
+      cg:          entregasTable.cg,
+      divergencias: entregasTable.divergencias,
     })
     .from(entregasTable)
     .where(sql`
