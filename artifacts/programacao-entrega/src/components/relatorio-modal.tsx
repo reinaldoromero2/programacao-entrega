@@ -445,30 +445,29 @@ function FreteMensalTab() {
   const [data, setData] = useState<FreteMensalData | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [cancelados, setCancelados] = useState<CanceladoItem[] | null>(null);
-  const [loadingCancelados, setLoadingCancelados] = useState(false);
-  const [showCancelados, setShowCancelados] = useState(false);
+  const [selectedFrete, setSelectedFrete] = useState<string | null>(null);
+  const [freteList, setFreteList] = useState<CanceladoItem[] | null>(null);
+  const [loadingFreteList, setLoadingFreteList] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     setFetchError(null);
-    setShowCancelados(false);
-    setCancelados(null);
+    setSelectedFrete(null);
+    setFreteList(null);
     apiFetch<FreteMensalData>(`/api/entregas/frete-mensal?mes=${mes}`)
       .then(setData)
       .catch((err: unknown) => setFetchError(err instanceof Error ? err.message : "Erro"))
       .finally(() => setLoading(false));
   }, [mes]);
 
-  const handleCanceladosClick = () => {
-    if (showCancelados) { setShowCancelados(false); return; }
-    setShowCancelados(true);
-    // Always re-fetch so stale/empty cache never hides real data
-    setLoadingCancelados(true);
-    apiFetch<CanceladoItem[]>(`/api/entregas/cancelados?mes=${mes}`)
-      .then(setCancelados)
-      .catch(() => setCancelados([]))
-      .finally(() => setLoadingCancelados(false));
+  const handleFreteClick = (frete: string) => {
+    if (selectedFrete === frete) { setSelectedFrete(null); return; }
+    setSelectedFrete(frete);
+    setLoadingFreteList(true);
+    apiFetch<CanceladoItem[]>(`/api/entregas/por-frete?mes=${mes}&frete=${encodeURIComponent(frete)}`)
+      .then(setFreteList)
+      .catch(() => setFreteList([]))
+      .finally(() => setLoadingFreteList(false));
   };
 
   const prevMes = () => {
@@ -564,14 +563,14 @@ function FreteMensalTab() {
                         label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
                         labelLine={false}
                         onClick={(entry: { frete?: string }) => {
-                          if (entry.frete === "CANCELADOS") handleCanceladosClick();
+                          if (entry.frete) handleFreteClick(entry.frete);
                         }}
                       >
                         {pieData.map((entry) => (
                           <Cell
                             key={entry.frete}
                             fill={corOf(entry.frete)}
-                            style={entry.frete === "CANCELADOS" ? { cursor: "pointer" } : undefined}
+                            style={{ cursor: "pointer" }}
                           />
                         ))}
                       </Pie>
@@ -582,20 +581,33 @@ function FreteMensalTab() {
 
                 <div className="w-full flex flex-col gap-1">
                   {data.resumo.map((r) => (
-                    <div key={r.frete} className="flex items-center justify-between px-2 py-1 rounded text-xs" style={{ background: FRETE_CORES[r.frete] + "18" }}>
+                    <button
+                      key={r.frete}
+                      onClick={() => handleFreteClick(r.frete)}
+                      className="w-full flex items-center justify-between px-2 py-1 rounded text-xs transition-colors hover:opacity-80"
+                      style={{
+                        background: selectedFrete === r.frete ? FRETE_CORES[r.frete] + "40" : FRETE_CORES[r.frete] + "18",
+                        outline: selectedFrete === r.frete ? `2px solid ${FRETE_CORES[r.frete]}` : undefined,
+                      }}
+                      title={`Clique para ver cargas ${r.frete}`}
+                    >
                       <span className="flex items-center gap-1.5 font-medium" style={{ color: FRETE_CORES[r.frete] }}>
                         <span className="w-2 h-2 rounded-full inline-block" style={{ background: FRETE_CORES[r.frete] }} />
                         {r.frete}
                       </span>
                       <span className="font-bold text-slate-700">{r.total}</span>
-                    </div>
+                    </button>
                   ))}
 
                   {hasCancelados && (
                     <button
-                      onClick={handleCanceladosClick}
-                      className={`w-full flex items-center justify-between px-2 py-1 rounded text-xs mt-1 border transition-colors ${showCancelados ? "border-red-400 bg-red-100" : "border-red-200 hover:border-red-400 hover:bg-red-100"}`}
-                      style={{ background: showCancelados ? undefined : "#fef2f2" }}
+                      onClick={() => handleFreteClick("CANCELADOS")}
+                      className="w-full flex items-center justify-between px-2 py-1 rounded text-xs mt-1 border transition-colors hover:bg-red-100"
+                      style={{
+                        background: selectedFrete === "CANCELADOS" ? "#fecaca" : "#fef2f2",
+                        borderColor: selectedFrete === "CANCELADOS" ? "#dc2626" : "#fecaca",
+                        outline: selectedFrete === "CANCELADOS" ? "2px solid #dc2626" : undefined,
+                      }}
                       title="Clique para ver as cargas canceladas"
                     >
                       <span className="flex items-center gap-1.5 font-semibold text-red-600">
@@ -623,65 +635,72 @@ function FreteMensalTab() {
                       <Tooltip contentStyle={{ fontSize: 12 }} labelFormatter={(v: string) => v} />
                       <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                       {activeFreteTipos.map((tipo) => (
-                        <Bar key={tipo} dataKey={tipo} stackId="a" fill={FRETE_CORES[tipo]} />
+                        <Bar key={tipo} dataKey={tipo} stackId="a" fill={FRETE_CORES[tipo]} onClick={() => handleFreteClick(tipo)} style={{ cursor: "pointer" }} />
                       ))}
                       {hasCanceladosBar && (
-                        <Bar dataKey="CANCELADOS" stackId="b" fill={CANCELADOS_COR} onClick={handleCanceladosClick} style={{ cursor: "pointer" }} />
+                        <Bar dataKey="CANCELADOS" stackId="b" fill={CANCELADOS_COR} onClick={() => handleFreteClick("CANCELADOS")} style={{ cursor: "pointer" }} />
                       )}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               )}
             </div>
-            {/* ── Lista de cancelados ───────────────────────────────── */}
-            {showCancelados && (
-              <div className="rounded-lg border border-red-200 bg-red-50 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 bg-red-100 border-b border-red-200">
-                  <span className="text-xs font-semibold text-red-700 uppercase tracking-wide">
-                    Cargas Canceladas — {mesLabel(mes)}
-                  </span>
-                  <button onClick={() => setShowCancelados(false)} className="text-red-400 hover:text-red-700 text-lg leading-none">×</button>
-                </div>
-                {loadingCancelados && (
-                  <div className="flex items-center justify-center py-6">
-                    <Loader2 className="w-5 h-5 text-red-500 animate-spin" />
+            {/* ── Lista por tipo de frete ───────────────────────────── */}
+            {selectedFrete && (() => {
+              const isCancel = selectedFrete === "CANCELADOS";
+              const accent   = isCancel ? "#dc2626" : (FRETE_CORES[selectedFrete] ?? "#2563eb");
+              const bgLight  = accent + "12";
+              const bgMed    = accent + "25";
+              const label    = isCancel ? "Cargas Canceladas" : `Cargas — ${selectedFrete}`;
+              return (
+                <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${accent}40` }}>
+                  <div className="flex items-center justify-between px-3 py-2 border-b" style={{ background: bgMed, borderColor: accent + "40" }}>
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: accent }}>
+                      {label} — {mesLabel(mes)}
+                    </span>
+                    <button onClick={() => setSelectedFrete(null)} className="text-lg leading-none hover:opacity-70" style={{ color: accent }}>×</button>
                   </div>
-                )}
-                {!loadingCancelados && cancelados !== null && cancelados.length === 0 && (
-                  <p className="text-xs text-slate-400 text-center py-4 italic">Nenhum cancelamento encontrado.</p>
-                )}
-                {!loadingCancelados && cancelados && cancelados.length > 0 && (
-                  <div className="overflow-x-auto max-h-52 overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-red-100">
-                        <tr>
-                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">Data</th>
-                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">Cliente</th>
-                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">Frete</th>
-                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">OBS</th>
-                          <th className="text-center px-3 py-1.5 text-red-700 font-semibold">NF</th>
-                          <th className="text-center px-3 py-1.5 text-red-700 font-semibold">CG</th>
-                          <th className="text-left px-3 py-1.5 text-red-700 font-semibold">Divergências</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cancelados.map((c, i) => (
-                          <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-red-50"}>
-                            <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.date.slice(8)}/{c.date.slice(5,7)}</td>
-                            <td className="px-3 py-1.5 font-medium text-slate-800 whitespace-nowrap">{c.cliente || "—"}</td>
-                            <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.frete || "—"}</td>
-                            <td className="px-3 py-1.5 text-slate-600 uppercase whitespace-nowrap">{c.obs || "—"}</td>
-                            <td className="px-3 py-1.5 text-center text-red-600 font-bold">{c.nf === "x" ? "✗" : ""}</td>
-                            <td className="px-3 py-1.5 text-center text-red-600 font-bold">{c.cg === "x" ? "✗" : ""}</td>
-                            <td className="px-3 py-1.5 text-slate-600 min-w-[200px]">{c.divergencias || ""}</td>
+                  {loadingFreteList && (
+                    <div className="flex items-center justify-center py-6" style={{ background: bgLight }}>
+                      <Loader2 className="w-5 h-5 animate-spin" style={{ color: accent }} />
+                    </div>
+                  )}
+                  {!loadingFreteList && freteList !== null && freteList.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-4 italic" style={{ background: bgLight }}>Nenhuma carga encontrada.</p>
+                  )}
+                  {!loadingFreteList && freteList && freteList.length > 0 && (
+                    <div className="overflow-x-auto max-h-52 overflow-y-auto" style={{ background: bgLight }}>
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0" style={{ background: bgMed }}>
+                          <tr>
+                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Data</th>
+                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Cliente</th>
+                            {isCancel && <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Frete</th>}
+                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>OBS</th>
+                            <th className="text-center px-3 py-1.5 font-semibold" style={{ color: accent }}>NF</th>
+                            <th className="text-center px-3 py-1.5 font-semibold" style={{ color: accent }}>CG</th>
+                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Divergências</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+                        </thead>
+                        <tbody>
+                          {freteList.map((c, i) => (
+                            <tr key={c.id} className={i % 2 === 0 ? "bg-white" : ""} style={i % 2 !== 0 ? { background: bgLight } : undefined}>
+                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.date.slice(8)}/{c.date.slice(5,7)}</td>
+                              <td className="px-3 py-1.5 font-medium text-slate-800 whitespace-nowrap">{c.cliente || "—"}</td>
+                              {isCancel && <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.frete || "—"}</td>}
+                              <td className="px-3 py-1.5 text-slate-600 uppercase whitespace-nowrap">{c.obs || "—"}</td>
+                              <td className="px-3 py-1.5 text-center font-bold" style={{ color: accent }}>{c.nf === "x" ? "✗" : ""}</td>
+                              <td className="px-3 py-1.5 text-center font-bold" style={{ color: accent }}>{c.cg === "x" ? "✗" : ""}</td>
+                              <td className="px-3 py-1.5 text-slate-600 min-w-[200px]">{c.divergencias || ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="flex justify-end pt-1">
               <Button size="sm" onClick={exportExcel} className="gap-2 bg-green-700 hover:bg-green-800 text-white">

@@ -158,6 +158,47 @@ router.get("/entregas/cancelados", async (req, res): Promise<void> => {
   res.json(rows);
 });
 
+router.get("/entregas/por-frete", async (req, res): Promise<void> => {
+  const mes   = typeof req.query.mes   === "string" ? req.query.mes   : new Date().toISOString().slice(0, 7);
+  const frete = typeof req.query.frete === "string" ? req.query.frete : "";
+  const start = `${mes}-01`;
+  const end   = `${mes}-31`;
+
+  const cols = {
+    id:          entregasTable.id,
+    date:        entregasTable.date,
+    cliente:     entregasTable.cliente,
+    obs:         entregasTable.obs,
+    frete:       entregasTable.frete,
+    nf:          entregasTable.nf,
+    cg:          entregasTable.cg,
+    divergencias: entregasTable.divergencias,
+  };
+
+  let rows;
+  if (frete === "CANCELADOS") {
+    rows = await db.select(cols).from(entregasTable)
+      .where(sql`
+        ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+        AND (
+          UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+          OR ${entregasTable.nf} = 'x'
+          OR ${entregasTable.cg} = 'x'
+        )
+      `)
+      .orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
+  } else {
+    rows = await db.select(cols).from(entregasTable)
+      .where(sql`
+        ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+        AND ${entregasTable.frete} = ${frete}
+      `)
+      .orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
+  }
+
+  res.json(rows);
+});
+
 router.get("/entregas/frete-mensal", async (req, res): Promise<void> => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : new Date().toISOString().slice(0, 7);
   const start = `${mes}-01`;
