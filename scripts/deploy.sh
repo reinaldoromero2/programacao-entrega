@@ -81,6 +81,6 @@ echo "✅ Push concluído! Aguardando Render iniciar e verificando produção...
 echo "   (Ctrl+C para pular a verificação e monitorar manualmente em https://dashboard.render.com)"
 echo ""
 
-# Run the smoke test with the release ID so it can confirm production is
-# running exactly this build, not a stale previous release.
-bash "$(dirname "$0")/check-deploy.sh" "${RELEASE_ID}"
+# Run the smoke test — it derives the expected release from the local HEAD SHA
+# (matching the "dev-<sha>" format the server reports when Render rebuilds from source).
+bash "$(dirname "$0")/check-deploy.sh"

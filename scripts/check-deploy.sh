@@ -4,16 +4,19 @@
 # Verifica se os três estágios do deploy.sh concluíram com sucesso:
 #   1. Build output existe e não está vazio
 #   2. O mirror no GitHub tem o mesmo SHA que o HEAD local
-#   3. O app em produção está rodando o release esperado (via /api/healthz)
+#   3. O app em produção está rodando o commit esperado (via /api/healthz)
 #
-# Uso: bash scripts/check-deploy.sh <release-id>
-#   O release-id é o valor de RELEASE_ID gerado por deploy.sh (ex: 20260806192100)
+# Uso: bash scripts/check-deploy.sh
+#   Deriva automaticamente o release esperado do commit HEAD local (ex: dev-054827f)
 #
 # Requer: GITHUB_PERSONAL_ACCESS_TOKEN (conta reinaldoromero2)
 
 set -euo pipefail
 
-EXPECTED_RELEASE="${1:?Uso: bash scripts/check-deploy.sh <release-id>}"
+# Derive the expected release from the local HEAD short SHA.
+# The server embeds "dev-<short-sha>" when DEPLOY_RELEASE_ID is not set at
+# build time (which is the case when Render rebuilds from source on its end).
+EXPECTED_RELEASE="dev-$(git rev-parse --short HEAD)"
 TOKEN="${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
 MIRROR_REPO="reinaldoromero2/programacao-entrega"
 DIST_FILE="artifacts/api-server/dist/index.mjs"
@@ -31,7 +34,7 @@ fail() { echo "   ❌ $*"; FAIL=$((FAIL + 1)); }
 
 echo "================================================="
 echo " Smoke test — $(date -u '+%Y-%m-%d %H:%M UTC')"
-echo " Esperando release: ${EXPECTED_RELEASE}"
+echo " Esperando release: ${EXPECTED_RELEASE} (HEAD local)"
 echo "================================================="
 
 # ── Token obrigatório ─────────────────────────────────
@@ -68,7 +71,7 @@ fi
 
 # ── 3. Produção rodando o release esperado ────────────
 echo ""
-echo "🔍 [3/3] Aguardando produção reportar o release ${EXPECTED_RELEASE}..."
+echo "🔍 [3/3] Aguardando produção reportar o release ${EXPECTED_RELEASE} (commit SHA)..."
 echo "   (máx ${POLL_ATTEMPTS} tentativas × ${POLL_INTERVAL}s = $((POLL_ATTEMPTS * POLL_INTERVAL))s)"
 
 PROD_OK=false
