@@ -344,14 +344,19 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const template = gridTemplate(colWidths);
 
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  const enableDrag  = () => { if (rowRef.current) rowRef.current.draggable = true; };
+  const disableDrag = () => { if (rowRef.current) rowRef.current.draggable = false; };
+
   return (
     <div
-      draggable
+      ref={rowRef}
       onDragStart={onDragStart}
       onDragEnter={(e) => { e.preventDefault(); onDragEnter(); }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
-      onDragEnd={onDragEnd}
+      onDragEnd={() => { disableDrag(); onDragEnd(); }}
       className={cn(
         "border-b border-slate-200 group hover:bg-slate-50 transition-colors items-stretch",
         isRipack && "bg-green-100 hover:bg-green-200",
@@ -561,7 +566,12 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       {/* Actions */}
       <div className="p-1 flex items-center justify-center gap-1 relative overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
-          <div className="cursor-grab active:cursor-grabbing p-1 rounded text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors">
+          <div
+            onMouseDown={enableDrag}
+            onMouseUp={disableDrag}
+            className="cursor-grab active:cursor-grabbing p-1 rounded text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+            title="Arrastar para reordenar"
+          >
             <GripVertical className="w-4 h-4" />
           </div>
           <Button variant="ghost" size="icon" onClick={handleDelete} className="w-6 h-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded" data-testid={`button-delete-${entrega.id}`}>
