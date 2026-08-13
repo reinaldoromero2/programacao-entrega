@@ -28,9 +28,9 @@ import { Button } from "@/components/ui/button";
 
 const STORAGE_KEY = "delivery-table-col-widths";
 
-const DEFAULT_WIDTHS = [40, 200, 80, 150, 220, 120, 50, 140, 100, 50, 160, 80];
-const MIN_WIDTHS    = [30,  80, 50,  60, 120,  80, 36,  80,  60, 36,  80, 36];
-const COL_LABELS = ["S", "CLIENTE", "HRS", "OBS", "MOTORISTA • PLACA", "FRETE", "V", "UNIDADE", "NF", "CG", "DIVERGÊNCIAS", ""];
+const DEFAULT_WIDTHS = [40, 40, 200, 80, 150, 220, 120, 50, 140, 100, 50, 160, 80];
+const MIN_WIDTHS    = [30, 30,  80, 50,  60, 120,  80, 36,  80,  60, 36,  80, 36];
+const COL_LABELS = ["S", "#", "CLIENTE", "HRS", "OBS", "MOTORISTA • PLACA", "FRETE", "V", "UNIDADE", "NF", "CG", "DIVERGÊNCIAS", ""];
 
 const FRETE_OPTIONS = ["RIPACK", "TRANSPORTADORA", "3º", "COLETA"] as const;
 type FreteOption = typeof FRETE_OPTIONS[number];
@@ -159,7 +159,7 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
               className={cn(
                 "relative flex items-center justify-center p-3",
                 i < COL_LABELS.length - 1 && "border-r border-slate-200",
-                i === 1 || i === 3 || i === 4 ? "justify-start" : "justify-center"
+                i === 2 || i === 4 || i === 5 ? "justify-start" : "justify-center"
               )}
             >
               <span className="truncate">{label}</span>
@@ -185,6 +185,7 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
               key={entrega.id}
               entrega={entrega}
               date={date}
+              rowIndex={index + 1}
               onMoveUp={() => handleMove(index, "up")}
               onMoveDown={() => handleMove(index, "down")}
               isFirst={index === 0}
@@ -208,13 +209,14 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
 interface DeliveryRowProps {
   entrega: Entrega;
   date: string;
+  rowIndex: number;
   onMoveUp: () => void;
   onMoveDown: () => void;
   isFirst: boolean;
   isLast: boolean;
 }
 
-function DeliveryRow({ entrega, date, onMoveUp, onMoveDown, isFirst, isLast }: DeliveryRowProps) {
+function DeliveryRow({ entrega, date, rowIndex, onMoveUp, onMoveDown, isFirst, isLast }: DeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const updateEntrega = useUpdateEntrega();
@@ -352,6 +354,11 @@ function DeliveryRow({ entrega, date, onMoveUp, onMoveDown, isFirst, isLast }: D
             </svg>
           )}
         </button>
+      </div>
+
+      {/* # */}
+      <div className="p-2 border-r border-slate-200 flex items-center justify-center overflow-hidden">
+        <span className="text-xs font-bold text-slate-400 select-none">{rowIndex}</span>
       </div>
 
       {/* CLIENTE */}
@@ -590,6 +597,8 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
       <div className="p-2 border-r border-slate-100 flex items-center justify-center">
         <div className="w-5 h-5 rounded-sm border border-slate-300 bg-white/50" />
       </div>
+
+      <div className="p-1 border-r border-slate-100 overflow-hidden" />{/* # */}
 
       <div className="p-1 border-r border-slate-100 flex flex-col justify-center relative overflow-hidden">
         <input
