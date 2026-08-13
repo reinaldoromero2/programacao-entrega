@@ -2,7 +2,13 @@
 
 # compiled output
 dist
-!artifacts/api-server/dist/index.mjs
+# Allow the pre-built API bundle committed by deploy.sh.
+# Git won't descend into an ignored directory, so we must un-ignore the
+# directory itself before we can un-ignore files inside it.
+# Sourcemaps (*.map) are kept out — they are large and not required to run.
+!artifacts/api-server/dist/
+!artifacts/api-server/dist/*.mjs
+artifacts/api-server/dist/*.map
 tmp
 out-tsc
 *.tsbuildinfo
