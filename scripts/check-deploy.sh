@@ -23,12 +23,14 @@ else
 fi
 TOKEN="${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
 MIRROR_REPO="reinaldoromero2/programacao-entrega"
-DIST_FILE="artifacts/api-server/dist/index.mjs"
+# Allow override for testing (DIST_FILE env var); falls back to the real path.
+DIST_FILE="${DIST_FILE:-artifacts/api-server/dist/index.mjs}"
 HEALTHZ_URL="https://data-fill-tool.onrender.com/api/healthz"
 
-# Poll settings: wait up to 6 minutes (36 × 10 s)
-POLL_ATTEMPTS=36
-POLL_INTERVAL=10
+# Poll settings: wait up to 6 minutes (36 × 10 s).
+# Override via env vars for testing: POLL_ATTEMPTS=1 POLL_INTERVAL=0 bash scripts/check-deploy.sh
+POLL_ATTEMPTS="${POLL_ATTEMPTS:-36}"
+POLL_INTERVAL="${POLL_INTERVAL:-10}"
 
 PASS=0
 FAIL=0
