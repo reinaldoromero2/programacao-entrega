@@ -6,17 +6,21 @@
 #   2. O mirror no GitHub tem o mesmo SHA que o HEAD local
 #   3. O app em produção está rodando o commit esperado (via /api/healthz)
 #
-# Uso: bash scripts/check-deploy.sh
-#   Deriva automaticamente o release esperado do commit HEAD local (ex: dev-054827f)
+# Uso: bash scripts/check-deploy.sh [RELEASE_ID]
+#   Com RELEASE_ID (ex: 20260812135812) — compara o timestamp exato embutido pelo deploy.sh.
+#   Sem RELEASE_ID — fallback: usa "dev-<short-sha>" (build sem DEPLOY_RELEASE_ID).
 #
 # Requer: GITHUB_PERSONAL_ACCESS_TOKEN (conta reinaldoromero2)
 
 set -euo pipefail
 
-# Derive the expected release from the local HEAD short SHA.
-# The server embeds "dev-<short-sha>" when DEPLOY_RELEASE_ID is not set at
-# build time (which is the case when Render rebuilds from source on its end).
-EXPECTED_RELEASE="dev-$(git rev-parse --short HEAD)"
+# Accept the release ID as the first argument (passed by deploy.sh).
+# Falls back to the git-SHA format for manual standalone runs.
+if [ -n "${1:-}" ]; then
+  EXPECTED_RELEASE="${1}"
+else
+  EXPECTED_RELEASE="dev-$(git rev-parse --short HEAD)"
+fi
 TOKEN="${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
 MIRROR_REPO="reinaldoromero2/programacao-entrega"
 DIST_FILE="artifacts/api-server/dist/index.mjs"
@@ -71,7 +75,7 @@ fi
 
 # ── 3. Produção rodando o release esperado ────────────
 echo ""
-echo "🔍 [3/3] Aguardando produção reportar o release ${EXPECTED_RELEASE} (commit SHA)..."
+echo "🔍 [3/3] Aguardando produção reportar o release ${EXPECTED_RELEASE}..."
 echo "   (máx ${POLL_ATTEMPTS} tentativas × ${POLL_INTERVAL}s = $((POLL_ATTEMPTS * POLL_INTERVAL))s)"
 
 PROD_OK=false
