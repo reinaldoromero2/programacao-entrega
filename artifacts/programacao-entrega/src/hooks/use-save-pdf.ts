@@ -31,8 +31,8 @@ function buildPdf(entregas: Entrega[], dateStr: string): Blob {
       [e.motorista, e.placa].filter(Boolean).join(" • "),
       e.v || "",
       e.unidade,
-      e.nf ? "✓" : "",
-      e.cg ? "✓" : "",
+      e.nf && e.nf !== "none" ? "✓" : "",
+      e.cg && e.cg !== "none" ? "✓" : "",
     ]);
 
   autoTable(doc, {
@@ -59,82 +59,107 @@ function buildPdf(entregas: Entrega[], dateStr: string): Blob {
   return doc.output("blob");
 }
 
-async function requestWritePermission(handle: FileSystemFileHandle): Promise<boolean> {
-  const h = handle as FileSystemFileHandle & {
-    queryPermission: (opts: { mode: string }) => Promise<string>;
-    requestPermission: (opts: { mode: string }) => Promise<string>;
-  };
-  const perm = await h.queryPermission({ mode: "readwrite" });
-  if (perm === "granted") return true;
-  const req = await h.requestPermission({ mode: "readwrite" });
-  return req === "granted";
+/** Fallback: trigger a regular browser download (no folder selection). */
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Try to write via File System Access API. Returns false if unavailable/denied. */
+async function writeViaFileSystemAPI(
+  handleRef: React.MutableRefObject<FileSystemFileHandle | null>,
+  blob: Blob,
+  suggestedName: string,
+): Promise<boolean> {
+  if (!("showSaveFilePicker" in window)) return false;
+
+  const showPicker = (window as unknown as {
+    showSaveFilePicker: (opts: object) => Promise<FileSystemFileHandle>;
+  }).showSaveFilePicker;
+
+  let fileHandle = handleRef.current;
+
+  // Check/request permission on existing handle
+  if (fileHandle) {
+    try {
+      const h = fileHandle as FileSystemFileHandle & {
+        queryPermission: (o: { mode: string }) => Promise<string>;
+        requestPermission: (o: { mode: string }) => Promise<string>;
+      };
+      // Go straight to requestPermission — if already granted it returns immediately
+      const result = await h.requestPermission({ mode: "readwrite" });
+      if (result !== "granted") fileHandle = null; // will open picker below
+    } catch {
+      fileHandle = null; // handle is stale — open picker
+    }
+  }
+
+  // Open picker if we don't have a working handle
+  if (!fileHandle) {
+    try {
+      fileHandle = await showPicker({
+        suggestedName,
+        types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
+      });
+      handleRef.current = fileHandle;
+      await set(IDB_KEY, fileHandle);
+    } catch (err) {
+      // User cancelled (AbortError) or API not allowed in this context
+      if ((err as { name?: string }).name === "AbortError") return true; // cancelled ≠ error
+      return false; // API unavailable — caller will fallback
+    }
+  }
+
+  if (!fileHandle) return false;
+
+  const writable = await fileHandle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+  return true;
 }
 
 export function useSavePdf() {
   const handleRef = useRef<FileSystemFileHandle | null>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
 
-  // Pre-load the stored handle at mount time so it's already in memory
-  // before the user clicks. This keeps the user-gesture token intact
-  // when we later call requestPermission inside the click handler.
+  // Pre-load stored handle at mount so it's in memory before the user clicks,
+  // keeping the user-gesture token intact for requestPermission.
   useEffect(() => {
-    get<FileSystemFileHandle>(IDB_KEY).then(stored => {
-      if (stored) handleRef.current = stored;
-    });
+    get<FileSystemFileHandle>(IDB_KEY)
+      .then(stored => { if (stored) handleRef.current = stored; })
+      .catch(() => { /* IDB unavailable — no-op */ });
   }, []);
 
   const savePdf = useCallback(async (entregas: Entrega[], dateStr: string) => {
-    if (!("showSaveFilePicker" in window)) {
-      alert("Seu navegador não suporta salvar arquivos diretamente. Use Chrome ou Edge.");
-      return;
-    }
-
     setStatus("saving");
+    const dateFmt = format(new Date(dateStr + "T12:00:00"), "dd-MM-yyyy");
+    const filename = `Programacao-Entrega-${dateFmt}.pdf`;
+    const blob = buildPdf(entregas, dateStr);
+
     try {
-      // Handle already pre-loaded by useEffect — no IDB await here
-      // so the user-gesture token stays alive for requestPermission.
-      let fileHandle = handleRef.current;
-      let needPicker = !fileHandle;
-
-      if (fileHandle && !needPicker) {
-        const ok = await requestWritePermission(fileHandle).catch(() => false);
-        if (!ok) needPicker = true;
+      const savedToFolder = await writeViaFileSystemAPI(handleRef, blob, filename);
+      if (!savedToFolder) {
+        // File System Access API unavailable or not allowed — use regular download
+        downloadBlob(blob, filename);
       }
-
-      if (needPicker) {
-        const dateFmt = format(new Date(dateStr + "T12:00:00"), "dd-MM-yyyy");
-        fileHandle = await (window as unknown as {
-          showSaveFilePicker: (opts: object) => Promise<FileSystemFileHandle>
-        }).showSaveFilePicker({
-          suggestedName: `Programacao-Entrega-${dateFmt}.pdf`,
-          types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
-        });
-        handleRef.current = fileHandle;
-        await set(IDB_KEY, fileHandle);
-      }
-
-      if (!fileHandle) { setStatus("idle"); return; }
-
-      const blob = buildPdf(entregas, dateStr);
-      const writable = await fileHandle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-
       setStatus("idle");
-    } catch (err: unknown) {
-      if ((err as { name?: string }).name === "AbortError") {
-        setStatus("idle");
-      } else {
-        console.error(err);
-        setStatus("error");
-        setTimeout(() => setStatus("idle"), 3000);
-      }
+    } catch (err) {
+      console.error("[useSavePdf]", err);
+      // Last resort: try plain download before showing error
+      try { downloadBlob(blob, filename); setStatus("idle"); }
+      catch { setStatus("error"); setTimeout(() => setStatus("idle"), 3000); }
     }
   }, []);
 
-  const resetLocation = useCallback(async () => {
+  const resetLocation = useCallback(() => {
     handleRef.current = null;
-    await set(IDB_KEY, undefined);
+    set(IDB_KEY, undefined).catch(() => {});
   }, []);
 
   return { savePdf, status, resetLocation };
