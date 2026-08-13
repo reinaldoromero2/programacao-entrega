@@ -66,10 +66,10 @@ interface CanceladoItem {
   id: number;
   date: string;
   cliente: string;
+  motorista: string | null;
+  placa: string | null;
   obs: string | null;
   frete: string | null;
-  nf: string | null;
-  cg: string | null;
   divergencias: string | null;
 }
 
@@ -675,10 +675,10 @@ function FreteMensalTab() {
                           <tr>
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Data</th>
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Cliente</th>
+                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Motorista</th>
+                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Placa</th>
                             {isCancel && <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Frete</th>}
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>OBS</th>
-                            <th className="text-center px-3 py-1.5 font-semibold" style={{ color: accent }}>NF</th>
-                            <th className="text-center px-3 py-1.5 font-semibold" style={{ color: accent }}>CG</th>
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Divergências</th>
                           </tr>
                         </thead>
@@ -687,10 +687,10 @@ function FreteMensalTab() {
                             <tr key={c.id} className={i % 2 === 0 ? "bg-white" : ""} style={i % 2 !== 0 ? { background: bgLight } : undefined}>
                               <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.date.slice(8)}/{c.date.slice(5,7)}</td>
                               <td className="px-3 py-1.5 font-medium text-slate-800 whitespace-nowrap">{c.cliente || "—"}</td>
+                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.motorista || "—"}</td>
+                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.placa || "—"}</td>
                               {isCancel && <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.frete || "—"}</td>}
                               <td className="px-3 py-1.5 text-slate-600 uppercase whitespace-nowrap">{c.obs || "—"}</td>
-                              <td className="px-3 py-1.5 text-center font-bold" style={{ color: accent }}>{c.nf === "x" ? "✗" : ""}</td>
-                              <td className="px-3 py-1.5 text-center font-bold" style={{ color: accent }}>{c.cg === "x" ? "✗" : ""}</td>
                               <td className="px-3 py-1.5 text-slate-600 min-w-[200px]">{c.divergencias || ""}</td>
                             </tr>
                           ))}

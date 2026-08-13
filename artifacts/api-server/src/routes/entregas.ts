@@ -135,13 +135,13 @@ router.get("/entregas/cancelados", async (req, res): Promise<void> => {
 
   const rows = await db
     .select({
-      id:          entregasTable.id,
-      date:        entregasTable.date,
-      cliente:     entregasTable.cliente,
-      obs:         entregasTable.obs,
-      frete:       entregasTable.frete,
-      nf:          entregasTable.nf,
-      cg:          entregasTable.cg,
+      id:           entregasTable.id,
+      date:         entregasTable.date,
+      cliente:      entregasTable.cliente,
+      motorista:    entregasTable.motorista,
+      placa:        entregasTable.placa,
+      obs:          entregasTable.obs,
+      frete:        entregasTable.frete,
       divergencias: entregasTable.divergencias,
     })
     .from(entregasTable)
@@ -165,13 +165,13 @@ router.get("/entregas/por-frete", async (req, res): Promise<void> => {
   const end   = `${mes}-31`;
 
   const cols = {
-    id:          entregasTable.id,
-    date:        entregasTable.date,
-    cliente:     entregasTable.cliente,
-    obs:         entregasTable.obs,
-    frete:       entregasTable.frete,
-    nf:          entregasTable.nf,
-    cg:          entregasTable.cg,
+    id:           entregasTable.id,
+    date:         entregasTable.date,
+    cliente:      entregasTable.cliente,
+    motorista:    entregasTable.motorista,
+    placa:        entregasTable.placa,
+    obs:          entregasTable.obs,
+    frete:        entregasTable.frete,
     divergencias: entregasTable.divergencias,
   };
 

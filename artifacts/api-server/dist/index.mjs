@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-ee329c1" });
+  res.json({ ...data, release: "dev-b3c900c" });
 });
 var health_default = router;
 
@@ -106178,10 +106178,10 @@ router2.get("/entregas/cancelados", async (req, res) => {
     id: entregasTable.id,
     date: entregasTable.date,
     cliente: entregasTable.cliente,
+    motorista: entregasTable.motorista,
+    placa: entregasTable.placa,
     obs: entregasTable.obs,
     frete: entregasTable.frete,
-    nf: entregasTable.nf,
-    cg: entregasTable.cg,
     divergencias: entregasTable.divergencias
   }).from(entregasTable).where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
@@ -106202,10 +106202,10 @@ router2.get("/entregas/por-frete", async (req, res) => {
     id: entregasTable.id,
     date: entregasTable.date,
     cliente: entregasTable.cliente,
+    motorista: entregasTable.motorista,
+    placa: entregasTable.placa,
     obs: entregasTable.obs,
     frete: entregasTable.frete,
-    nf: entregasTable.nf,
-    cg: entregasTable.cg,
     divergencias: entregasTable.divergencias
   };
   let rows;
