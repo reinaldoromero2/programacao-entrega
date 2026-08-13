@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { Loader2, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MotoristaCombobox } from "@/components/motorista-combobox";
 import {
@@ -70,6 +70,8 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
   const reorderEntregas = useReorderEntregas();
 
   const [colWidths, setColWidths] = useState<number[]>(loadWidths);
+  const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
 
   // Persist to localStorage whenever widths change
   useEffect(() => {
@@ -114,23 +116,28 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
     return a.id - b.id;
   });
 
-  const handleMove = (index: number, direction: "up" | "down") => {
-    if (direction === "up" && index === 0) return;
-    if (direction === "down" && index === sortedEntregas.length - 1) return;
-    const newIndex = direction === "up" ? index - 1 : index + 1;
-    const newOrder = [...sortedEntregas];
-    [newOrder[index], newOrder[newIndex]] = [newOrder[newIndex], newOrder[index]];
+  const handleDragStart = (id: number) => setDraggedId(id);
+  const handleDragEnter = (id: number) => { if (id !== draggedId) setDragOverId(id); };
+  const handleDragEnd = () => { setDraggedId(null); setDragOverId(null); };
 
-    // Optimistic update: swap sortOrders in cache immediately so UI moves instantly
+  const handleDrop = (targetId: number) => {
+    if (draggedId === null || draggedId === targetId) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+    const fromIndex = sortedEntregas.findIndex(e => e.id === draggedId);
+    const toIndex   = sortedEntregas.findIndex(e => e.id === targetId);
+    const newOrder  = [...sortedEntregas];
+    const [moved]   = newOrder.splice(fromIndex, 1);
+    newOrder.splice(toIndex, 0, moved);
+
     const queryKey = getListEntregasQueryKey({ date });
     const previous = queryClient.getQueryData(queryKey);
-    const itemA = sortedEntregas[index];
-    const itemB = sortedEntregas[newIndex];
     queryClient.setQueryData(queryKey, (old: Entrega[] | undefined) =>
       old?.map(e => {
-        if (e.id === itemA.id) return { ...e, sortOrder: itemB.sortOrder };
-        if (e.id === itemB.id) return { ...e, sortOrder: itemA.sortOrder };
-        return e;
+        const idx = newOrder.findIndex(n => n.id === e.id);
+        return idx !== -1 ? { ...e, sortOrder: idx } : e;
       })
     );
 
@@ -141,6 +148,8 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
         onSuccess: () => queryClient.invalidateQueries({ queryKey }),
       }
     );
+    setDraggedId(null);
+    setDragOverId(null);
   };
 
   const template = gridTemplate(colWidths);
@@ -186,10 +195,12 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
               entrega={entrega}
               date={date}
               rowIndex={index + 1}
-              onMoveUp={() => handleMove(index, "up")}
-              onMoveDown={() => handleMove(index, "down")}
-              isFirst={index === 0}
-              isLast={index === sortedEntregas.length - 1}
+              onDragStart={() => handleDragStart(entrega.id)}
+              onDragEnter={() => handleDragEnter(entrega.id)}
+              onDrop={() => handleDrop(entrega.id)}
+              onDragEnd={handleDragEnd}
+              isDragging={draggedId === entrega.id}
+              isDragOver={dragOverId === entrega.id}
             />
           ))}
 
@@ -210,13 +221,15 @@ interface DeliveryRowProps {
   entrega: Entrega;
   date: string;
   rowIndex: number;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  isFirst: boolean;
-  isLast: boolean;
+  onDragStart: () => void;
+  onDragEnter: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
+  isDragging: boolean;
+  isDragOver: boolean;
 }
 
-function DeliveryRow({ entrega, date, rowIndex, onMoveUp, onMoveDown, isFirst, isLast }: DeliveryRowProps) {
+function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver }: DeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const updateEntrega = useUpdateEntrega();
@@ -333,7 +346,19 @@ function DeliveryRow({ entrega, date, rowIndex, onMoveUp, onMoveDown, isFirst, i
 
   return (
     <div
-      className={cn("border-b border-slate-200 group hover:bg-slate-50 transition-colors items-stretch", isRipack && "bg-green-100 hover:bg-green-200", isCancelled && "bg-red-100 hover:bg-red-200")}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnter={(e) => { e.preventDefault(); onDragEnter(); }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      onDragEnd={onDragEnd}
+      className={cn(
+        "border-b border-slate-200 group hover:bg-slate-50 transition-colors items-stretch",
+        isRipack && "bg-green-100 hover:bg-green-200",
+        isCancelled && "bg-red-100 hover:bg-red-200",
+        isDragging && "opacity-30 scale-[0.99]",
+        isDragOver && "border-t-2 border-blue-500",
+      )}
       style={{ display: "grid", gridTemplateColumns: template }}
     >
       {/* S */}
@@ -536,13 +561,10 @@ function DeliveryRow({ entrega, date, rowIndex, onMoveUp, onMoveDown, isFirst, i
       {/* Actions */}
       <div className="p-1 flex items-center justify-center gap-1 relative overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
-          <Button variant="ghost" size="icon" onClick={onMoveUp} disabled={isFirst} className="w-6 h-6 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded">
-            <ArrowUp className="w-3 h-3" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onMoveDown} disabled={isLast} className="w-6 h-6 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded">
-            <ArrowDown className="w-3 h-3" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={handleDelete} className="w-6 h-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded ml-1" data-testid={`button-delete-${entrega.id}`}>
+          <div className="cursor-grab active:cursor-grabbing p-1 rounded text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors">
+            <GripVertical className="w-4 h-4" />
+          </div>
+          <Button variant="ghost" size="icon" onClick={handleDelete} className="w-6 h-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded" data-testid={`button-delete-${entrega.id}`}>
             <Trash2 className="w-3 h-3" />
           </Button>
         </div>
