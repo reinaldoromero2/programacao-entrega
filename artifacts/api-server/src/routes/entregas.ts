@@ -403,28 +403,23 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
   const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
   const valor  = typeof req.query.valor  === "string" ? req.query.valor  : new Date().toISOString().slice(0, 7);
 
-  let whereExpr;
-  const cancelFilter = sql`NOT (
+  const notCancelled = sql`NOT (
     UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
     OR ${entregasTable.nf} = 'x'
     OR ${entregasTable.cg} = 'x'
   )`;
+  const clienteExists = sql`${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''`;
 
+  let dateFilter;
   if (filtro === "dia") {
-    whereExpr = sql`${entregasTable.date} = ${valor}
-      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
-      AND ${cancelFilter}`;
+    dateFilter = sql`${entregasTable.date} = ${valor}`;
   } else if (filtro === "mes") {
-    whereExpr = sql`${entregasTable.date} >= ${valor + "-01"}
-      AND ${entregasTable.date} <= ${valor + "-31"}
-      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
-      AND ${cancelFilter}`;
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
   } else {
-    whereExpr = sql`${entregasTable.date} >= ${valor + "-01-01"}
-      AND ${entregasTable.date} <= ${valor + "-12-31"}
-      AND ${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''
-      AND ${cancelFilter}`;
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
   }
+
+  const whereExpr = sql`(${dateFilter}) AND (${clienteExists}) AND (${notCancelled})`;
 
   const rows = await db
     .select({ cliente: entregasTable.cliente })
