@@ -1108,97 +1108,111 @@ function ClienteTab() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="overflow-auto border rounded-md max-h-[260px]">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-700 font-semibold text-xs uppercase sticky top-0">
-                      <th className="px-3 py-2 text-left">#</th>
-                      <th className="px-3 py-2 text-left">Cliente</th>
-                      <th className="px-3 py-2 text-center">Entregas</th>
-                      <th className="px-3 py-2 text-left">Participação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.resultado.map((r, i) => {
-                      const pct = data.totalViagens > 0 ? Math.round((r.total / data.totalViagens) * 100) : 0;
-                      const cor = CLIENTE_CORES[i % CLIENTE_CORES.length];
-                      return (
-                        <tr
-                          key={r.cliente}
-                          onClick={() => handleClienteClick(r.cliente)}
-                          className={`border-t border-slate-200 cursor-pointer transition-colors ${selectedCliente === r.cliente ? "bg-blue-50" : "hover:bg-slate-50"}`}
-                        >
-                          <td className="px-3 py-2 text-slate-400 text-xs">{i + 1}</td>
-                          <td className="px-3 py-2 font-medium text-slate-800">{r.cliente}</td>
-                          <td className="px-3 py-2 text-center font-bold" style={{ color: cor }}>{r.total}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 bg-slate-100 rounded-full h-2">
-                                <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: cor }} />
-                              </div>
-                              <span className="text-xs text-slate-500 w-8 text-right">{pct}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {/* Linha lado a lado: tabela de clientes | painel de viagens */}
+              <div className="flex gap-3 min-h-0" style={{ height: "260px" }}>
 
-              {/* Painel de viagens do cliente selecionado */}
-              {selectedCliente && (
-                <div className="rounded-lg overflow-hidden border border-blue-200">
-                  <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-b border-blue-200">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                      {selectedCliente} — {periodoLabel}
-                      {clienteViagens && !loadingViagens && (
-                        <span className="ml-2 font-normal text-blue-500">
-                          ({clienteViagens.length} viagem{clienteViagens.length !== 1 ? "s" : ""})
-                        </span>
-                      )}
-                    </span>
-                    <button
-                      onClick={() => { setSelectedCliente(null); setClienteViagens(null); }}
-                      className="text-blue-400 hover:text-blue-600 text-lg leading-none"
-                    >×</button>
-                  </div>
-                  {loadingViagens && (
-                    <div className="flex items-center justify-center py-4 bg-blue-50/50">
-                      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                    </div>
-                  )}
-                  {!loadingViagens && clienteViagens?.length === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-3 italic">Nenhuma viagem encontrada.</p>
-                  )}
-                  {!loadingViagens && clienteViagens && clienteViagens.length > 0 && (
-                    <div className="overflow-y-auto max-h-44">
-                      <table className="w-full text-xs">
-                        <thead className="sticky top-0 bg-blue-100">
-                          <tr>
-                            <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Data</th>
-                            <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Motorista</th>
-                            <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Frete</th>
-                            <th className="px-3 py-1.5 text-left font-semibold text-blue-700">OBS</th>
+                {/* Esquerda — ranking de clientes */}
+                <div className="w-1/2 overflow-auto border rounded-md">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-semibold text-xs uppercase sticky top-0">
+                        <th className="px-3 py-2 text-left">#</th>
+                        <th className="px-3 py-2 text-left">Cliente</th>
+                        <th className="px-3 py-2 text-center">Entregas</th>
+                        <th className="px-3 py-2 text-left">Participação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.resultado.map((r, i) => {
+                        const pct = data.totalViagens > 0 ? Math.round((r.total / data.totalViagens) * 100) : 0;
+                        const cor = CLIENTE_CORES[i % CLIENTE_CORES.length];
+                        return (
+                          <tr
+                            key={r.cliente}
+                            onClick={() => handleClienteClick(r.cliente)}
+                            className={`border-t border-slate-200 cursor-pointer transition-colors ${selectedCliente === r.cliente ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                          >
+                            <td className="px-3 py-2 text-slate-400 text-xs">{i + 1}</td>
+                            <td className="px-3 py-2 font-medium text-slate-800">{r.cliente}</td>
+                            <td className="px-3 py-2 text-center font-bold" style={{ color: cor }}>{r.total}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 bg-slate-100 rounded-full h-2">
+                                  <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: cor }} />
+                                </div>
+                                <span className="text-xs text-slate-500 w-8 text-right">{pct}%</span>
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {clienteViagens.map((v, i) => (
-                            <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-blue-50/40"}>
-                              <td className="px-3 py-1.5 font-medium text-slate-700 whitespace-nowrap">
-                                {v.date.slice(8)}/{v.date.slice(5,7)}/{v.date.slice(0,4)}
-                              </td>
-                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.motorista || "—"}</td>
-                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.frete || "—"}</td>
-                              <td className="px-3 py-1.5 text-slate-500">{v.obs || ""}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Direita — viagens do cliente selecionado */}
+                <div className="w-1/2 rounded-md overflow-hidden border border-blue-200 flex flex-col">
+                  {!selectedCliente ? (
+                    <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-6-6m0 0l6-6m-6 6h12" />
+                      </svg>
+                      <p className="text-xs">Clique em um cliente para ver as viagens</p>
                     </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-b border-blue-200 shrink-0">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-blue-700 truncate pr-2">
+                          {selectedCliente}
+                          {clienteViagens && !loadingViagens && (
+                            <span className="ml-2 font-normal text-blue-500 normal-case">
+                              · {clienteViagens.length} viagem{clienteViagens.length !== 1 ? "s" : ""} em {periodoLabel}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          onClick={() => { setSelectedCliente(null); setClienteViagens(null); }}
+                          className="text-blue-400 hover:text-blue-600 text-lg leading-none shrink-0"
+                        >×</button>
+                      </div>
+                      {loadingViagens && (
+                        <div className="flex items-center justify-center flex-1">
+                          <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                        </div>
+                      )}
+                      {!loadingViagens && clienteViagens?.length === 0 && (
+                        <p className="text-xs text-slate-400 text-center py-6 italic flex-1">Nenhuma viagem encontrada.</p>
+                      )}
+                      {!loadingViagens && clienteViagens && clienteViagens.length > 0 && (
+                        <div className="overflow-y-auto flex-1">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-blue-100">
+                              <tr>
+                                <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Data</th>
+                                <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Motorista</th>
+                                <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Frete</th>
+                                <th className="px-3 py-1.5 text-left font-semibold text-blue-700">OBS</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {clienteViagens.map((v, i) => (
+                                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-blue-50/40"}>
+                                  <td className="px-3 py-1.5 font-medium text-slate-700 whitespace-nowrap">
+                                    {v.date.slice(8)}/{v.date.slice(5,7)}/{v.date.slice(0,4)}
+                                  </td>
+                                  <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.motorista || "—"}</td>
+                                  <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.frete || "—"}</td>
+                                  <td className="px-3 py-1.5 text-slate-500">{v.obs || ""}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-              )}
+              </div>
 
               <div className="flex justify-end pt-1">
                 <Button size="sm" onClick={exportExcel} className="gap-2 bg-green-700 hover:bg-green-800 text-white">
