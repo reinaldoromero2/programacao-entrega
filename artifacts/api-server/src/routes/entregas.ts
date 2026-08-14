@@ -403,11 +403,13 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
   const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
   const valor  = typeof req.query.valor  === "string" ? req.query.valor  : new Date().toISOString().slice(0, 7);
 
-  const notCancelled = sql`NOT (
-    UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
-    OR ${entregasTable.nf} = 'x'
-    OR ${entregasTable.cg} = 'x'
-  )`;
+  // NULL-safe cancel filter: UPPER(NULL) IN (...) = NULL → excluded by WHERE.
+  // Use COALESCE to treat NULL obs as empty string so only real cancel words trigger.
+  const notCancelled = sql`
+    UPPER(COALESCE(${entregasTable.obs}, '')) NOT IN ('CANCELADO', 'CANCELADA')
+    AND COALESCE(${entregasTable.nf}, '') <> 'x'
+    AND COALESCE(${entregasTable.cg}, '') <> 'x'
+  `;
   const clienteExists = sql`${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''`;
 
   let dateFilter;
