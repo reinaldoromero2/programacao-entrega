@@ -769,7 +769,7 @@ const MOTORISTA_CORES = [
 
 interface MotoristaViagem { date: string; cliente: string; frete: string; obs: string; }
 
-function MotoristaTab() {
+function MotoristaTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) => void }) {
   const [filtro, setFiltro] = useState<FiltroTipo>("mes");
   const [dia,  setDia]  = useState(localToday);
   const [mes,  setMes]  = useState(localMes);
@@ -1013,7 +1013,11 @@ function MotoristaTab() {
                             <tbody>
                               {motoristaViagens.map((v, i) => (
                                 <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-blue-50/40"}>
-                                  <td className="px-3 py-1.5 font-medium text-slate-700 whitespace-nowrap">
+                                  <td
+                                    className={`px-3 py-1.5 font-medium whitespace-nowrap ${onNavigateDia ? "text-blue-600 underline cursor-pointer hover:text-blue-800" : "text-slate-700"}`}
+                                    onClick={() => onNavigateDia?.(v.date)}
+                                    title={onNavigateDia ? "Ir para este dia" : undefined}
+                                  >
                                     {v.date.slice(8)}/{v.date.slice(5,7)}/{v.date.slice(0,4)}
                                   </td>
                                   <td className="px-3 py-1.5 text-slate-600">{v.cliente || "—"}</td>
@@ -1380,7 +1384,7 @@ export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: 
           {open && tab === "resumo"       && <ResumoMensalTab />}
           {open && tab === "divergencias" && <DivergenciasTab />}
           {open && tab === "frete"        && <FreteMensalTab />}
-          {open && tab === "motoristas"   && <MotoristaTab />}
+          {open && tab === "motoristas"   && <MotoristaTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "clientes"     && <ClienteTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
         </div>
       </DialogContent>
