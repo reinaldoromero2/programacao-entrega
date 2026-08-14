@@ -442,9 +442,10 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       <div className="p-1 border-r border-slate-200 flex flex-col justify-center">
         {isCancelled && (motivos?.length ?? 0) > 0 ? (
           <select
-            value={localState.obs}
+            value={localState.obs.replace(/^CANCELAD[AO]\s*-\s*/i, "")}
             onChange={(e) => {
-              const val = e.target.value;
+              const motivo = e.target.value;
+              const val = motivo === "" ? "" : `${obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO"} - ${motivo}`;
               setLocalState(prev => ({ ...prev, obs: val }));
               saveField("obs", val);
             }}
@@ -452,10 +453,9 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
             data-testid={`select-obs-${entrega.id}`}
           >
             <option value="">— limpar —</option>
-            {motivos!.map((m) => [
-              <option key={`a-${m.id}`} value={`CANCELADA - ${m.motivo}`}>CANCELADA - {m.motivo}</option>,
-              <option key={`o-${m.id}`} value={`CANCELADO - ${m.motivo}`}>CANCELADO - {m.motivo}</option>,
-            ])}
+            {motivos!.map((m) => (
+              <option key={m.id} value={m.motivo}>{m.motivo}</option>
+            ))}
           </select>
         ) : (
           <input
