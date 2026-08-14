@@ -255,7 +255,6 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
   const deleteEntrega = useDeleteEntrega();
 
   const [isSaving, setIsSaving] = useState(false);
-  const [showMotivoMenu, setShowMotivoMenu] = useState(false);
   const { data: motivos } = useMotivosCancelamento();
   const [localState, setLocalState] = useState({
     checked: entrega.checked,
@@ -439,39 +438,34 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         />
       </div>
 
-      {/* OBS — combobox de motivos quando digitado "cancelad..." */}
-      <div className="p-1 border-r border-slate-200 flex flex-col justify-center overflow-hidden relative">
-        <input
-          type="text"
-          value={localState.obs}
-          onChange={handleChange("obs")}
-          onFocus={() => setShowMotivoMenu(true)}
-          onBlur={() => {
-            setTimeout(() => setShowMotivoMenu(false), 150);
-            saveField("obs", localState.obs);
-          }}
-          className="w-full px-2 py-1.5 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white"
-          data-testid={`input-obs-${entrega.id}`}
-        />
-        {showMotivoMenu && /^cancelad/i.test(localState.obs) && (motivos?.length ?? 0) > 0 && (
-          <div className="absolute top-full left-0 z-50 min-w-full bg-white border border-red-200 rounded-md shadow-lg overflow-hidden print:hidden">
-            {motivos!.map((m) => (
-              <button
-                key={m.id}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  const prefix = localState.obs.toUpperCase().startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO";
-                  const val = `${prefix} - ${m.motivo}`;
-                  setLocalState(prev => ({ ...prev, obs: val }));
-                  saveField("obs", val);
-                  setShowMotivoMenu(false);
-                }}
-                className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-red-50 hover:text-red-700 transition-colors whitespace-nowrap"
-              >
-                {m.motivo}
-              </button>
-            ))}
-          </div>
+      {/* OBS — select nativo de motivos quando começa com "cancelad", senão input livre */}
+      <div className="p-1 border-r border-slate-200 flex flex-col justify-center">
+        {isCancelled && (motivos?.length ?? 0) > 0 ? (
+          <select
+            value={localState.obs}
+            onChange={(e) => {
+              const val = e.target.value;
+              setLocalState(prev => ({ ...prev, obs: val }));
+              saveField("obs", val);
+            }}
+            className="w-full px-1 py-1 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white cursor-pointer"
+            data-testid={`select-obs-${entrega.id}`}
+          >
+            <option value="">— limpar —</option>
+            {motivos!.map((m) => [
+              <option key={`a-${m.id}`} value={`CANCELADA - ${m.motivo}`}>CANCELADA - {m.motivo}</option>,
+              <option key={`o-${m.id}`} value={`CANCELADO - ${m.motivo}`}>CANCELADO - {m.motivo}</option>,
+            ])}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={localState.obs}
+            onChange={handleChange("obs")}
+            onBlur={() => saveField("obs", localState.obs)}
+            className="w-full px-2 py-1.5 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white"
+            data-testid={`input-obs-${entrega.id}`}
+          />
         )}
       </div>
 
