@@ -22,8 +22,16 @@ async function fetchMotivos(): Promise<Motivo[]> {
   return res.json();
 }
 
-export function MotivosCancelamentoModal() {
-  const [open, setOpen] = useState(false);
+interface MotivosCancelamentoModalProps {
+  open?: boolean;
+  onOpenChange?: (o: boolean) => void;
+}
+
+export function MotivosCancelamentoModal({ open: controlledOpen, onOpenChange: controlledOnOpenChange }: MotivosCancelamentoModalProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
+  const isControlled = controlledOnOpenChange !== undefined;
   const [motivos, setMotivos] = useState<Motivo[]>([]);
   const [newMotivo, setNewMotivo] = useState("");
   const [isAdding, setIsAdding] = useState(false);
@@ -83,17 +91,19 @@ export function MotivosCancelamentoModal() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 gap-2 text-slate-700 border-slate-300 hover:bg-slate-100"
-          data-testid="button-motivos-cancelamento"
-        >
-          <Ban className="w-4 h-4" />
-          Motivos Cancelamento
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 text-slate-700 border-slate-300 hover:bg-slate-100"
+            data-testid="button-motivos-cancelamento"
+          >
+            <Ban className="w-4 h-4" />
+            Motivos Cancelamento
+          </Button>
+        </DialogTrigger>
+      )}
 
       <DialogContent className="max-w-lg">
         <DialogHeader>

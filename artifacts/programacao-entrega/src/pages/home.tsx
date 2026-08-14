@@ -10,10 +10,8 @@ import { PrintView } from "@/components/print-view";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MotoristasModal } from "@/components/motoristas-modal";
-import { MotivosCancelamentoModal } from "@/components/motivos-cancelamento-modal";
 import { RelatorioModal } from "@/components/relatorio-modal";
-import { BackupButtons } from "@/components/backup-buttons";
+import { OpcoesMenu } from "@/components/opcoes-menu";
 import { useSavePdf } from "@/hooks/use-save-pdf";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 
@@ -132,44 +130,37 @@ export default function Home() {
             </Button>
           )}
 
-          {/* Backup — export / import Excel */}
-          <BackupButtons />
+          {/* Opções — exportar, importar, motoristas, motivos */}
+          <OpcoesMenu />
 
-          {/* Motoristas button */}
-          <MotoristasModal />
-
-          {/* Motivos de cancelamento */}
-          <MotivosCancelamentoModal />
-
-          {/* Relatorio button */}
+          {/* Relatorio button — ícone apenas */}
           <RelatorioModal />
 
-          {/* Refresh button */}
+          {/* Refresh button — ícone apenas */}
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={handleRefresh}
             disabled={!isOnline}
-            className="h-9 gap-2 text-slate-700 border-slate-300 hover:bg-slate-100 disabled:opacity-50"
+            className="h-9 w-9 text-slate-700 border-slate-300 hover:bg-slate-100 disabled:opacity-50"
             data-testid="button-refresh"
-            title={!isOnline ? "Sem conexão" : "Recarregar página"}
+            title={!isOnline ? "Sem conexão" : "Atualizar"}
           >
             <RefreshCw className="w-4 h-4" />
-            Atualizar
           </Button>
 
-          {/* Save PDF button */}
+          {/* Save PDF button — ícone apenas */}
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={() => savePdf(entregas || [], dateStr)}
               disabled={pdfStatus === "saving"}
               className={cn(
-                "h-9 gap-2 border-slate-300 hover:bg-slate-100",
+                "h-9 w-9 border-slate-300 hover:bg-slate-100",
                 pdfStatus === "error" ? "text-red-600 border-red-300" : "text-slate-700"
               )}
-              title="Salvar PDF na pasta escolhida (substitui o anterior)"
+              title={pdfStatus === "error" ? "Erro ao salvar PDF" : "Salvar PDF"}
               data-testid="button-save-pdf"
             >
               {pdfStatus === "saving" ? (
@@ -177,7 +168,6 @@ export default function Home() {
               ) : (
                 <FolderDown className="w-4 h-4" />
               )}
-              {pdfStatus === "error" ? "Erro!" : "Salvar PDF"}
             </Button>
             <Button
               variant="ghost"
@@ -190,16 +180,16 @@ export default function Home() {
             </Button>
           </div>
 
-          {/* Print button */}
+          {/* Print button — ícone apenas */}
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={handlePrint}
-            className="h-9 gap-2 text-slate-700 border-slate-300 hover:bg-slate-100"
+            className="h-9 w-9 text-slate-700 border-slate-300 hover:bg-slate-100"
             data-testid="button-print"
+            title="Imprimir"
           >
             <Printer className="w-4 h-4" />
-            Imprimir
           </Button>
         </div>
       </header>

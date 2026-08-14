@@ -26,7 +26,17 @@ interface EditState {
   placa: string;
 }
 
-export function MotoristasModal() {
+interface MotoristasModalProps {
+  open?: boolean;
+  onOpenChange?: (o: boolean) => void;
+}
+
+export function MotoristasModal({ open: controlledOpen, onOpenChange: controlledOnOpenChange }: MotoristasModalProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
+  const isControlled = controlledOnOpenChange !== undefined;
+
   const queryClient = useQueryClient();
   const { data: motoristas = [] } = useListMotoristas();
   const createMotorista = useCreateMotorista();
@@ -93,18 +103,20 @@ export function MotoristasModal() {
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 gap-2 text-slate-700 border-slate-300 hover:bg-slate-100"
-          data-testid="button-motoristas"
-        >
-          <Users className="w-4 h-4" />
-          Motoristas
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={setOpen}>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 text-slate-700 border-slate-300 hover:bg-slate-100"
+            data-testid="button-motoristas"
+          >
+            <Users className="w-4 h-4" />
+            Motoristas
+          </Button>
+        </DialogTrigger>
+      )}
 
       <DialogContent className="max-w-lg">
         <DialogHeader>
