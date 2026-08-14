@@ -553,7 +553,7 @@ function FreteMensalTab() {
   };
 
   return (
-    <div className="flex flex-col gap-4 overflow-y-auto h-full">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <button onClick={prevMes} className="px-3 py-1 rounded border border-slate-300 text-sm hover:bg-slate-100">‹</button>
         <span className="text-sm font-semibold text-slate-700">{mesLabel(mes)}</span>
@@ -1177,7 +1177,7 @@ export function RelatorioModal() {
           ))}
         </div>
 
-        <div className="flex-1 flex flex-col min-h-0 pt-1">
+        <div className="flex-1 overflow-y-auto pt-1 min-h-0">
           {open && tab === "resumo"       && <ResumoMensalTab />}
           {open && tab === "divergencias" && <DivergenciasTab />}
           {open && tab === "frete"        && <FreteMensalTab />}
