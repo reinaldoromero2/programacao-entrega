@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Download, Upload, Users, Ban, Settings, Loader2, Building2 } from "lucide-react";
+import { Download, Upload, Users, Ban, Settings, Loader2, Building2, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MotoristasModal } from "@/components/motoristas-modal";
 import { MotivosCancelamentoModal } from "@/components/motivos-cancelamento-modal";
 import { ClientesCadastroModal } from "@/components/clientes-cadastro-modal";
+import { BgColorModal } from "@/components/bg-color-modal";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
 
@@ -38,6 +39,7 @@ export function OpcoesMenu() {
   const [motoOpen, setMotoOpen] = useState(false);
   const [motivosOpen, setMotivosOpen] = useState(false);
   const [clientesOpen, setClientesOpen] = useState(false);
+  const [bgColorOpen, setBgColorOpen] = useState(false);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -152,6 +154,16 @@ export function OpcoesMenu() {
             <Building2 className="w-4 h-4" />
             Clientes Cadastro
           </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onClick={() => setBgColorOpen(true)}
+            className="gap-2 cursor-pointer"
+          >
+            <Palette className="w-4 h-4" />
+            Cor do plano de fundo
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -159,6 +171,7 @@ export function OpcoesMenu() {
       <MotoristasModal open={motoOpen} onOpenChange={setMotoOpen} />
       <MotivosCancelamentoModal open={motivosOpen} onOpenChange={setMotivosOpen} />
       <ClientesCadastroModal open={clientesOpen} onOpenChange={setClientesOpen} />
+      <BgColorModal open={bgColorOpen} onOpenChange={setBgColorOpen} />
 
       {/* Import confirmation */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

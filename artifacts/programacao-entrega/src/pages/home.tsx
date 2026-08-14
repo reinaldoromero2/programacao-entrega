@@ -14,11 +14,13 @@ import { RelatorioModal } from "@/components/relatorio-modal";
 import { OpcoesMenu } from "@/components/opcoes-menu";
 import { useSavePdf } from "@/hooks/use-save-pdf";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { useBgColor } from "@/hooks/use-bg-color";
 
 export default function Home() {
   const [date, setDate] = useState<Date>(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const isOnline = useOnlineStatus();
+  const { color: bgColor } = useBgColor();
   const { savePdf, status: pdfStatus, resetLocation } = useSavePdf();
   const { canInstall, install } = usePwaInstall();
 
@@ -40,7 +42,7 @@ export default function Home() {
   const handlePrint = () => window.print();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center">
+    <div className="min-h-screen flex flex-col items-center" style={{ backgroundColor: bgColor }}>
       {/* Screen header — hidden when printing */}
       <header className="print-hidden w-full bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20 shadow-sm">
         {/* LEFT — título + navegação de data */}
