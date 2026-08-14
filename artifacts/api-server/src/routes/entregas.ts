@@ -428,14 +428,42 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
     .from(entregasTable)
     .where(whereExpr);
 
-  const grouped = new Map<string, number>();
+  // Normalize client name for grouping:
+  // 1. trim leading/trailing whitespace
+  // 2. collapse multiple internal spaces into one
+  // 3. normalize spaces around hyphens (e.g. "MBB- ITUPEVA" → "MBB-ITUPEVA")
+  // 4. normalize spaces around parentheses
+  function normalizeCliente(name: string): string {
+    return name
+      .trim()
+      .replace(/\s+/g, " ")                // collapse multiple spaces
+      .replace(/\s*-\s*/g, "-")            // remove spaces around hyphens
+      .replace(/\s*\(\s*/g, "(")           // remove spaces before/inside open paren
+      .replace(/\s*\)\s*/g, ")")           // remove spaces before/inside close paren
+      .toUpperCase();
+  }
+
+  // Group by normalized key, tracking display name (most frequent raw form)
+  const grouped = new Map<string, { total: number; nameCounts: Map<string, number> }>();
   for (const row of rows) {
-    const k = row.cliente!.trim();
-    grouped.set(k, (grouped.get(k) ?? 0) + 1);
+    const raw = row.cliente!.trim();
+    const key = normalizeCliente(raw);
+    if (!grouped.has(key)) grouped.set(key, { total: 0, nameCounts: new Map() });
+    const entry = grouped.get(key)!;
+    entry.total++;
+    entry.nameCounts.set(raw, (entry.nameCounts.get(raw) ?? 0) + 1);
   }
 
   const resultado = Array.from(grouped.entries())
-    .map(([cliente, total]) => ({ cliente, total }))
+    .map(([, { total, nameCounts }]) => {
+      // Use the most frequently occurring raw name as the display name
+      let displayName = "";
+      let maxCount = 0;
+      for (const [name, count] of nameCounts) {
+        if (count > maxCount) { maxCount = count; displayName = name; }
+      }
+      return { cliente: displayName, total };
+    })
     .sort((a, b) => b.total - a.total);
 
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
