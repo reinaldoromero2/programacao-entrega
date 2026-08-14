@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-2ffae51" });
+  res.json({ ...data, release: "dev-fb28d74" });
 });
 var health_default = router;
 
@@ -106738,22 +106738,34 @@ app.use(errorHandler);
 var app_default = app;
 
 // src/index.ts
+async function runStartupMigrations() {
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS motivos_cancelamento (
+        id     SERIAL PRIMARY KEY,
+        motivo TEXT NOT NULL
+      )
+    `);
+  } catch (err) {
+    logger.warn({ err }, "Startup migration warning (non-fatal)");
+  }
+}
 var rawPort = process.env["PORT"];
 if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided."
-  );
+  throw new Error("PORT environment variable is required but was not provided.");
 }
 var port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
-app_default.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
-  logger.info({ port }, "Server listening");
+runStartupMigrations().then(() => {
+  app_default.listen(port, (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
+    logger.info({ port }, "Server listening");
+  });
 });
 /*! Bundled license information:
 
