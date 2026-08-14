@@ -553,7 +553,7 @@ function FreteMensalTab() {
   };
 
   return (
-    <div className="flex flex-col gap-4 overflow-y-auto">
+    <div className="flex flex-col gap-4 overflow-y-auto flex-1 min-h-0">
       <div className="flex items-center justify-between">
         <button onClick={prevMes} className="px-3 py-1 rounded border border-slate-300 text-sm hover:bg-slate-100">‹</button>
         <span className="text-sm font-semibold text-slate-700">{mesLabel(mes)}</span>
