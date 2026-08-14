@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-b02aac8" });
+  res.json({ ...data, release: "dev-fe37106" });
 });
 var health_default = router;
 
@@ -106400,28 +106400,16 @@ router2.get("/entregas/cliente-relatorio", async (req, res) => {
   const whereExpr = sql`(${dateFilter}) AND (${clienteExists}) AND (${notCancelled})`;
   const rows = await db.select({ cliente: entregasTable.cliente }).from(entregasTable).where(whereExpr);
   function normalizeCliente(name) {
-    return name.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").replace(/\s*\(\s*/g, "(").replace(/\s*\)\s*/g, ")").toUpperCase();
+    return name.replace(/\s*\([^)]*\)/g, "").trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase();
   }
   const grouped = /* @__PURE__ */ new Map();
   for (const row of rows) {
-    const raw = row.cliente.trim();
-    const key = normalizeCliente(raw);
-    if (!grouped.has(key)) grouped.set(key, { total: 0, nameCounts: /* @__PURE__ */ new Map() });
-    const entry = grouped.get(key);
-    entry.total++;
-    entry.nameCounts.set(raw, (entry.nameCounts.get(raw) ?? 0) + 1);
-  }
-  const resultado = Array.from(grouped.entries()).map(([, { total, nameCounts }]) => {
-    let displayName = "";
-    let maxCount = 0;
-    for (const [name, count] of nameCounts) {
-      if (count > maxCount) {
-        maxCount = count;
-        displayName = name;
-      }
+    const parts = row.cliente.split("+").map((p) => normalizeCliente(p)).filter(Boolean);
+    for (const key of parts) {
+      grouped.set(key, (grouped.get(key) ?? 0) + 1);
     }
-    return { cliente: displayName, total };
-  }).sort((a, b) => b.total - a.total);
+  }
+  const resultado = Array.from(grouped.entries()).map(([cliente, total]) => ({ cliente, total })).sort((a, b) => b.total - a.total);
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
 });
 router2.get("/entregas/export", async (_req, res, next) => {
