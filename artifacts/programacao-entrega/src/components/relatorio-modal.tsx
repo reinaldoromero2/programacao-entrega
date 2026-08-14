@@ -840,7 +840,7 @@ function MotoristaTab() {
             <p className="text-sm text-slate-400 text-center py-8 italic">Nenhuma viagem registrada no período.</p>
           ) : (
             <>
-              <div className="flex-shrink-0">
+              <div className="overflow-y-auto border rounded-md" style={{ maxHeight: "340px" }}>
                 <ResponsiveContainer width="100%" height={Math.max(120, data.resultado.length * 36)}>
                   <BarChart
                     data={data.resultado.map((r, i) => ({
@@ -1026,7 +1026,7 @@ function ClienteTab() {
             <p className="text-sm text-slate-400 text-center py-8 italic">Nenhuma entrega registrada no período.</p>
           ) : (
             <>
-              <div className="flex-shrink-0">
+              <div className="overflow-y-auto border rounded-md" style={{ maxHeight: "340px" }}>
                 <ResponsiveContainer width="100%" height={Math.max(120, data.resultado.length * 32)}>
                   <BarChart
                     data={data.resultado.map((r, i) => ({
