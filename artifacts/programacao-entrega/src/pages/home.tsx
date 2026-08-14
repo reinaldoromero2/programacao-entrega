@@ -42,29 +42,31 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center">
       {/* Screen header — hidden when printing */}
-      <header className="print-hidden w-full bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3 text-slate-800">
-          <div className="bg-blue-600 text-white p-2 rounded flex items-center justify-center">
-            <CalendarIcon className="w-5 h-5" />
+      <header className="print-hidden w-full bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+        {/* LEFT — título + navegação de data */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 text-slate-800">
+            <div className="bg-blue-600 text-white p-2 rounded flex items-center justify-center">
+              <CalendarIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight leading-none">PROGRAMAÇÃO DE ENTREGA</h1>
+              <p className="text-sm text-slate-500 font-medium">Controle Logístico Diário</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight leading-none">PROGRAMAÇÃO DE ENTREGA</h1>
-            <p className="text-sm text-slate-500 font-medium">Controle Logístico Diário</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-3">
+          <div className="w-px h-10 bg-slate-200" />
+
           {/* Date navigator */}
           <div className="flex items-center bg-slate-100 rounded-md p-1 border border-slate-200">
             <Button variant="ghost" size="icon" onClick={goPreviousDay} className="h-8 w-8 text-slate-600 hover:text-slate-900 hover:bg-white rounded" data-testid="button-prev-day">
               <ChevronLeft className="w-4 h-4" />
             </Button>
 
-            {/* Calendar popover trigger */}
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
                 <button
-                  className="px-4 flex flex-col items-center justify-center min-w-[140px] rounded-md hover:bg-white transition-colors cursor-pointer py-1 group"
+                  className="px-4 flex flex-col items-center justify-center min-w-[130px] rounded-md hover:bg-white transition-colors cursor-pointer py-1 group"
                   data-testid="button-open-calendar"
                 >
                   <span className="text-sm font-bold text-slate-800 uppercase tabular-nums group-hover:text-blue-600 transition-colors">
@@ -75,7 +77,7 @@ export default function Home() {
                   </span>
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="center" sideOffset={8}>
+              <PopoverContent className="w-auto p-0" align="start" sideOffset={8}>
                 <div className="p-3 border-b border-slate-100 flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Selecionar data</span>
                   <Button
@@ -90,17 +92,13 @@ export default function Home() {
                 <Calendar
                   mode="single"
                   selected={date}
-                  onSelect={(d) => {
-                    if (d) { setDate(d); setCalendarOpen(false); }
-                  }}
+                  onSelect={(d) => { if (d) { setDate(d); setCalendarOpen(false); } }}
                   captionLayout="dropdown"
                   locale={ptBR}
                   fromYear={2020}
                   toYear={2035}
                   defaultMonth={date}
-                  classNames={{
-                    day: "group/day relative aspect-square h-full w-full select-none p-0 text-center",
-                  }}
+                  classNames={{ day: "group/day relative aspect-square h-full w-full select-none p-0 text-center" }}
                 />
               </PopoverContent>
             </Popover>
@@ -115,41 +113,33 @@ export default function Home() {
               HOJE
             </Button>
           </div>
+        </div>
 
-          {/* PWA install button — only visible when browser offers install */}
+        {/* RIGHT — ações */}
+        <div className="flex items-center gap-2">
           {canInstall && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={install}
-              className="h-9 gap-2 text-blue-700 border-blue-300 hover:bg-blue-50"
-              title="Instalar aplicativo"
-            >
-              <Download className="w-4 h-4" />
+            <Button variant="outline" size="sm" onClick={install} className="h-10 gap-2 text-blue-700 border-blue-300 hover:bg-blue-50" title="Instalar aplicativo">
+              <Download className="w-5 h-5" />
               Instalar
             </Button>
           )}
 
-          {/* Opções — exportar, importar, motoristas, motivos */}
           <OpcoesMenu />
 
-          {/* Relatorio button — ícone apenas */}
           <RelatorioModal />
 
-          {/* Refresh button — ícone apenas */}
           <Button
             variant="outline"
             size="icon"
             onClick={handleRefresh}
             disabled={!isOnline}
-            className="h-9 w-9 text-slate-700 border-slate-300 hover:bg-slate-100 disabled:opacity-50"
+            className="h-10 w-10 text-slate-700 border-slate-300 hover:bg-slate-100 disabled:opacity-50"
             data-testid="button-refresh"
             title={!isOnline ? "Sem conexão" : "Atualizar"}
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-5 h-5" />
           </Button>
 
-          {/* Save PDF button — ícone apenas */}
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
@@ -157,39 +147,34 @@ export default function Home() {
               onClick={() => savePdf(entregas || [], dateStr)}
               disabled={pdfStatus === "saving"}
               className={cn(
-                "h-9 w-9 border-slate-300 hover:bg-slate-100",
+                "h-10 w-10 border-slate-300 hover:bg-slate-100",
                 pdfStatus === "error" ? "text-red-600 border-red-300" : "text-slate-700"
               )}
               title={pdfStatus === "error" ? "Erro ao salvar PDF" : "Salvar PDF"}
               data-testid="button-save-pdf"
             >
-              {pdfStatus === "saving" ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FolderDown className="w-4 h-4" />
-              )}
+              {pdfStatus === "saving" ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderDown className="w-5 h-5" />}
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={resetLocation}
-              className="h-9 w-9 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              className="h-10 w-10 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               title="Redefinir pasta de destino"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </Button>
           </div>
 
-          {/* Print button — ícone apenas */}
           <Button
             variant="outline"
             size="icon"
             onClick={handlePrint}
-            className="h-9 w-9 text-slate-700 border-slate-300 hover:bg-slate-100"
+            className="h-10 w-10 text-slate-700 border-slate-300 hover:bg-slate-100"
             data-testid="button-print"
             title="Imprimir"
           >
-            <Printer className="w-4 h-4" />
+            <Printer className="w-5 h-5" />
           </Button>
         </div>
       </header>

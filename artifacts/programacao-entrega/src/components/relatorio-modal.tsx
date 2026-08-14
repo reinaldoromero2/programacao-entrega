@@ -1141,8 +1141,8 @@ export function RelatorioModal() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="icon" className="h-9 w-9 text-slate-700 border-slate-300 hover:bg-slate-100" title="Relatórios">
-          <FileText className="w-4 h-4" />
+        <Button variant="outline" size="icon" className="h-10 w-10 text-slate-700 border-slate-300 hover:bg-slate-100" title="Relatórios">
+          <FileText className="w-5 h-5" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col">
