@@ -417,7 +417,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         <ClienteAutocomplete
           value={localState.cliente}
           onChange={(val) => setLocalState((s) => ({ ...s, cliente: val }))}
-          onBlur={() => saveField("cliente", localState.cliente)}
+          onBlur={(val) => saveField("cliente", val)}
           className="w-full px-2 py-1.5 text-sm font-medium text-slate-800 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
           data-testid={`input-cliente-${entrega.id}`}
         />
@@ -654,9 +654,9 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [newCliente, setNewCliente] = useState("");
 
-  const handleCreate = () => {
-    if (!newCliente.trim() || isCreating) return;
-    const value = newCliente.trim();
+  const handleCreate = (validatedCliente?: string) => {
+    const value = (validatedCliente ?? newCliente).trim();
+    if (!value || isCreating) return;
     setIsCreating(true);
     createEntrega.mutate(
       { data: { date, cliente: value, sortOrder: index, checked: "none", unidade: "MATRIZ", cg: "none" } },
@@ -687,7 +687,7 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
         <ClienteAutocomplete
           value={newCliente}
           onChange={setNewCliente}
-          onBlur={handleCreate}
+          onBlur={(val) => handleCreate(val)}
           placeholder="Adicionar cliente..."
           className="w-full px-2 py-1.5 text-sm text-slate-800 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white placeholder:text-slate-400 placeholder:italic"
           data-testid={`input-new-cliente-${index}`}

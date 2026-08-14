@@ -3,13 +3,14 @@
  *
  * Drop-in replacement for the CLIENTE <input> in delivery-table.tsx.
  * Supports:
- *   - Free text (always accepted)
+ *   - Only registered clients are accepted (validated on blur)
  *   - Suggestions from the registered clients list
  *   - Multi-client via "+" separator: autocomplete works on the LAST segment
  *   - Parenthetical observations: "(obs)" after a client name — NOT interrupted
  *     by autocomplete when the cursor is inside parens.
+ *   - Red border while the current segment doesn't match any registered client
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 
@@ -18,7 +19,8 @@ interface DropdownPos { top: number; left: number; width: number; openUp: boolea
 interface ClienteAutocompleteProps {
   value: string;
   onChange: (val: string) => void;
-  onBlur: () => void;
+  /** Called with the validated value after blur (invalid segments are stripped). */
+  onBlur: (validatedValue: string) => void;
   className?: string;
   "data-testid"?: string;
   placeholder?: string;
@@ -44,6 +46,25 @@ function replaceLastSegment(value: string, selected: string): string {
   return value.slice(0, idx + 1) + " " + selected;
 }
 
+/** Strip parenthetical content and trim — used for matching */
+function bareSegment(seg: string): string {
+  return seg.replace(/\([^)]*\)/g, "").trim().toUpperCase();
+}
+
+/** Keep only segments that match a registered client. Returns cleaned value. */
+function validateValue(value: string, clienteNames: Set<string>): string {
+  if (!value.trim()) return "";
+  const segments = value.split("+");
+  const valid = segments
+    .map((seg) => {
+      const bare = bareSegment(seg);
+      if (!bare) return null;
+      return clienteNames.has(bare) ? seg.trim() : null;
+    })
+    .filter((s): s is string => s !== null);
+  return valid.join(" + ");
+}
+
 export function ClienteAutocomplete({
   value,
   onChange,
@@ -58,19 +79,30 @@ export function ClienteAutocomplete({
   const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const clienteNames = useMemo(
+    () => new Set(clientes.map((c) => c.nome.toUpperCase())),
+    [clientes]
+  );
+
   const segment = getCurrentSegment(value);
-  const insideParens = isInsideParens(segment);
+  const inParens = isInsideParens(segment);
 
   const filtered =
-    !insideParens && segment.trim().length > 0
+    !inParens && segment.trim().length > 0
       ? clientes.filter((c) =>
           c.nome.toLowerCase().includes(segment.trim().toLowerCase())
         )
-      : !insideParens && segment.trim().length === 0
+      : !inParens && segment.trim().length === 0
       ? clientes
       : [];
 
   const shouldShow = open && filtered.length > 0;
+
+  /** Current segment is non-empty but doesn't match any registered client */
+  const isInvalid =
+    !inParens &&
+    segment.trim().length > 0 &&
+    !clienteNames.has(bareSegment(segment));
 
   const updatePos = useCallback(() => {
     if (!inputRef.current) return;
@@ -107,10 +139,11 @@ export function ClienteAutocomplete({
   };
 
   const handleBlur = () => {
-    // Delay so click on suggestion is registered first
     setTimeout(() => {
       setOpen(false);
-      onBlur();
+      const validated = validateValue(value, clienteNames);
+      onChange(validated);
+      onBlur(validated);
     }, 150);
   };
 
@@ -143,6 +176,13 @@ export function ClienteAutocomplete({
     }
   };
 
+  const inputClass = [
+    className ?? "",
+    isInvalid
+      ? "ring-2 ring-red-400 bg-red-50"
+      : "",
+  ].join(" ").trim();
+
   return (
     <>
       <input
@@ -153,7 +193,7 @@ export function ClienteAutocomplete({
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        className={className}
+        className={inputClass}
         placeholder={placeholder}
         autoComplete="off"
         {...(rest["data-testid"] ? { "data-testid": rest["data-testid"] } : {})}
@@ -169,7 +209,7 @@ export function ClienteAutocomplete({
               width: dropdownPos.width,
               maxHeight: 220,
             }}
-            onMouseDown={(e) => e.preventDefault()} // keep focus on input
+            onMouseDown={(e) => e.preventDefault()}
           >
             {filtered.map((c, i) => (
               <li
