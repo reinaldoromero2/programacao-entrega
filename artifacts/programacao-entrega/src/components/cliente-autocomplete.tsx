@@ -26,9 +26,31 @@ interface ClienteAutocompleteProps {
   placeholder?: string;
 }
 
-/** Returns the segment after the last "+" for matching purposes */
+/**
+ * Split by "+" only when outside parentheses.
+ * e.g. "INGREDION (025 + 015) + SIEMENS" → ["INGREDION (025 + 015) ", " SIEMENS"]
+ */
+function splitByPlusOutsideParens(value: string): string[] {
+  const segments: string[] = [];
+  let current = "";
+  let depth = 0;
+  for (const ch of value) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "+" && depth === 0) {
+      segments.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  segments.push(current);
+  return segments;
+}
+
+/** Returns the segment after the last "+" (outside parens) for matching purposes */
 function getCurrentSegment(value: string): string {
-  const parts = value.split("+");
+  const parts = splitByPlusOutsideParens(value);
   return (parts[parts.length - 1] ?? "").trimStart();
 }
 
@@ -39,11 +61,11 @@ function isInsideParens(segment: string): boolean {
   return open > close;
 }
 
-/** Replace the last segment of the value with the selected client name */
+/** Replace the last segment (outside parens) of the value with the selected client name */
 function replaceLastSegment(value: string, selected: string): string {
-  const idx = value.lastIndexOf("+");
-  if (idx === -1) return selected;
-  return value.slice(0, idx + 1) + " " + selected;
+  const segments = splitByPlusOutsideParens(value);
+  if (segments.length <= 1) return selected;
+  return segments.slice(0, -1).join("+") + "+ " + selected;
 }
 
 /** Strip parenthetical content and trim — used for matching */
@@ -54,7 +76,7 @@ function bareSegment(seg: string): string {
 /** Keep only segments that match a registered client. Returns cleaned value. */
 function validateValue(value: string, clienteNames: Set<string>): string {
   if (!value.trim()) return "";
-  const segments = value.split("+");
+  const segments = splitByPlusOutsideParens(value);
   const valid = segments
     .map((seg) => {
       const bare = bareSegment(seg);
