@@ -1146,7 +1146,7 @@ export function RelatorioModal() {
           RELATÓRIO
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-slate-800">
             <FileText className="w-5 h-5 text-blue-600" />
