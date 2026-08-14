@@ -1032,7 +1032,7 @@ function ClienteTab() {
     ano;
 
   return (
-    <div className="flex flex-col gap-3 flex-1 min-h-0">
+    <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto">
       <div className="flex items-center gap-3">
         <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-semibold">
           {(["dia","mes","ano"] as FiltroTipo[]).map((t) => (
@@ -1108,7 +1108,7 @@ function ClienteTab() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="flex-1 overflow-auto border rounded-md">
+              <div className="overflow-auto border rounded-md max-h-[260px]">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 font-semibold text-xs uppercase sticky top-0">
