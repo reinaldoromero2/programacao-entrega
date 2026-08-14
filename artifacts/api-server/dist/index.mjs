@@ -5751,8 +5751,8 @@ var require_dist = __commonJS({
       }
       return index;
     }
-    function trailingOWS(header, start, end) {
-      while (end > start) {
+    function trailingOWS(header, start2, end) {
+      while (end > start2) {
         const char2 = header.charCodeAt(end - 1);
         if (char2 !== SP && char2 !== HTAB)
           break;
@@ -18978,27 +18978,27 @@ var require_forwarded = __commonJS({
     function parse3(header) {
       var end = header.length;
       var list = [];
-      var start = header.length;
+      var start2 = header.length;
       for (var i = header.length - 1; i >= 0; i--) {
         switch (header.charCodeAt(i)) {
           case 32:
-            if (start === end) {
-              start = end = i;
+            if (start2 === end) {
+              start2 = end = i;
             }
             break;
           case 44:
-            if (start !== end) {
-              list.push(header.substring(start, end));
+            if (start2 !== end) {
+              list.push(header.substring(start2, end));
             }
-            start = end = i;
+            start2 = end = i;
             break;
           default:
-            start = i;
+            start2 = i;
             break;
         }
       }
-      if (start !== end) {
-        list.push(header.substring(start, end));
+      if (start2 !== end) {
+        list.push(header.substring(start2, end));
       }
       return list;
     }
@@ -21939,24 +21939,24 @@ var require_fresh = __commonJS({
     function parseTokenList(str) {
       var end = 0;
       var list = [];
-      var start = 0;
+      var start2 = 0;
       for (var i = 0, len = str.length; i < len; i++) {
         switch (str.charCodeAt(i)) {
           case 32:
-            if (start === end) {
-              start = end = i + 1;
+            if (start2 === end) {
+              start2 = end = i + 1;
             }
             break;
           case 44:
-            list.push(str.substring(start, end));
-            start = end = i + 1;
+            list.push(str.substring(start2, end));
+            start2 = end = i + 1;
             break;
           default:
             end = i + 1;
             break;
         }
       }
-      list.push(str.substring(start, end));
+      list.push(str.substring(start2, end));
       return list;
     }
   }
@@ -21980,10 +21980,10 @@ var require_range_parser = __commonJS({
       ranges.type = str.slice(0, index);
       for (var i = 0; i < arr.length; i++) {
         var range = arr[i].split("-");
-        var start = parseInt(range[0], 10);
+        var start2 = parseInt(range[0], 10);
         var end = parseInt(range[1], 10);
-        if (isNaN(start)) {
-          start = size - end;
+        if (isNaN(start2)) {
+          start2 = size - end;
           end = size - 1;
         } else if (isNaN(end)) {
           end = size - 1;
@@ -21991,11 +21991,11 @@ var require_range_parser = __commonJS({
         if (end > size - 1) {
           end = size - 1;
         }
-        if (isNaN(start) || isNaN(end) || start > end || start < 0) {
+        if (isNaN(start2) || isNaN(end) || start2 > end || start2 < 0) {
           continue;
         }
         ranges.push({
-          start,
+          start: start2,
           end
         });
       }
@@ -22361,11 +22361,11 @@ var require_content_disposition = __commonJS({
       if (end === 0) {
         return "";
       }
-      let start = end - 1;
-      while (start >= 0 && normalized[start] !== "/") {
-        start--;
+      let start2 = end - 1;
+      while (start2 >= 0 && normalized[start2] !== "/") {
+        start2--;
       }
-      return normalized.slice(start + 1, end);
+      return normalized.slice(start2 + 1, end);
     }
     function isHexDigit(char2) {
       const code = char2.charCodeAt(0);
@@ -23033,27 +23033,27 @@ var require_send = __commonJS({
     function parseTokenList(str) {
       var end = 0;
       var list = [];
-      var start = 0;
+      var start2 = 0;
       for (var i = 0, len = str.length; i < len; i++) {
         switch (str.charCodeAt(i)) {
           case 32:
-            if (start === end) {
-              start = end = i + 1;
+            if (start2 === end) {
+              start2 = end = i + 1;
             }
             break;
           case 44:
-            if (start !== end) {
-              list.push(str.substring(start, end));
+            if (start2 !== end) {
+              list.push(str.substring(start2, end));
             }
-            start = end = i + 1;
+            start2 = end = i + 1;
             break;
           default:
             end = i + 1;
             break;
         }
       }
-      if (start !== end) {
-        list.push(str.substring(start, end));
+      if (start2 !== end) {
+        list.push(str.substring(start2, end));
       }
       return list;
     }
@@ -23107,24 +23107,24 @@ var require_vary = __commonJS({
     function parse3(header) {
       var end = 0;
       var list = [];
-      var start = 0;
+      var start2 = 0;
       for (var i = 0, len = header.length; i < len; i++) {
         switch (header.charCodeAt(i)) {
           case 32:
-            if (start === end) {
-              start = end = i + 1;
+            if (start2 === end) {
+              start2 = end = i + 1;
             }
             break;
           case 44:
-            list.push(header.substring(start, end));
-            start = end = i + 1;
+            list.push(header.substring(start2, end));
+            start2 = end = i + 1;
             break;
           default:
             end = i + 1;
             break;
         }
       }
-      list.push(header.substring(start, end));
+      list.push(header.substring(start2, end));
       return list;
     }
     function vary(res, field) {
@@ -31298,12 +31298,12 @@ var require_buffer_reader = __commonJS({
         return result;
       }
       cstring() {
-        const start = this.offset;
-        let end = start;
+        const start2 = this.offset;
+        let end = start2;
         while (this.buffer[end++]) {
         }
         this.offset = end;
-        return this.buffer.toString(this.encoding, start, end - 1);
+        return this.buffer.toString(this.encoding, start2, end - 1);
       }
       bytes(length) {
         const result = this.buffer.slice(this.offset, this.offset + length);
@@ -39035,9 +39035,9 @@ var require_xlsx = __commonJS({
           }
         }
         function get_mfat_entry(entry, payload, mini) {
-          var start = entry.start, size = entry.size;
+          var start2 = entry.start, size = entry.size;
           var o = [];
-          var idx = start;
+          var idx = start2;
           while (mini && size > 0 && idx >= 0) {
             o.push(payload.slice(idx * MSSZ, idx * MSSZ + MSSZ));
             size -= MSSZ;
@@ -39060,11 +39060,11 @@ var require_xlsx = __commonJS({
             sleuth_fat(__readInt32LE(sector, ssz - 4), cnt - 1, sectors, ssz, fat_addrs);
           }
         }
-        function get_sector_list(sectors, start, fat_addrs, ssz, chkd) {
+        function get_sector_list(sectors, start2, fat_addrs, ssz, chkd) {
           var buf = [], buf_chain = [];
           if (!chkd) chkd = [];
           var modulus = ssz - 1, j = 0, jj = 0;
-          for (j = start; j >= 0; ) {
+          for (j = start2; j >= 0; ) {
             chkd[j] = true;
             buf[buf.length] = j;
             buf_chain.push(sectors[j]);
@@ -40048,7 +40048,7 @@ var require_xlsx = __commonJS({
             fp = cfb.FullPaths[i2].slice(root.length);
             fi = cfb.FileIndex[i2];
             if (!fi.size || !fi.content || fp == "Sh33tJ5") continue;
-            var start = start_cd;
+            var start2 = start_cd;
             var namebuf = new_buf(fp.length);
             for (j = 0; j < fp.length; ++j) namebuf.write_shift(1, fp.charCodeAt(j) & 127);
             namebuf = namebuf.slice(0, namebuf.l);
@@ -40097,7 +40097,7 @@ var require_xlsx = __commonJS({
             o.write_shift(2, 0);
             o.write_shift(2, 0);
             o.write_shift(4, 0);
-            o.write_shift(4, start);
+            o.write_shift(4, start2);
             sz_cd += o.l;
             cdirs.push(o);
             sz_cd += namebuf.length;
@@ -41866,7 +41866,7 @@ var require_xlsx = __commonJS({
         return o;
       }
       function parse_RichStr(data, length) {
-        var start = data.l;
+        var start2 = data.l;
         var flags = data.read_shift(1);
         var str = parse_XLWideString(data);
         var rgsStrRun = [];
@@ -41876,7 +41876,7 @@ var require_xlsx = __commonJS({
           for (var i = 0; i != dwSizeStrRun; ++i) rgsStrRun.push(parse_StrRun(data));
           z.r = rgsStrRun;
         } else z.r = [{ ich: 0, ifnt: 0 }];
-        data.l = start + length;
+        data.l = start2 + length;
         return z;
       }
       function write_RichStr(str, o) {
@@ -43295,9 +43295,9 @@ var require_xlsx = __commonJS({
         return o;
       }
       function parse_lpstr(blob, type, pad) {
-        var start = blob.l;
+        var start2 = blob.l;
         var str = blob.read_shift(0, "lpstr-cp");
-        if (pad) while (blob.l - start & 3) ++blob.l;
+        if (pad) while (blob.l - start2 & 3) ++blob.l;
         return str;
       }
       function parse_lpwstr(blob, type, pad) {
@@ -43320,9 +43320,9 @@ var require_xlsx = __commonJS({
         var length = blob.read_shift(4);
         var ret = [];
         for (var i = 0; i != length; ++i) {
-          var start = blob.l;
+          var start2 = blob.l;
           ret[i] = blob.read_shift(0, "lpwstr").replace(chr0, "");
-          if (blob.l - start & 2) blob.l += 2;
+          if (blob.l - start2 & 2) blob.l += 2;
         }
         return ret;
       }
@@ -43333,9 +43333,9 @@ var require_xlsx = __commonJS({
         return ret;
       }
       function parse_VtHeadingPair(blob) {
-        var start = blob.l;
+        var start2 = blob.l;
         var headingString = parse_TypedPropertyValue(blob, VT_USTR);
-        if (blob[blob.l] == 0 && blob[blob.l + 1] == 0 && blob.l - start & 2) blob.l += 2;
+        if (blob[blob.l] == 0 && blob[blob.l + 1] == 0 && blob.l - start2 & 2) blob.l += 2;
         var headerParts = parse_TypedPropertyValue(blob, VT_I4);
         return [headingString, headerParts];
       }
@@ -43863,12 +43863,12 @@ var require_xlsx = __commonJS({
         return [flags, accel];
       }
       function parse_URLMoniker(blob) {
-        var len = blob.read_shift(4), start = blob.l;
+        var len = blob.read_shift(4), start2 = blob.l;
         var extra = false;
         if (len > 24) {
           blob.l += len - 24;
           if (blob.read_shift(16) === "795881f43b1d7f48af2c825dc4852763") extra = true;
-          blob.l = start;
+          blob.l = start2;
         }
         var url2 = blob.read_shift((extra ? len - 24 : len) >> 1, "utf16le").replace(chr0, "");
         if (extra) blob.l += 24;
@@ -46142,20 +46142,20 @@ var require_xlsx = __commonJS({
           var lines = f.split(/[\r\n]/);
           var L = lines.length - 1;
           while (L >= 0 && lines[L].length === 0) --L;
-          var start = 10, idx = 0;
+          var start2 = 10, idx = 0;
           var R = 0;
           for (; R <= L; ++R) {
             idx = lines[R].indexOf(" ");
             if (idx == -1) idx = lines[R].length;
             else idx++;
-            start = Math.max(start, idx);
+            start2 = Math.max(start2, idx);
           }
           for (R = 0; R <= L; ++R) {
             arr[R] = [];
             var C = 0;
-            set_text_arr(lines[R].slice(0, start).trim(), arr, R, C, o);
-            for (C = 1; C <= (lines[R].length - start) / 10 + 1; ++C)
-              set_text_arr(lines[R].slice(start + (C - 1) * 10, start + C * 10).trim(), arr, R, C, o);
+            set_text_arr(lines[R].slice(0, start2).trim(), arr, R, C, o);
+            for (C = 1; C <= (lines[R].length - start2) / 10 + 1; ++C)
+              set_text_arr(lines[R].slice(start2 + (C - 1) * 10, start2 + C * 10).trim(), arr, R, C, o);
           }
           if (o.sheetRows) arr = arr.slice(0, o.sheetRows);
           return arr;
@@ -46210,11 +46210,11 @@ var require_xlsx = __commonJS({
           } else if (o && o.FS) sep = o.FS;
           else sep = guess_sep(str.slice(0, 1024));
           var R = 0, C = 0, v = 0;
-          var start = 0, end = 0, sepcc = sep.charCodeAt(0), instr = false, cc = 0, startcc = str.charCodeAt(0);
+          var start2 = 0, end = 0, sepcc = sep.charCodeAt(0), instr = false, cc = 0, startcc = str.charCodeAt(0);
           str = str.replace(/\r\n/mg, "\n");
           var _re = o.dateNF != null ? dateNF_regex(o.dateNF) : null;
           function finish_cell() {
-            var s = str.slice(start, end);
+            var s = str.slice(start2, end);
             var cell = {};
             if (s.charAt(0) == '"' && s.charAt(s.length - 1) == '"') s = s.slice(1, -1).replace(/""/g, '"');
             if (s.length === 0) cell.t = "z";
@@ -46270,8 +46270,8 @@ var require_xlsx = __commonJS({
               if (!ws[R]) ws[R] = [];
               ws[R][C] = cell;
             } else ws[encode_cell({ c: C, r: R })] = cell;
-            start = end + 1;
-            startcc = str.charCodeAt(start);
+            start2 = end + 1;
+            startcc = str.charCodeAt(start2);
             if (range.e.c < C) range.e.c = C;
             if (range.e.r < R) range.e.r = R;
             if (cc == sepcc) ++C;
@@ -46293,7 +46293,7 @@ var require_xlsx = __commonJS({
             default:
               break;
           }
-          if (end - start > 0) finish_cell();
+          if (end - start2 > 0) finish_cell();
           ws["!ref"] = encode_range(range);
           return ws;
         }
@@ -56968,15 +56968,15 @@ var require_xlsx = __commonJS({
         bufs.push(d);
         blob.l += l;
         var nextrt = __readUInt16LE(blob, blob.l), next = XLSRecordEnum[nextrt];
-        var start = 0;
+        var start2 = 0;
         while (next != null && CONTINUE_RT.indexOf(nextrt) > -1) {
           l = __readUInt16LE(blob, blob.l + 2);
-          start = blob.l + 4;
-          if (nextrt == 2066) start += 4;
+          start2 = blob.l + 4;
+          if (nextrt == 2066) start2 += 4;
           else if (nextrt == 2165 || nextrt == 2175) {
-            start += 12;
+            start2 += 12;
           }
-          d = blob.slice(start, blob.l + 4 + l);
+          d = blob.slice(start2, blob.l + 4 + l);
           bufs.push(d);
           blob.l += 4 + l;
           next = XLSRecordEnum[nextrt = __readUInt16LE(blob, blob.l)];
@@ -62823,11 +62823,11 @@ var require_xlsx = __commonJS({
         var B = buf_array();
         var blen = 0, j = 0;
         for (j = 0; j < wb.SheetNames.length; ++j) blen += (b8 ? 12 : 11) + (b8 ? 2 : 1) * wb.SheetNames[j].length;
-        var start = a.length + blen + c.length;
+        var start2 = a.length + blen + c.length;
         for (j = 0; j < wb.SheetNames.length; ++j) {
           var _sheet = _sheets[j] || {};
-          write_biff_rec(B, 133, write_BoundSheet8({ pos: start, hs: _sheet.Hidden || 0, dt: 0, name: wb.SheetNames[j] }, opts));
-          start += bufs[j].length;
+          write_biff_rec(B, 133, write_BoundSheet8({ pos: start2, hs: _sheet.Hidden || 0, dt: 0, name: wb.SheetNames[j] }, opts));
+          start2 += bufs[j].length;
         }
         var b = B.end();
         if (blen != b.length) throw new Error("BS8 " + blen + " != " + b.length);
@@ -77954,7 +77954,7 @@ var require_multipart = __commonJS({
         this.crlf = 0;
       }
       push(chunk, pos, end) {
-        let start = pos;
+        let start2 = pos;
         while (pos < end) {
           switch (this.state) {
             case HPARSER_NAME: {
@@ -77967,7 +77967,7 @@ var require_multipart = __commonJS({
                 if (TOKEN[code] !== 1) {
                   if (code !== 58)
                     return -1;
-                  this.name += chunk.latin1Slice(start, pos);
+                  this.name += chunk.latin1Slice(start2, pos);
                   if (this.name.length === 0)
                     return -1;
                   ++pos;
@@ -77977,7 +77977,7 @@ var require_multipart = __commonJS({
                 }
               }
               if (!done) {
-                this.name += chunk.latin1Slice(start, pos);
+                this.name += chunk.latin1Slice(start2, pos);
                 break;
               }
             }
@@ -77989,7 +77989,7 @@ var require_multipart = __commonJS({
                 ++this.byteCount;
                 const code = chunk[pos];
                 if (code !== 32 && code !== 9) {
-                  start = pos;
+                  start2 = pos;
                   done = true;
                   this.state = HPARSER_VALUE;
                   break;
@@ -78013,7 +78013,7 @@ var require_multipart = __commonJS({
                       break;
                     }
                   }
-                  this.value += chunk.latin1Slice(start, pos++);
+                  this.value += chunk.latin1Slice(start2, pos++);
                   break;
                 case 1:
                   if (this.byteCount === MAX_HEADER_SIZE)
@@ -78029,7 +78029,7 @@ var require_multipart = __commonJS({
                   ++this.byteCount;
                   const code = chunk[pos];
                   if (code === 32 || code === 9) {
-                    start = pos;
+                    start2 = pos;
                     this.crlf = 0;
                   } else {
                     if (++this.pairCount < MAX_HEADER_PAIRS) {
@@ -78043,7 +78043,7 @@ var require_multipart = __commonJS({
                       ++this.crlf;
                       ++pos;
                     } else {
-                      start = pos;
+                      start2 = pos;
                       this.crlf = 0;
                       this.state = HPARSER_NAME;
                       this.name = "";
@@ -78239,41 +78239,41 @@ var require_multipart = __commonJS({
           }
         });
         let matchPostBoundary = 0;
-        const ssCb = (isMatch, data, start, end, isDataSafe) => {
+        const ssCb = (isMatch, data, start2, end, isDataSafe) => {
           retrydata:
             while (data) {
               if (this._hparser !== null) {
-                const ret = this._hparser.push(data, start, end);
+                const ret = this._hparser.push(data, start2, end);
                 if (ret === -1) {
                   this._hparser = null;
                   hparser.reset();
                   this.emit("error", new Error("Malformed part header"));
                   break;
                 }
-                start = ret;
+                start2 = ret;
               }
-              if (start === end)
+              if (start2 === end)
                 break;
               if (matchPostBoundary !== 0) {
                 if (matchPostBoundary === 1) {
-                  switch (data[start]) {
+                  switch (data[start2]) {
                     case 45:
                       matchPostBoundary = 2;
-                      ++start;
+                      ++start2;
                       break;
                     case 13:
                       matchPostBoundary = 3;
-                      ++start;
+                      ++start2;
                       break;
                     default:
                       matchPostBoundary = 0;
                   }
-                  if (start === end)
+                  if (start2 === end)
                     return;
                 }
                 if (matchPostBoundary === 2) {
                   matchPostBoundary = 0;
-                  if (data[start] === 45) {
+                  if (data[start2] === 45) {
                     this._complete = true;
                     this._bparser = ignoreData;
                     return;
@@ -78284,12 +78284,12 @@ var require_multipart = __commonJS({
                   this._writecb = writecb;
                 } else if (matchPostBoundary === 3) {
                   matchPostBoundary = 0;
-                  if (data[start] === 10) {
-                    ++start;
+                  if (data[start2] === 10) {
+                    ++start2;
                     if (parts >= partsLimit)
                       break;
                     this._hparser = hparser;
-                    if (start === end)
+                    if (start2 === end)
                       break;
                     continue retrydata;
                   } else {
@@ -78303,12 +78303,12 @@ var require_multipart = __commonJS({
               if (!skipPart) {
                 if (this._fileStream) {
                   let chunk;
-                  const actualLen = Math.min(end - start, fileSizeLimit - fileSize);
+                  const actualLen = Math.min(end - start2, fileSizeLimit - fileSize);
                   if (!isDataSafe) {
                     chunk = Buffer.allocUnsafe(actualLen);
-                    data.copy(chunk, 0, start, start + actualLen);
+                    data.copy(chunk, 0, start2, start2 + actualLen);
                   } else {
-                    chunk = data.slice(start, start + actualLen);
+                    chunk = data.slice(start2, start2 + actualLen);
                   }
                   fileSize += chunk.length;
                   if (fileSize === fileSizeLimit) {
@@ -78325,14 +78325,14 @@ var require_multipart = __commonJS({
                 } else if (field !== void 0) {
                   let chunk;
                   const actualLen = Math.min(
-                    end - start,
+                    end - start2,
                     fieldSizeLimit - fieldSize
                   );
                   if (!isDataSafe) {
                     chunk = Buffer.allocUnsafe(actualLen);
-                    data.copy(chunk, 0, start, start + actualLen);
+                    data.copy(chunk, 0, start2, start2 + actualLen);
                   } else {
-                    chunk = data.slice(start, start + actualLen);
+                    chunk = data.slice(start2, start2 + actualLen);
                   }
                   fieldSize += actualLen;
                   field.push(chunk);
@@ -80514,14 +80514,14 @@ var require_errors = __commonJS({
       }
       return str.substring(this_len - search.length, this_len) === search;
     }
-    function includes(str, search, start) {
-      if (typeof start !== "number") {
-        start = 0;
+    function includes(str, search, start2) {
+      if (typeof start2 !== "number") {
+        start2 = 0;
       }
-      if (start + search.length > str.length) {
+      if (start2 + search.length > str.length) {
         return false;
       } else {
-        return str.indexOf(search, start) !== -1;
+        return str.indexOf(search, start2) !== -1;
       }
     }
     createErrorType("ERR_INVALID_OPT_VALUE", function(name, value) {
@@ -83253,33 +83253,33 @@ var require_typedarray = __commonJS({
             throw new TypeError("Unexpected argument type(s)");
           }
         };
-        ctor.prototype.subarray = function(start, end) {
+        ctor.prototype.subarray = function(start2, end) {
           function clamp(v, min2, max) {
             return v < min2 ? min2 : v > max ? max : v;
           }
-          start = ECMAScript.ToInt32(start);
+          start2 = ECMAScript.ToInt32(start2);
           end = ECMAScript.ToInt32(end);
           if (arguments.length < 1) {
-            start = 0;
+            start2 = 0;
           }
           if (arguments.length < 2) {
             end = this.length;
           }
-          if (start < 0) {
-            start = this.length + start;
+          if (start2 < 0) {
+            start2 = this.length + start2;
           }
           if (end < 0) {
             end = this.length + end;
           }
-          start = clamp(start, 0, this.length);
+          start2 = clamp(start2, 0, this.length);
           end = clamp(end, 0, this.length);
-          var len = end - start;
+          var len = end - start2;
           if (len < 0) {
             len = 0;
           }
           return new this.constructor(
             this.buffer,
-            this.byteOffset + start * this.BYTES_PER_ELEMENT,
+            this.byteOffset + start2 * this.BYTES_PER_ELEMENT,
             len
           );
         };
@@ -87686,16 +87686,20 @@ var ReorderEntregasBody = objectType({
 });
 var ReorderEntregasResponse = unknownType();
 
-// src/routes/health.ts
-var router = (0, import_express.Router)();
-router.get("/healthz", (_req, res) => {
-  const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-4136f69" });
-});
-var health_default = router;
-
-// src/routes/entregas.ts
-var import_express2 = __toESM(require_express2(), 1);
+// ../../node_modules/.pnpm/pg@8.22.0/node_modules/pg/esm/index.mjs
+var import_lib = __toESM(require_lib5(), 1);
+var Client = import_lib.default.Client;
+var Pool = import_lib.default.Pool;
+var Connection = import_lib.default.Connection;
+var types = import_lib.default.types;
+var Query = import_lib.default.Query;
+var DatabaseError = import_lib.default.DatabaseError;
+var escapeIdentifier = import_lib.default.escapeIdentifier;
+var escapeLiteral = import_lib.default.escapeLiteral;
+var Result = import_lib.default.Result;
+var TypeOverrides = import_lib.default.TypeOverrides;
+var defaults = import_lib.default.defaults;
+var esm_default = import_lib.default;
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/entity.js
 var entityKind = /* @__PURE__ */ Symbol.for("drizzle:entityKind");
@@ -87722,6 +87726,61 @@ function is(value, type) {
   }
   return false;
 }
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/logger.js
+var ConsoleLogWriter = class {
+  static [entityKind] = "ConsoleLogWriter";
+  write(message) {
+    console.log(message);
+  }
+};
+var DefaultLogger = class {
+  static [entityKind] = "DefaultLogger";
+  writer;
+  constructor(config2) {
+    this.writer = config2?.writer ?? new ConsoleLogWriter();
+  }
+  logQuery(query, params) {
+    const stringifiedParams = params.map((p) => {
+      try {
+        return JSON.stringify(p);
+      } catch {
+        return String(p);
+      }
+    });
+    const paramsStr = stringifiedParams.length ? ` -- params: [${stringifiedParams.join(", ")}]` : "";
+    this.writer.write(`Query: ${query}${paramsStr}`);
+  }
+};
+var NoopLogger = class {
+  static [entityKind] = "NoopLogger";
+  logQuery() {
+  }
+};
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/query-promise.js
+var QueryPromise = class {
+  static [entityKind] = "QueryPromise";
+  [Symbol.toStringTag] = "QueryPromise";
+  catch(onRejected) {
+    return this.then(void 0, onRejected);
+  }
+  finally(onFinally) {
+    return this.then(
+      (value) => {
+        onFinally?.();
+        return value;
+      },
+      (reason) => {
+        onFinally?.();
+        throw reason;
+      }
+    );
+  }
+  then(onFulfilled, onRejected) {
+    return this.execute().then(onFulfilled, onRejected);
+  }
+};
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/column.js
 var Column = class {
@@ -88930,85 +88989,71 @@ function mapColumnsInSQLToAlias(query, alias) {
   }));
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/errors.js
-var DrizzleError = class extends Error {
-  static [entityKind] = "DrizzleError";
-  constructor({ message, cause }) {
-    super(message);
-    this.name = "DrizzleError";
-    this.cause = cause;
-  }
-};
-var DrizzleQueryError = class _DrizzleQueryError extends Error {
-  constructor(query, params, cause) {
-    super(`Failed query: ${query}
-params: ${params}`);
-    this.query = query;
-    this.params = params;
-    this.cause = cause;
-    Error.captureStackTrace(this, _DrizzleQueryError);
-    if (cause) this.cause = cause;
-  }
-};
-var TransactionRollbackError = class extends DrizzleError {
-  static [entityKind] = "TransactionRollbackError";
-  constructor() {
-    super({ message: "Rollback" });
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/logger.js
-var ConsoleLogWriter = class {
-  static [entityKind] = "ConsoleLogWriter";
-  write(message) {
-    console.log(message);
-  }
-};
-var DefaultLogger = class {
-  static [entityKind] = "DefaultLogger";
-  writer;
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/selection-proxy.js
+var SelectionProxyHandler = class _SelectionProxyHandler {
+  static [entityKind] = "SelectionProxyHandler";
+  config;
   constructor(config2) {
-    this.writer = config2?.writer ?? new ConsoleLogWriter();
+    this.config = { ...config2 };
   }
-  logQuery(query, params) {
-    const stringifiedParams = params.map((p) => {
-      try {
-        return JSON.stringify(p);
-      } catch {
-        return String(p);
+  get(subquery, prop) {
+    if (prop === "_") {
+      return {
+        ...subquery["_"],
+        selectedFields: new Proxy(
+          subquery._.selectedFields,
+          this
+        )
+      };
+    }
+    if (prop === ViewBaseConfig) {
+      return {
+        ...subquery[ViewBaseConfig],
+        selectedFields: new Proxy(
+          subquery[ViewBaseConfig].selectedFields,
+          this
+        )
+      };
+    }
+    if (typeof prop === "symbol") {
+      return subquery[prop];
+    }
+    const columns = is(subquery, Subquery) ? subquery._.selectedFields : is(subquery, View) ? subquery[ViewBaseConfig].selectedFields : subquery;
+    const value = columns[prop];
+    if (is(value, SQL.Aliased)) {
+      if (this.config.sqlAliasedBehavior === "sql" && !value.isSelectionField) {
+        return value.sql;
       }
-    });
-    const paramsStr = stringifiedParams.length ? ` -- params: [${stringifiedParams.join(", ")}]` : "";
-    this.writer.write(`Query: ${query}${paramsStr}`);
-  }
-};
-var NoopLogger = class {
-  static [entityKind] = "NoopLogger";
-  logQuery() {
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/query-promise.js
-var QueryPromise = class {
-  static [entityKind] = "QueryPromise";
-  [Symbol.toStringTag] = "QueryPromise";
-  catch(onRejected) {
-    return this.then(void 0, onRejected);
-  }
-  finally(onFinally) {
-    return this.then(
-      (value) => {
-        onFinally?.();
+      const newValue = value.clone();
+      newValue.isSelectionField = true;
+      return newValue;
+    }
+    if (is(value, SQL)) {
+      if (this.config.sqlBehavior === "sql") {
         return value;
-      },
-      (reason) => {
-        onFinally?.();
-        throw reason;
       }
-    );
-  }
-  then(onFulfilled, onRejected) {
-    return this.execute().then(onFulfilled, onRejected);
+      throw new Error(
+        `You tried to reference "${prop}" field from a subquery, which is a raw SQL field, but it doesn't have an alias declared. Please add an alias to the field using ".as('alias')" method.`
+      );
+    }
+    if (is(value, Column)) {
+      if (this.config.alias) {
+        return new Proxy(
+          value,
+          new ColumnAliasProxyHandler(
+            new Proxy(
+              value.table,
+              new TableAliasProxyHandler(this.config.alias, this.config.replaceOriginalName ?? false)
+            )
+          )
+        );
+      }
+      return value;
+    }
+    if (typeof value !== "object" || value === null) {
+      return value;
+    }
+    return new Proxy(value, new _SelectionProxyHandler(this.config));
   }
 };
 
@@ -90608,6 +90653,85 @@ var PrimaryKey = class {
   }
 };
 
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/casing.js
+function toSnakeCase(input) {
+  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
+  return words.map((word) => word.toLowerCase()).join("_");
+}
+function toCamelCase(input) {
+  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
+  return words.reduce((acc, word, i) => {
+    const formattedWord = i === 0 ? word.toLowerCase() : `${word[0].toUpperCase()}${word.slice(1)}`;
+    return acc + formattedWord;
+  }, "");
+}
+function noopCase(input) {
+  return input;
+}
+var CasingCache = class {
+  static [entityKind] = "CasingCache";
+  /** @internal */
+  cache = {};
+  cachedTables = {};
+  convert;
+  constructor(casing) {
+    this.convert = casing === "snake_case" ? toSnakeCase : casing === "camelCase" ? toCamelCase : noopCase;
+  }
+  getColumnCasing(column) {
+    if (!column.keyAsName) return column.name;
+    const schema = column.table[Table.Symbol.Schema] ?? "public";
+    const tableName = column.table[Table.Symbol.OriginalName];
+    const key = `${schema}.${tableName}.${column.name}`;
+    if (!this.cache[key]) {
+      this.cacheTable(column.table);
+    }
+    return this.cache[key];
+  }
+  cacheTable(table) {
+    const schema = table[Table.Symbol.Schema] ?? "public";
+    const tableName = table[Table.Symbol.OriginalName];
+    const tableKey = `${schema}.${tableName}`;
+    if (!this.cachedTables[tableKey]) {
+      for (const column of Object.values(table[Table.Symbol.Columns])) {
+        const columnKey = `${tableKey}.${column.name}`;
+        this.cache[columnKey] = this.convert(column.name);
+      }
+      this.cachedTables[tableKey] = true;
+    }
+  }
+  clearCache() {
+    this.cache = {};
+    this.cachedTables = {};
+  }
+};
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/errors.js
+var DrizzleError = class extends Error {
+  static [entityKind] = "DrizzleError";
+  constructor({ message, cause }) {
+    super(message);
+    this.name = "DrizzleError";
+    this.cause = cause;
+  }
+};
+var DrizzleQueryError = class _DrizzleQueryError extends Error {
+  constructor(query, params, cause) {
+    super(`Failed query: ${query}
+params: ${params}`);
+    this.query = query;
+    this.params = params;
+    this.cause = cause;
+    Error.captureStackTrace(this, _DrizzleQueryError);
+    if (cause) this.cause = cause;
+  }
+};
+var TransactionRollbackError = class extends DrizzleError {
+  static [entityKind] = "TransactionRollbackError";
+  constructor() {
+    super({ message: "Rollback" });
+  }
+};
+
 // ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/sql/expressions/conditions.js
 function bindIfParam(value, column) {
   if (isDriverValueEncoder(column) && !isSQLWrapper(value) && !is(value, Param) && !is(value, Placeholder) && !is(value, Column) && !is(value, Table) && !is(value, View)) {
@@ -90991,141 +91115,6 @@ function mapRelationalRow(tablesConfig, tableConfig, row, buildQueryResultSelect
   }
   return result;
 }
-
-// ../../node_modules/.pnpm/pg@8.22.0/node_modules/pg/esm/index.mjs
-var import_lib = __toESM(require_lib5(), 1);
-var Client = import_lib.default.Client;
-var Pool = import_lib.default.Pool;
-var Connection = import_lib.default.Connection;
-var types = import_lib.default.types;
-var Query = import_lib.default.Query;
-var DatabaseError = import_lib.default.DatabaseError;
-var escapeIdentifier = import_lib.default.escapeIdentifier;
-var escapeLiteral = import_lib.default.escapeLiteral;
-var Result = import_lib.default.Result;
-var TypeOverrides = import_lib.default.TypeOverrides;
-var defaults = import_lib.default.defaults;
-var esm_default = import_lib.default;
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/selection-proxy.js
-var SelectionProxyHandler = class _SelectionProxyHandler {
-  static [entityKind] = "SelectionProxyHandler";
-  config;
-  constructor(config2) {
-    this.config = { ...config2 };
-  }
-  get(subquery, prop) {
-    if (prop === "_") {
-      return {
-        ...subquery["_"],
-        selectedFields: new Proxy(
-          subquery._.selectedFields,
-          this
-        )
-      };
-    }
-    if (prop === ViewBaseConfig) {
-      return {
-        ...subquery[ViewBaseConfig],
-        selectedFields: new Proxy(
-          subquery[ViewBaseConfig].selectedFields,
-          this
-        )
-      };
-    }
-    if (typeof prop === "symbol") {
-      return subquery[prop];
-    }
-    const columns = is(subquery, Subquery) ? subquery._.selectedFields : is(subquery, View) ? subquery[ViewBaseConfig].selectedFields : subquery;
-    const value = columns[prop];
-    if (is(value, SQL.Aliased)) {
-      if (this.config.sqlAliasedBehavior === "sql" && !value.isSelectionField) {
-        return value.sql;
-      }
-      const newValue = value.clone();
-      newValue.isSelectionField = true;
-      return newValue;
-    }
-    if (is(value, SQL)) {
-      if (this.config.sqlBehavior === "sql") {
-        return value;
-      }
-      throw new Error(
-        `You tried to reference "${prop}" field from a subquery, which is a raw SQL field, but it doesn't have an alias declared. Please add an alias to the field using ".as('alias')" method.`
-      );
-    }
-    if (is(value, Column)) {
-      if (this.config.alias) {
-        return new Proxy(
-          value,
-          new ColumnAliasProxyHandler(
-            new Proxy(
-              value.table,
-              new TableAliasProxyHandler(this.config.alias, this.config.replaceOriginalName ?? false)
-            )
-          )
-        );
-      }
-      return value;
-    }
-    if (typeof value !== "object" || value === null) {
-      return value;
-    }
-    return new Proxy(value, new _SelectionProxyHandler(this.config));
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/casing.js
-function toSnakeCase(input) {
-  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
-  return words.map((word) => word.toLowerCase()).join("_");
-}
-function toCamelCase(input) {
-  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
-  return words.reduce((acc, word, i) => {
-    const formattedWord = i === 0 ? word.toLowerCase() : `${word[0].toUpperCase()}${word.slice(1)}`;
-    return acc + formattedWord;
-  }, "");
-}
-function noopCase(input) {
-  return input;
-}
-var CasingCache = class {
-  static [entityKind] = "CasingCache";
-  /** @internal */
-  cache = {};
-  cachedTables = {};
-  convert;
-  constructor(casing) {
-    this.convert = casing === "snake_case" ? toSnakeCase : casing === "camelCase" ? toCamelCase : noopCase;
-  }
-  getColumnCasing(column) {
-    if (!column.keyAsName) return column.name;
-    const schema = column.table[Table.Symbol.Schema] ?? "public";
-    const tableName = column.table[Table.Symbol.OriginalName];
-    const key = `${schema}.${tableName}.${column.name}`;
-    if (!this.cache[key]) {
-      this.cacheTable(column.table);
-    }
-    return this.cache[key];
-  }
-  cacheTable(table) {
-    const schema = table[Table.Symbol.Schema] ?? "public";
-    const tableName = table[Table.Symbol.OriginalName];
-    const tableKey = `${schema}.${tableName}`;
-    if (!this.cachedTables[tableKey]) {
-      for (const column of Object.values(table[Table.Symbol.Columns])) {
-        const columnKey = `${tableKey}.${column.name}`;
-        this.cache[columnKey] = this.convert(column.name);
-      }
-      this.cachedTables[tableKey] = true;
-    }
-  }
-  clearCache() {
-    this.cache = {};
-    this.cachedTables = {};
-  }
-};
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/view-base.js
 var PgViewBase = class extends View {
@@ -95287,9 +95276,9 @@ function nullish(input) {
   return input === null || input === void 0;
 }
 function cleanRegex(source) {
-  const start = source.startsWith("^") ? 1 : 0;
+  const start2 = source.startsWith("^") ? 1 : 0;
   const end = source.endsWith("$") ? source.length - 1 : source.length;
-  return source.slice(start, end);
+  return source.slice(start2, end);
 }
 function floatSafeRemainder2(val, step) {
   const valDecCount = (val.toString().split(".")[1] || "").length;
@@ -98146,9 +98135,9 @@ var $ZodTemplateLiteral = /* @__PURE__ */ $constructor("$ZodTemplateLiteral", (i
       const source = part._zod.pattern instanceof RegExp ? part._zod.pattern.source : part._zod.pattern;
       if (!source)
         throw new Error(`Invalid template literal part: ${part._zod.traits}`);
-      const start = source.startsWith("^") ? 1 : 0;
+      const start2 = source.startsWith("^") ? 1 : 0;
       const end = source.endsWith("$") ? source.length - 1 : source.length;
-      regexParts.push(source.slice(start, end));
+      regexParts.push(source.slice(start2, end));
     } else if (part === null || primitiveTypes.has(typeof part)) {
       regexParts.push(escapeRegex(`${part}`));
     } else {
@@ -106105,7 +106094,29 @@ if (!process.env.DATABASE_URL) {
 var pool = new Pool3({ connectionString: process.env.DATABASE_URL });
 var db = drizzle(pool, { schema: schema_exports });
 
+// src/routes/health.ts
+var router = (0, import_express.Router)();
+router.get("/healthz", async (_req, res) => {
+  let db2 = "error";
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query("SELECT 1");
+      db2 = "ok";
+    } finally {
+      client.release();
+    }
+  } catch {
+  }
+  const status = db2 === "ok" ? "ok" : "degraded";
+  const data = HealthCheckResponse.parse({ status });
+  const httpStatus = db2 === "ok" ? 200 : 503;
+  res.status(httpStatus).json({ ...data, db: db2, release: "dev-0f65d40" });
+});
+var health_default = router;
+
 // src/routes/entregas.ts
+var import_express2 = __toESM(require_express2(), 1);
 var XLSX = __toESM(require_xlsx(), 1);
 var import_multer = __toESM(require_multer(), 1);
 var upload = (0, import_multer.default)({ storage: import_multer.default.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -106179,7 +106190,7 @@ router2.get("/entregas/divergencias", async (_req, res) => {
 });
 router2.get("/entregas/cancelados", async (req, res) => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-  const start = `${mes}-01`;
+  const start2 = `${mes}-01`;
   const end = `${mes}-31`;
   const rows = await db.select({
     id: entregasTable.id,
@@ -106191,7 +106202,7 @@ router2.get("/entregas/cancelados", async (req, res) => {
     frete: entregasTable.frete,
     divergencias: entregasTable.divergencias
   }).from(entregasTable).where(sql`
-      ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+      ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
       AND (
         UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
@@ -106203,7 +106214,7 @@ router2.get("/entregas/cancelados", async (req, res) => {
 router2.get("/entregas/por-frete", async (req, res) => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
   const frete = typeof req.query.frete === "string" ? req.query.frete : "";
-  const start = `${mes}-01`;
+  const start2 = `${mes}-01`;
   const end = `${mes}-31`;
   const cols = {
     id: entregasTable.id,
@@ -106218,7 +106229,7 @@ router2.get("/entregas/por-frete", async (req, res) => {
   let rows;
   if (frete === "CANCELADOS") {
     rows = await db.select(cols).from(entregasTable).where(sql`
-        ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+        ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
         AND (
           UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
           OR ${entregasTable.nf} = 'x'
@@ -106227,7 +106238,7 @@ router2.get("/entregas/por-frete", async (req, res) => {
       `).orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
   } else {
     rows = await db.select(cols).from(entregasTable).where(sql`
-        ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+        ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
         AND ${entregasTable.frete} = ${frete}
       `).orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
   }
@@ -106235,11 +106246,11 @@ router2.get("/entregas/por-frete", async (req, res) => {
 });
 router2.get("/entregas/frete-mensal", async (req, res) => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
-  const start = `${mes}-01`;
+  const start2 = `${mes}-01`;
   const end = `${mes}-31`;
-  const freteRows = await db.select({ date: entregasTable.date, frete: entregasTable.frete }).from(entregasTable).where(sql`${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end} AND ${entregasTable.frete} IS NOT NULL`).orderBy(asc(entregasTable.date));
+  const freteRows = await db.select({ date: entregasTable.date, frete: entregasTable.frete }).from(entregasTable).where(sql`${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end} AND ${entregasTable.frete} IS NOT NULL`).orderBy(asc(entregasTable.date));
   const cancelRows = await db.select({ date: entregasTable.date }).from(entregasTable).where(sql`
-      ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+      ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
       AND (
         UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
@@ -106319,13 +106330,13 @@ router2.get("/entregas/resumo-mensal", async (req, res) => {
   const [anoStr, mesStr] = mes.split("-");
   const ano = parseInt(anoStr, 10);
   const mesNum = parseInt(mesStr, 10);
-  const start = `${mes}-01`;
+  const start2 = `${mes}-01`;
   const end = `${mes}-31`;
   const freteRows = await db.select({
     frete: entregasTable.frete
-  }).from(entregasTable).where(sql`${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end} AND ${entregasTable.frete} IS NOT NULL`);
+  }).from(entregasTable).where(sql`${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end} AND ${entregasTable.frete} IS NOT NULL`);
   const cancelRows = await db.select({ frete: entregasTable.frete }).from(entregasTable).where(sql`
-      ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+      ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
       AND (
         UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
@@ -106746,12 +106757,47 @@ var port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
-app_default.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
+async function assertSchema() {
+  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento"];
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT table_name
+         FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = ANY($1::text[])`,
+      [expectedTables]
+    );
+    const found = result.rows.map((r) => r.table_name);
+    const missing = expectedTables.filter((t) => !found.includes(t));
+    if (missing.length > 0) {
+      logger.error(
+        { missing },
+        "Schema validation failed \u2014 tables not found in database. Run `pnpm --filter @workspace/db run push` and redeploy."
+      );
+      process.exit(1);
+    }
+    logger.info({ tables: found }, "Schema validation passed");
+  } finally {
+    client.release();
   }
-  logger.info({ port }, "Server listening");
+}
+async function start() {
+  await assertSchema();
+  await new Promise((resolve, reject) => {
+    app_default.listen(port, (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        logger.info({ port }, "Server listening");
+        resolve();
+      }
+    });
+  });
+}
+start().catch((err) => {
+  logger.error({ err }, "Failed to start server");
+  process.exit(1);
 });
 /*! Bundled license information:
 
