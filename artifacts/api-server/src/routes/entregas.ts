@@ -148,7 +148,7 @@ router.get("/entregas/cancelados", async (req, res): Promise<void> => {
     .where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
         OR ${entregasTable.cg} = 'x'
       )
@@ -181,7 +181,7 @@ router.get("/entregas/por-frete", async (req, res): Promise<void> => {
       .where(sql`
         ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
         AND (
-          UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+          UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
           OR ${entregasTable.nf} = 'x'
           OR ${entregasTable.cg} = 'x'
         )
@@ -211,14 +211,14 @@ router.get("/entregas/frete-mensal", async (req, res): Promise<void> => {
     .where(sql`${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end} AND ${entregasTable.frete} IS NOT NULL`)
     .orderBy(asc(entregasTable.date));
 
-  // Cancelados: OBS = CANCELADO/CANCELADA OR nf = 'x' OR cg = 'x'
+  // Cancelados: OBS LIKE 'CANCELADO%'/'CANCELADA%' OR nf = 'x' OR cg = 'x'
   const cancelRows = await db
     .select({ date: entregasTable.date })
     .from(entregasTable)
     .where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
         OR ${entregasTable.cg} = 'x'
       )
@@ -321,7 +321,7 @@ router.get("/entregas/resumo-mensal", async (req, res): Promise<void> => {
     .where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
         OR ${entregasTable.cg} = 'x'
       )
@@ -403,10 +403,10 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
   const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
   const valor  = typeof req.query.valor  === "string" ? req.query.valor  : new Date().toISOString().slice(0, 7);
 
-  // NULL-safe cancel filter: UPPER(NULL) IN (...) = NULL → excluded by WHERE.
-  // Use COALESCE to treat NULL obs as empty string so only real cancel words trigger.
+  // NULL-safe cancel filter: use COALESCE + LIKE to handle "CANCELADO - motivo" variants.
   const notCancelled = sql`
-    UPPER(COALESCE(${entregasTable.obs}, '')) NOT IN ('CANCELADO', 'CANCELADA')
+    UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADO%'
+    AND UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADA%'
     AND COALESCE(${entregasTable.nf}, '') <> 'x'
     AND COALESCE(${entregasTable.cg}, '') <> 'x'
   `;

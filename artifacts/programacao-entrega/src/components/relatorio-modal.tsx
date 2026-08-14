@@ -22,6 +22,16 @@ import {
   Pie,
 } from "recharts";
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+/** Extract cancellation reason from obs field. "CANCELADO - Produção não terminou" → "Produção não terminou" */
+function extractMotivo(obs: string | null): string {
+  if (!obs) return "—";
+  const m = obs.match(/^CANCELAD[AO]\s*[-–]\s*(.+)/i);
+  if (m) return m[1].trim();
+  if (/^CANCELAD[AO]$/i.test(obs.trim())) return "Sem motivo";
+  return obs;
+}
+
 // ─── API helper ───────────────────────────────────────────────────────────────
 const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
 const apiFetch = <T = unknown>(path: string): Promise<T> =>
@@ -680,6 +690,28 @@ function FreteMensalTab() {
                   {!loadingFreteList && freteList !== null && freteList.length === 0 && (
                     <p className="text-xs text-slate-400 text-center py-4 italic" style={{ background: bgLight }}>Nenhuma carga encontrada.</p>
                   )}
+                  {/* Motivo breakdown summary (only for CANCELADOS) */}
+                  {!loadingFreteList && isCancel && freteList && freteList.length > 0 && (() => {
+                    const summary = freteList.reduce<Record<string, number>>((acc, c) => {
+                      const m = extractMotivo(c.obs);
+                      acc[m] = (acc[m] ?? 0) + 1;
+                      return acc;
+                    }, {});
+                    const entries = Object.entries(summary).sort((a, b) => b[1] - a[1]);
+                    return (
+                      <div className="px-3 py-2 border-b" style={{ borderColor: accent + "40", background: bgLight }}>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: accent }}>Resumo por motivo</p>
+                        <div className="flex flex-wrap gap-x-6 gap-y-1">
+                          {entries.map(([motivo, count]) => (
+                            <span key={motivo} className="text-xs text-slate-700">
+                              <span className="font-bold" style={{ color: accent }}>{count}×</span> {motivo}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {!loadingFreteList && freteList && freteList.length > 0 && (
                     <div className="overflow-x-auto max-h-52 overflow-y-auto" style={{ background: bgLight }}>
                       <table className="w-full text-xs">
@@ -690,7 +722,7 @@ function FreteMensalTab() {
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Motorista</th>
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Placa</th>
                             {isCancel && <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Frete</th>}
-                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>OBS</th>
+                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>{isCancel ? "Motivo" : "OBS"}</th>
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Divergências</th>
                           </tr>
                         </thead>
@@ -702,7 +734,7 @@ function FreteMensalTab() {
                               <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.motorista || "—"}</td>
                               <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.placa || "—"}</td>
                               {isCancel && <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.frete || "—"}</td>}
-                              <td className="px-3 py-1.5 text-slate-600 uppercase whitespace-nowrap">{c.obs || "—"}</td>
+                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{isCancel ? extractMotivo(c.obs) : (c.obs || "—")}</td>
                               <td className="px-3 py-1.5 text-slate-600 min-w-[200px]">{c.divergencias || ""}</td>
                             </tr>
                           ))}

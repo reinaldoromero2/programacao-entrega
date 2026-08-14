@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Loader2, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MotoristaCombobox } from "@/components/motorista-combobox";
@@ -21,6 +21,25 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+
+// ----------------------------------------------------------------------
+// Motivos de cancelamento hook
+// ----------------------------------------------------------------------
+const MOTIVOS_API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
+
+interface MotivoItem { id: number; motivo: string; }
+
+function useMotivosCancelamento() {
+  return useQuery({
+    queryKey: ["motivos-cancelamento"],
+    queryFn: async (): Promise<MotivoItem[]> => {
+      const res = await fetch(`${MOTIVOS_API_BASE}/api/motivos-cancelamento`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+}
 
 // ----------------------------------------------------------------------
 // Column definitions & resize context
@@ -236,6 +255,8 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
   const deleteEntrega = useDeleteEntrega();
 
   const [isSaving, setIsSaving] = useState(false);
+  const [showMotivoMenu, setShowMotivoMenu] = useState(false);
+  const { data: motivos } = useMotivosCancelamento();
   const [localState, setLocalState] = useState({
     checked: entrega.checked,
     cliente: entrega.cliente,
@@ -340,7 +361,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const isRipack = localState.frete === "RIPACK";
   const obsUpper = localState.obs?.toUpperCase() ?? "";
-  const isCancelled = obsUpper === "CANCELADA" || obsUpper === "CANCELADO";
+  const isCancelled = obsUpper.startsWith("CANCELADA") || obsUpper.startsWith("CANCELADO");
 
   const template = gridTemplate(colWidths);
 
@@ -418,16 +439,40 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         />
       </div>
 
-      {/* OBS */}
-      <div className="p-1 border-r border-slate-200 flex flex-col justify-center overflow-hidden">
+      {/* OBS — combobox de motivos quando digitado "cancelad..." */}
+      <div className="p-1 border-r border-slate-200 flex flex-col justify-center overflow-hidden relative">
         <input
           type="text"
           value={localState.obs}
           onChange={handleChange("obs")}
-          onBlur={handleBlur("obs")}
+          onFocus={() => setShowMotivoMenu(true)}
+          onBlur={() => {
+            setTimeout(() => setShowMotivoMenu(false), 150);
+            saveField("obs", localState.obs);
+          }}
           className="w-full px-2 py-1.5 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white"
           data-testid={`input-obs-${entrega.id}`}
         />
+        {showMotivoMenu && /^cancelad/i.test(localState.obs) && (motivos?.length ?? 0) > 0 && (
+          <div className="absolute top-full left-0 z-50 min-w-full bg-white border border-red-200 rounded-md shadow-lg overflow-hidden print:hidden">
+            {motivos!.map((m) => (
+              <button
+                key={m.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const prefix = localState.obs.toUpperCase().startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO";
+                  const val = `${prefix} - ${m.motivo}`;
+                  setLocalState(prev => ({ ...prev, obs: val }));
+                  saveField("obs", val);
+                  setShowMotivoMenu(false);
+                }}
+                className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-red-50 hover:text-red-700 transition-colors whitespace-nowrap"
+              >
+                {m.motivo}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* MOTORISTA / PLACA */}

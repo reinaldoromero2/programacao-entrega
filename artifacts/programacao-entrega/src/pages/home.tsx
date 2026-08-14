@@ -11,6 +11,7 @@ import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MotoristasModal } from "@/components/motoristas-modal";
+import { MotivosCancelamentoModal } from "@/components/motivos-cancelamento-modal";
 import { RelatorioModal } from "@/components/relatorio-modal";
 import { BackupButtons } from "@/components/backup-buttons";
 import { useSavePdf } from "@/hooks/use-save-pdf";
@@ -136,6 +137,9 @@ export default function Home() {
 
           {/* Motoristas button */}
           <MotoristasModal />
+
+          {/* Motivos de cancelamento */}
+          <MotivosCancelamentoModal />
 
           {/* Relatorio button */}
           <RelatorioModal />

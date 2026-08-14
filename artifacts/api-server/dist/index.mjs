@@ -20651,27 +20651,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router5;
+    module.exports = Router6;
     module.exports.Route = Route;
-    function Router5(options) {
-      if (!(this instanceof Router5)) {
-        return new Router5(options);
+    function Router6(options) {
+      if (!(this instanceof Router6)) {
+        return new Router6(options);
       }
       const opts = options || {};
-      function router5(req, res, next) {
-        router5.handle(req, res, next);
+      function router6(req, res, next) {
+        router6.handle(req, res, next);
       }
-      Object.setPrototypeOf(router5, this);
-      router5.caseSensitive = opts.caseSensitive;
-      router5.mergeParams = opts.mergeParams;
-      router5.params = {};
-      router5.strict = opts.strict;
-      router5.stack = [];
-      return router5;
+      Object.setPrototypeOf(router6, this);
+      router6.caseSensitive = opts.caseSensitive;
+      router6.mergeParams = opts.mergeParams;
+      router6.params = {};
+      router6.strict = opts.strict;
+      router6.stack = [];
+      return router6;
     }
-    Router5.prototype = function() {
+    Router6.prototype = function() {
     };
-    Router5.prototype.param = function param(name, fn) {
+    Router6.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20691,7 +20691,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router5.prototype.handle = function handle(req, res, callback) {
+    Router6.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20818,7 +20818,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router5.prototype.use = function use(handler) {
+    Router6.prototype.use = function use(handler) {
       let offset = 0;
       let path = "/";
       if (typeof handler !== "function") {
@@ -20851,7 +20851,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router5.prototype.route = function route(path) {
+    Router6.prototype.route = function route(path) {
       const route2 = new Route(path);
       const layer = new Layer(path, {
         sensitive: this.caseSensitive,
@@ -20866,7 +20866,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router5.prototype[method] = function(path) {
+      Router6.prototype[method] = function(path) {
         const route = this.route(path);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21049,13 +21049,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router5 = require_router();
+    var Router6 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router5 = null;
+      var router6 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21064,13 +21064,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router5 === null) {
-            router5 = new Router5({
+          if (router6 === null) {
+            router6 = new Router6({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router5;
+          return router6;
         }
       });
     };
@@ -21141,15 +21141,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router5 = this.router;
+      var router6 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router5.use(path, fn2);
+          return router6.use(path, fn2);
         }
         debug(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router5.use(path, function mounted_app(req, res, next) {
+        router6.use(path, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23722,7 +23722,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router5 = require_router();
+    var Router6 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23744,8 +23744,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router5.Route;
-    exports.Router = Router5;
+    exports.Route = Router6.Route;
+    exports.Router = Router6;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -83637,12 +83637,12 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express5 = __toESM(require_express2(), 1);
+var import_express6 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 
 // src/routes/index.ts
-var import_express4 = __toESM(require_express2(), 1);
+var import_express5 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-ce05adc" });
+  res.json({ ...data, release: "dev-2ffae51" });
 });
 var health_default = router;
 
@@ -94671,6 +94671,7 @@ __export(schema_exports, {
   entregasTable: () => entregasTable,
   insertEntregaSchema: () => insertEntregaSchema,
   insertMotoristasSchema: () => insertMotoristasSchema,
+  motivosCancelamentoTable: () => motivosCancelamentoTable,
   motoristasTable: () => motoristasTable
 });
 
@@ -106088,6 +106089,12 @@ var motoristasTable = pgTable("motoristas", {
 });
 var insertMotoristasSchema = createInsertSchema(motoristasTable).omit({ id: true });
 
+// ../../lib/db/src/schema/motivos-cancelamento.ts
+var motivosCancelamentoTable = pgTable("motivos_cancelamento", {
+  id: serial("id").primaryKey(),
+  motivo: text("motivo").notNull()
+});
+
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
 if (!process.env.DATABASE_URL) {
@@ -106186,7 +106193,7 @@ router2.get("/entregas/cancelados", async (req, res) => {
   }).from(entregasTable).where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
         OR ${entregasTable.cg} = 'x'
       )
@@ -106213,7 +106220,7 @@ router2.get("/entregas/por-frete", async (req, res) => {
     rows = await db.select(cols).from(entregasTable).where(sql`
         ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
         AND (
-          UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+          UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
           OR ${entregasTable.nf} = 'x'
           OR ${entregasTable.cg} = 'x'
         )
@@ -106234,7 +106241,7 @@ router2.get("/entregas/frete-mensal", async (req, res) => {
   const cancelRows = await db.select({ date: entregasTable.date }).from(entregasTable).where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
         OR ${entregasTable.cg} = 'x'
       )
@@ -106320,7 +106327,7 @@ router2.get("/entregas/resumo-mensal", async (req, res) => {
   const cancelRows = await db.select({ frete: entregasTable.frete }).from(entregasTable).where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) IN ('CANCELADO', 'CANCELADA')
+        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
         OR ${entregasTable.nf} = 'x'
         OR ${entregasTable.cg} = 'x'
       )
@@ -106384,7 +106391,8 @@ router2.get("/entregas/cliente-relatorio", async (req, res) => {
   const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
   const valor = typeof req.query.valor === "string" ? req.query.valor : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
   const notCancelled = sql`
-    UPPER(COALESCE(${entregasTable.obs}, '')) NOT IN ('CANCELADO', 'CANCELADA')
+    UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADO%'
+    AND UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADA%'
     AND COALESCE(${entregasTable.nf}, '') <> 'x'
     AND COALESCE(${entregasTable.cg}, '') <> 'x'
   `;
@@ -106618,12 +106626,62 @@ router3.delete("/motoristas/:id", async (req, res) => {
 });
 var motoristas_default = router3;
 
-// src/routes/index.ts
+// src/routes/motivos-cancelamento.ts
+var import_express4 = __toESM(require_express2(), 1);
 var router4 = (0, import_express4.Router)();
-router4.use(health_default);
-router4.use(entregas_default);
-router4.use(motoristas_default);
-var routes_default = router4;
+router4.get("/motivos-cancelamento", async (_req, res) => {
+  const rows = await db.select().from(motivosCancelamentoTable).orderBy(asc(motivosCancelamentoTable.motivo));
+  res.json(rows);
+});
+router4.post("/motivos-cancelamento", async (req, res) => {
+  const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+  if (!motivo) {
+    res.status(400).json({ error: "motivo \xE9 obrigat\xF3rio" });
+    return;
+  }
+  const [row] = await db.insert(motivosCancelamentoTable).values({ motivo }).returning();
+  res.status(201).json(row);
+});
+router4.patch("/motivos-cancelamento/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "ID inv\xE1lido" });
+    return;
+  }
+  const motivo = typeof req.body?.motivo === "string" ? req.body.motivo.trim() : "";
+  if (!motivo) {
+    res.status(400).json({ error: "motivo \xE9 obrigat\xF3rio" });
+    return;
+  }
+  const [row] = await db.update(motivosCancelamentoTable).set({ motivo }).where(eq(motivosCancelamentoTable.id, id)).returning();
+  if (!row) {
+    res.status(404).json({ error: "Motivo n\xE3o encontrado" });
+    return;
+  }
+  res.json(row);
+});
+router4.delete("/motivos-cancelamento/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "ID inv\xE1lido" });
+    return;
+  }
+  const [row] = await db.delete(motivosCancelamentoTable).where(eq(motivosCancelamentoTable.id, id)).returning();
+  if (!row) {
+    res.status(404).json({ error: "Motivo n\xE3o encontrado" });
+    return;
+  }
+  res.sendStatus(204);
+});
+var motivos_cancelamento_default = router4;
+
+// src/routes/index.ts
+var router5 = (0, import_express5.Router)();
+router5.use(health_default);
+router5.use(entregas_default);
+router5.use(motoristas_default);
+router5.use(motivos_cancelamento_default);
+var routes_default = router5;
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -106652,7 +106710,7 @@ function errorHandler(err, _req, res, _next) {
 }
 
 // src/app.ts
-var app = (0, import_express5.default)();
+var app = (0, import_express6.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -106673,8 +106731,8 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express5.default.json());
-app.use(import_express5.default.urlencoded({ extended: true }));
+app.use(import_express6.default.json());
+app.use(import_express6.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 app.use(errorHandler);
 var app_default = app;
