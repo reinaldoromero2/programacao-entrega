@@ -428,24 +428,28 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
     .from(entregasTable)
     .where(whereExpr);
 
-  // Normalize a single client name segment:
-  // - remove parenthetical suffixes: "INGREDION MOGI (014)" → "INGREDION MOGI"
-  // - collapse spaces, normalize spaces around hyphens, uppercase
-  function normalizeCliente(name: string): string {
-    return name
-      .replace(/\s*\([^)]*\)/g, "")  // strip "(anything)"
-      .trim()
-      .replace(/\s+/g, " ")           // collapse multiple spaces
-      .replace(/\s*-\s*/g, "-")       // "MBB- ITUPEVA" → "MBB-ITUPEVA"
-      .toUpperCase();
+  // Parse a raw cliente string into one or more normalized names:
+  // 1. Strip ALL parenthetical content first (handles "BOEHRINGER (004 + 27 PEÇAS 009)" → "BOEHRINGER")
+  // 2. Split by "+" to separate combined clients (handles "MBB-ITUPEVA + INNOMOTICS")
+  // 3. Normalize each part: trim, collapse spaces, fix hyphen spacing, uppercase
+  function parseClientes(raw: string): string[] {
+    return raw
+      .replace(/\([^)]*\)/g, "")   // remove (anything) — before splitting by +
+      .split("+")
+      .map(p => p
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/\s*-\s*/g, "-")
+        .toUpperCase()
+      )
+      .filter(Boolean);
   }
 
   // Each row may contain multiple clients separated by "+".
   // Split, normalize and count each part independently.
   const grouped = new Map<string, number>();
   for (const row of rows) {
-    const parts = row.cliente!.split("+").map(p => normalizeCliente(p)).filter(Boolean);
-    for (const key of parts) {
+    for (const key of parseClientes(row.cliente!)) {
       grouped.set(key, (grouped.get(key) ?? 0) + 1);
     }
   }

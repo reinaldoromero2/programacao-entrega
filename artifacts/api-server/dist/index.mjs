@@ -87690,7 +87690,7 @@ var ReorderEntregasResponse = unknownType();
 var router = (0, import_express.Router)();
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, release: "dev-fe37106" });
+  res.json({ ...data, release: "dev-ce05adc" });
 });
 var health_default = router;
 
@@ -106399,13 +106399,14 @@ router2.get("/entregas/cliente-relatorio", async (req, res) => {
   }
   const whereExpr = sql`(${dateFilter}) AND (${clienteExists}) AND (${notCancelled})`;
   const rows = await db.select({ cliente: entregasTable.cliente }).from(entregasTable).where(whereExpr);
-  function normalizeCliente(name) {
-    return name.replace(/\s*\([^)]*\)/g, "").trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase();
+  function parseClientes(raw) {
+    return raw.replace(/\([^)]*\)/g, "").split("+").map(
+      (p) => p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase()
+    ).filter(Boolean);
   }
   const grouped = /* @__PURE__ */ new Map();
   for (const row of rows) {
-    const parts = row.cliente.split("+").map((p) => normalizeCliente(p)).filter(Boolean);
-    for (const key of parts) {
+    for (const key of parseClientes(row.cliente)) {
       grouped.set(key, (grouped.get(key) ?? 0) + 1);
     }
   }
