@@ -3,6 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Loader2, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MotoristaCombobox } from "@/components/motorista-combobox";
+import { ClienteAutocomplete } from "@/components/cliente-autocomplete";
 import {
   Entrega,
   EntregaUnidade,
@@ -413,11 +414,10 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
       {/* CLIENTE */}
       <div className="p-1 border-r border-slate-200 flex flex-col justify-center overflow-hidden">
-        <input
-          type="text"
+        <ClienteAutocomplete
           value={localState.cliente}
-          onChange={handleChange("cliente")}
-          onBlur={handleBlur("cliente")}
+          onChange={(val) => setLocalState((s) => ({ ...s, cliente: val }))}
+          onBlur={() => saveField("cliente", localState.cliente)}
           className="w-full px-2 py-1.5 text-sm font-medium text-slate-800 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
           data-testid={`input-cliente-${entrega.id}`}
         />
@@ -652,17 +652,18 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
   const queryClient = useQueryClient();
   const createEntrega = useCreateEntrega();
   const [isCreating, setIsCreating] = useState(false);
+  const [newCliente, setNewCliente] = useState("");
 
-  const handleCreate = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (!value.trim() || isCreating) return;
+  const handleCreate = () => {
+    if (!newCliente.trim() || isCreating) return;
+    const value = newCliente.trim();
     setIsCreating(true);
     createEntrega.mutate(
       { data: { date, cliente: value, sortOrder: index, checked: "none", unidade: "MATRIZ", cg: "none" } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListEntregasQueryKey({ date }) });
-          e.target.value = "";
+          setNewCliente("");
         },
         onSettled: () => setIsCreating(false),
       }
@@ -683,12 +684,11 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
       <div className="p-1 border-r border-slate-100 overflow-hidden" />{/* # */}
 
       <div className="p-1 border-r border-slate-100 flex flex-col justify-center relative overflow-hidden">
-        <input
-          type="text"
-          placeholder="Adicionar cliente..."
+        <ClienteAutocomplete
+          value={newCliente}
+          onChange={setNewCliente}
           onBlur={handleCreate}
-          onKeyDown={(e) => { if (e.key === "Enter") handleCreate(e as unknown as React.ChangeEvent<HTMLInputElement>); }}
-          disabled={isCreating}
+          placeholder="Adicionar cliente..."
           className="w-full px-2 py-1.5 text-sm text-slate-800 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white placeholder:text-slate-400 placeholder:italic"
           data-testid={`input-new-cliente-${index}`}
         />

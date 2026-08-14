@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Download, Upload, Users, Ban, Settings, Loader2 } from "lucide-react";
+import { Download, Upload, Users, Ban, Settings, Loader2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { MotoristasModal } from "@/components/motoristas-modal";
 import { MotivosCancelamentoModal } from "@/components/motivos-cancelamento-modal";
+import { ClientesCadastroModal } from "@/components/clientes-cadastro-modal";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
 
@@ -36,6 +37,7 @@ export function OpcoesMenu() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [motoOpen, setMotoOpen] = useState(false);
   const [motivosOpen, setMotivosOpen] = useState(false);
+  const [clientesOpen, setClientesOpen] = useState(false);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -142,12 +144,21 @@ export function OpcoesMenu() {
             <Ban className="w-4 h-4" />
             Motivos Cancelamento
           </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => setClientesOpen(true)}
+            className="gap-2 cursor-pointer"
+          >
+            <Building2 className="w-4 h-4" />
+            Clientes Cadastro
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       {/* Modals controlled externally */}
       <MotoristasModal open={motoOpen} onOpenChange={setMotoOpen} />
       <MotivosCancelamentoModal open={motivosOpen} onOpenChange={setMotivosOpen} />
+      <ClientesCadastroModal open={clientesOpen} onOpenChange={setClientesOpen} />
 
       {/* Import confirmation */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

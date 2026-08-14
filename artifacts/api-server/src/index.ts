@@ -20,7 +20,7 @@ if (Number.isNaN(port) || port <= 0) {
  * mismatch would only surface later as 500 errors on every request.
  */
 async function assertSchema(): Promise<void> {
-  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento"];
+  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro"];
 
   const client = await pool.connect();
   try {
