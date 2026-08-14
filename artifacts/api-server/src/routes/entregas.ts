@@ -462,6 +462,60 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
 });
 
+// ─── Cliente datas — viagens de um cliente no período ────────────────────────
+router.get("/entregas/cliente-datas", async (req, res): Promise<void> => {
+  const filtro  = typeof req.query.filtro  === "string" ? req.query.filtro  : "mes";
+  const valor   = typeof req.query.valor   === "string" ? req.query.valor   : new Date().toISOString().slice(0, 7);
+  const cliente = typeof req.query.cliente === "string" ? req.query.cliente.toUpperCase() : "";
+
+  const notCancelled = sql`
+    UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADO%'
+    AND UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADA%'
+    AND COALESCE(${entregasTable.nf}, '') <> 'x'
+    AND COALESCE(${entregasTable.cg}, '') <> 'x'
+  `;
+  const clienteExists = sql`${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''`;
+
+  let dateFilter;
+  if (filtro === "dia") {
+    dateFilter = sql`${entregasTable.date} = ${valor}`;
+  } else if (filtro === "mes") {
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+  } else {
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
+  }
+
+  const rows = await db
+    .select({
+      date:       entregasTable.date,
+      cliente:    entregasTable.cliente,
+      motorista:  entregasTable.motorista,
+      frete:      entregasTable.frete,
+      obs:        entregasTable.obs,
+    })
+    .from(entregasTable)
+    .where(sql`(${dateFilter}) AND (${clienteExists}) AND (${notCancelled})`)
+    .orderBy(entregasTable.date);
+
+  // Keep only rows where the parsed cliente list includes the requested client
+  function parseClientes(raw: string): string[] {
+    return raw
+      .replace(/\([^)]*\)/g, "")
+      .split("+")
+      .map(p => p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase())
+      .filter(Boolean);
+  }
+
+  const filtered = rows.filter(r => parseClientes(r.cliente ?? "").includes(cliente));
+
+  res.json({ cliente, filtro, valor, viagens: filtered.map(r => ({
+    date:      r.date,
+    motorista: r.motorista ?? "",
+    frete:     r.frete ?? "",
+    obs:       r.obs ?? "",
+  }))});
+});
+
 // ─── Export — full DB dump as Excel ──────────────────────────────────────────
 router.get("/entregas/export", async (_req, res, next): Promise<void> => {
   try {

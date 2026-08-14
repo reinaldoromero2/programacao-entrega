@@ -953,6 +953,8 @@ const CLIENTE_CORES = [
   "#0284c7","#dc2626","#9333ea","#059669",
 ];
 
+interface ClienteViagem { date: string; motorista: string; frete: string; obs: string; }
+
 function ClienteTab() {
   const [filtro, setFiltro] = useState<FiltroTipo>("mes");
   const [dia,  setDia]  = useState(localToday);
@@ -963,16 +965,34 @@ function ClienteTab() {
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const [selectedCliente, setSelectedCliente] = useState<string | null>(null);
+  const [clienteViagens, setClienteViagens] = useState<ClienteViagem[] | null>(null);
+  const [loadingViagens, setLoadingViagens] = useState(false);
+
   const valor = filtro === "dia" ? dia : filtro === "mes" ? mes : ano;
 
   useEffect(() => {
     setLoading(true);
     setFetchError(null);
+    setSelectedCliente(null);
+    setClienteViagens(null);
     apiFetch<ClienteRelatorio>(`/api/entregas/cliente-relatorio?filtro=${filtro}&valor=${valor}`)
       .then(setData)
       .catch((err: unknown) => setFetchError(err instanceof Error ? err.message : "Erro"))
       .finally(() => setLoading(false));
   }, [filtro, valor]);
+
+  const handleClienteClick = (nome: string) => {
+    if (selectedCliente === nome) { setSelectedCliente(null); setClienteViagens(null); return; }
+    setSelectedCliente(nome);
+    setLoadingViagens(true);
+    apiFetch<{ viagens: ClienteViagem[] }>(
+      `/api/entregas/cliente-datas?filtro=${filtro}&valor=${valor}&cliente=${encodeURIComponent(nome)}`
+    )
+      .then(r => setClienteViagens(r.viagens))
+      .catch(() => setClienteViagens([]))
+      .finally(() => setLoadingViagens(false));
+  };
 
   const prevMes = () => {
     const [a, m] = mes.split("-").map(Number);
@@ -1068,14 +1088,20 @@ function ClienteTab() {
                     }))}
                     layout="vertical"
                     margin={{ top: 2, right: 40, left: 8, bottom: 2 }}
+                    onClick={(s) => { if (s?.activePayload?.[0]?.payload?.nome) handleClienteClick(s.activePayload[0].payload.nome); }}
+                    style={{ cursor: "pointer" }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                     <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} width={180} />
                     <Tooltip formatter={(v) => [`${v} entrega${Number(v) !== 1 ? "s" : ""}`, "Total"]} />
                     <Bar dataKey="entregas" radius={[0, 4, 4, 0]}>
-                      {data.resultado.map((_, i) => (
-                        <Cell key={i} fill={CLIENTE_CORES[i % CLIENTE_CORES.length]} />
+                      {data.resultado.map((r, i) => (
+                        <Cell
+                          key={i}
+                          fill={CLIENTE_CORES[i % CLIENTE_CORES.length]}
+                          opacity={selectedCliente && selectedCliente !== r.cliente ? 0.4 : 1}
+                        />
                       ))}
                     </Bar>
                   </BarChart>
@@ -1097,7 +1123,11 @@ function ClienteTab() {
                       const pct = data.totalViagens > 0 ? Math.round((r.total / data.totalViagens) * 100) : 0;
                       const cor = CLIENTE_CORES[i % CLIENTE_CORES.length];
                       return (
-                        <tr key={r.cliente} className="border-t border-slate-200 hover:bg-slate-50">
+                        <tr
+                          key={r.cliente}
+                          onClick={() => handleClienteClick(r.cliente)}
+                          className={`border-t border-slate-200 cursor-pointer transition-colors ${selectedCliente === r.cliente ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                        >
                           <td className="px-3 py-2 text-slate-400 text-xs">{i + 1}</td>
                           <td className="px-3 py-2 font-medium text-slate-800">{r.cliente}</td>
                           <td className="px-3 py-2 text-center font-bold" style={{ color: cor }}>{r.total}</td>
@@ -1115,6 +1145,60 @@ function ClienteTab() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Painel de viagens do cliente selecionado */}
+              {selectedCliente && (
+                <div className="rounded-lg overflow-hidden border border-blue-200">
+                  <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-b border-blue-200">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                      {selectedCliente} — {periodoLabel}
+                      {clienteViagens && !loadingViagens && (
+                        <span className="ml-2 font-normal text-blue-500">
+                          ({clienteViagens.length} viagem{clienteViagens.length !== 1 ? "s" : ""})
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => { setSelectedCliente(null); setClienteViagens(null); }}
+                      className="text-blue-400 hover:text-blue-600 text-lg leading-none"
+                    >×</button>
+                  </div>
+                  {loadingViagens && (
+                    <div className="flex items-center justify-center py-4 bg-blue-50/50">
+                      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                    </div>
+                  )}
+                  {!loadingViagens && clienteViagens?.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-3 italic">Nenhuma viagem encontrada.</p>
+                  )}
+                  {!loadingViagens && clienteViagens && clienteViagens.length > 0 && (
+                    <div className="overflow-y-auto max-h-44">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-blue-100">
+                          <tr>
+                            <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Data</th>
+                            <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Motorista</th>
+                            <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Frete</th>
+                            <th className="px-3 py-1.5 text-left font-semibold text-blue-700">OBS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {clienteViagens.map((v, i) => (
+                            <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-blue-50/40"}>
+                              <td className="px-3 py-1.5 font-medium text-slate-700 whitespace-nowrap">
+                                {v.date.slice(8)}/{v.date.slice(5,7)}/{v.date.slice(0,4)}
+                              </td>
+                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.motorista || "—"}</td>
+                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.frete || "—"}</td>
+                              <td className="px-3 py-1.5 text-slate-500">{v.obs || ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-end pt-1">
                 <Button size="sm" onClick={exportExcel} className="gap-2 bg-green-700 hover:bg-green-800 text-white">

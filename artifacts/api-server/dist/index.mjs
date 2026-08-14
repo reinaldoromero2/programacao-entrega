@@ -106111,7 +106111,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260814110039" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260814132933" });
 });
 var health_default = router;
 
@@ -106431,6 +106431,43 @@ router2.get("/entregas/cliente-relatorio", async (req, res) => {
   }
   const resultado = Array.from(grouped.entries()).map(([cliente, total]) => ({ cliente, total })).sort((a, b) => b.total - a.total);
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
+});
+router2.get("/entregas/cliente-datas", async (req, res) => {
+  const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
+  const valor = typeof req.query.valor === "string" ? req.query.valor : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+  const cliente = typeof req.query.cliente === "string" ? req.query.cliente.toUpperCase() : "";
+  const notCancelled = sql`
+    UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADO%'
+    AND UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADA%'
+    AND COALESCE(${entregasTable.nf}, '') <> 'x'
+    AND COALESCE(${entregasTable.cg}, '') <> 'x'
+  `;
+  const clienteExists = sql`${entregasTable.cliente} IS NOT NULL AND ${entregasTable.cliente} <> ''`;
+  let dateFilter;
+  if (filtro === "dia") {
+    dateFilter = sql`${entregasTable.date} = ${valor}`;
+  } else if (filtro === "mes") {
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+  } else {
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
+  }
+  const rows = await db.select({
+    date: entregasTable.date,
+    cliente: entregasTable.cliente,
+    motorista: entregasTable.motorista,
+    frete: entregasTable.frete,
+    obs: entregasTable.obs
+  }).from(entregasTable).where(sql`(${dateFilter}) AND (${clienteExists}) AND (${notCancelled})`).orderBy(entregasTable.date);
+  function parseClientes(raw) {
+    return raw.replace(/\([^)]*\)/g, "").split("+").map((p) => p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase()).filter(Boolean);
+  }
+  const filtered = rows.filter((r) => parseClientes(r.cliente ?? "").includes(cliente));
+  res.json({ cliente, filtro, valor, viagens: filtered.map((r) => ({
+    date: r.date,
+    motorista: r.motorista ?? "",
+    frete: r.frete ?? "",
+    obs: r.obs ?? ""
+  })) });
 });
 router2.get("/entregas/export", async (_req, res, next) => {
   try {
