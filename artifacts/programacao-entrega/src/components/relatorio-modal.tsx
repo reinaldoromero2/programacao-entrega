@@ -553,7 +553,7 @@ function FreteMensalTab() {
   };
 
   return (
-    <div className="flex flex-col gap-4 flex-1 min-h-0">
+    <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto">
       <div className="flex items-center justify-between">
         <button onClick={prevMes} className="px-3 py-1 rounded border border-slate-300 text-sm hover:bg-slate-100">‹</button>
         <span className="text-sm font-semibold text-slate-700">{mesLabel(mes)}</span>
@@ -569,7 +569,7 @@ function FreteMensalTab() {
             <p className="text-sm text-slate-400 text-center py-8 italic">Nenhuma entrega registrada em {mesLabel(mes)}.</p>
           ) : (
             <>
-            <div className="flex gap-4 flex-1 min-h-0">
+            <div className="flex gap-4">
               <div className="flex flex-col items-center gap-3 w-52 flex-shrink-0">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total do Mês</p>
                 {pieData.length > 0 && (
