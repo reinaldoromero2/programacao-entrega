@@ -126,7 +126,7 @@ export default function Home() {
 
           <OpcoesMenu />
 
-          <RelatorioModal />
+          <RelatorioModal onNavigateDate={(d) => setDate(new Date(d + "T12:00:00"))} />
 
           <Button
             variant="outline"

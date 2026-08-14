@@ -955,7 +955,7 @@ const CLIENTE_CORES = [
 
 interface ClienteViagem { date: string; motorista: string; frete: string; obs: string; }
 
-function ClienteTab() {
+function ClienteTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) => void }) {
   const [filtro, setFiltro] = useState<FiltroTipo>("mes");
   const [dia,  setDia]  = useState(localToday);
   const [mes,  setMes]  = useState(localMes);
@@ -1197,9 +1197,13 @@ function ClienteTab() {
                             <tbody>
                               {clienteViagens.map((v, i) => (
                                 <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-blue-50/40"}>
-                                  <td className="px-3 py-1.5 font-medium text-slate-700 whitespace-nowrap">
-                                    {v.date.slice(8)}/{v.date.slice(5,7)}/{v.date.slice(0,4)}
-                                  </td>
+                                  <td
+                                className={`px-3 py-1.5 font-medium whitespace-nowrap ${onNavigateDia ? "text-blue-600 underline cursor-pointer hover:text-blue-800" : "text-slate-700"}`}
+                                onClick={() => onNavigateDia?.(v.date)}
+                                title={onNavigateDia ? "Ir para este dia" : undefined}
+                              >
+                                {v.date.slice(8)}/{v.date.slice(5,7)}/{v.date.slice(0,4)}
+                              </td>
                                   <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.motorista || "—"}</td>
                                   <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.frete || "—"}</td>
                                   <td className="px-3 py-1.5 text-slate-500">{v.obs || ""}</td>
@@ -1232,7 +1236,7 @@ function ClienteTab() {
 
 type Tab = "resumo" | "divergencias" | "frete" | "motoristas" | "clientes";
 
-export function RelatorioModal() {
+export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: string) => void } = {}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("resumo");
 
@@ -1279,7 +1283,7 @@ export function RelatorioModal() {
           {open && tab === "divergencias" && <DivergenciasTab />}
           {open && tab === "frete"        && <FreteMensalTab />}
           {open && tab === "motoristas"   && <MotoristaTab />}
-          {open && tab === "clientes"     && <ClienteTab />}
+          {open && tab === "clientes"     && <ClienteTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
         </div>
       </DialogContent>
     </Dialog>
