@@ -106118,7 +106118,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260814150646" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260814161008" });
 });
 var health_default = router;
 
@@ -106404,6 +106404,31 @@ router2.get("/entregas/motorista-relatorio", async (req, res) => {
   }
   const resultado = Array.from(grouped.values()).sort((a, b) => b.total - a.total);
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
+});
+router2.get("/entregas/motorista-datas", async (req, res) => {
+  const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
+  const valor = typeof req.query.valor === "string" ? req.query.valor : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+  const motorista = typeof req.query.motorista === "string" ? req.query.motorista : "";
+  let dateFilter;
+  if (filtro === "dia") {
+    dateFilter = sql`${entregasTable.date} = ${valor}`;
+  } else if (filtro === "mes") {
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+  } else {
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
+  }
+  const rows = await db.select({
+    date: entregasTable.date,
+    cliente: entregasTable.cliente,
+    frete: entregasTable.frete,
+    obs: entregasTable.obs
+  }).from(entregasTable).where(sql`(${dateFilter}) AND ${entregasTable.motorista} = ${motorista}`).orderBy(entregasTable.date);
+  res.json({ motorista, filtro, valor, viagens: rows.map((r) => ({
+    date: r.date,
+    cliente: r.cliente ?? "",
+    frete: r.frete ?? "",
+    obs: r.obs ?? ""
+  })) });
 });
 router2.get("/entregas/cliente-relatorio", async (req, res) => {
   const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";

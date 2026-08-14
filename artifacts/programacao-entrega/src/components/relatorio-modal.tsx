@@ -767,6 +767,8 @@ const MOTORISTA_CORES = [
   "#0284c7","#dc2626","#9333ea","#059669",
 ];
 
+interface MotoristaViagem { date: string; cliente: string; frete: string; obs: string; }
+
 function MotoristaTab() {
   const [filtro, setFiltro] = useState<FiltroTipo>("mes");
   const [dia,  setDia]  = useState(localToday);
@@ -777,16 +779,34 @@ function MotoristaTab() {
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const [selectedMotorista, setSelectedMotorista] = useState<string | null>(null);
+  const [motoristaViagens, setMotoristaViagens] = useState<MotoristaViagem[] | null>(null);
+  const [loadingViagens, setLoadingViagens] = useState(false);
+
   const valor = filtro === "dia" ? dia : filtro === "mes" ? mes : ano;
 
   useEffect(() => {
     setLoading(true);
     setFetchError(null);
+    setSelectedMotorista(null);
+    setMotoristaViagens(null);
     apiFetch<MotoristaRelatorio>(`/api/entregas/motorista-relatorio?filtro=${filtro}&valor=${valor}`)
       .then(setData)
       .catch((err: unknown) => setFetchError(err instanceof Error ? err.message : "Erro"))
       .finally(() => setLoading(false));
   }, [filtro, valor]);
+
+  const handleMotoristaClick = (motorista: string) => {
+    if (selectedMotorista === motorista) { setSelectedMotorista(null); setMotoristaViagens(null); return; }
+    setSelectedMotorista(motorista);
+    setLoadingViagens(true);
+    apiFetch<{ viagens: MotoristaViagem[] }>(
+      `/api/entregas/motorista-datas?filtro=${filtro}&valor=${valor}&motorista=${encodeURIComponent(motorista)}`
+    )
+      .then(r => setMotoristaViagens(r.viagens))
+      .catch(() => setMotoristaViagens([]))
+      .finally(() => setLoadingViagens(false));
+  };
 
   const prevMes = () => {
     const [a, m] = mes.split("-").map(Number);
@@ -872,7 +892,7 @@ function MotoristaTab() {
             <p className="text-sm text-slate-400 text-center py-8 italic">Nenhuma viagem registrada no período.</p>
           ) : (
             <>
-              <div className="overflow-y-auto border rounded-md" style={{ maxHeight: "340px" }}>
+              <div className="overflow-y-auto border rounded-md" style={{ maxHeight: "200px" }}>
                 <ResponsiveContainer width="100%" height={Math.max(120, data.resultado.length * 36)}>
                   <BarChart
                     data={data.resultado.map((r, i) => ({
@@ -882,54 +902,132 @@ function MotoristaTab() {
                     }))}
                     layout="vertical"
                     margin={{ top: 2, right: 40, left: 8, bottom: 2 }}
+                    onClick={(s) => { if (s?.activePayload?.[0]?.payload?.nome) { const raw = s.activePayload[0].payload.nome as string; const motorista = raw.includes(" · ") ? raw.split(" · ")[0]! : raw; handleMotoristaClick(motorista); } }}
+                    style={{ cursor: "pointer" }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                     <YAxis type="category" dataKey="nome" tick={{ fontSize: 11 }} width={160} />
                     <Tooltip formatter={(v) => [`${v} viagem${Number(v) !== 1 ? "s" : ""}`, "Total"]} />
                     <Bar dataKey="viagens" radius={[0, 4, 4, 0]}>
-                      {data.resultado.map((_, i) => (
-                        <Cell key={i} fill={MOTORISTA_CORES[i % MOTORISTA_CORES.length]} />
+                      {data.resultado.map((r, i) => (
+                        <Cell
+                          key={i}
+                          fill={MOTORISTA_CORES[i % MOTORISTA_CORES.length]}
+                          opacity={selectedMotorista && selectedMotorista !== r.motorista ? 0.4 : 1}
+                        />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="flex-1 overflow-auto border rounded-md">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-700 font-semibold text-xs uppercase sticky top-0">
-                      <th className="px-3 py-2 text-left">#</th>
-                      <th className="px-3 py-2 text-left">Motorista</th>
-                      <th className="px-3 py-2 text-left">Placa</th>
-                      <th className="px-3 py-2 text-center">Viagens</th>
-                      <th className="px-3 py-2 text-left">Participação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.resultado.map((r, i) => {
-                      const pct = data.totalViagens > 0 ? Math.round((r.total / data.totalViagens) * 100) : 0;
-                      const cor = MOTORISTA_CORES[i % MOTORISTA_CORES.length];
-                      return (
-                        <tr key={`${r.motorista}-${r.placa}`} className="border-t border-slate-200 hover:bg-slate-50">
-                          <td className="px-3 py-2 text-slate-400 text-xs">{i + 1}</td>
-                          <td className="px-3 py-2 font-medium text-slate-800">{r.motorista}</td>
-                          <td className="px-3 py-2 font-mono text-slate-600">{r.placa ?? "—"}</td>
-                          <td className="px-3 py-2 text-center font-bold" style={{ color: cor }}>{r.total}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 bg-slate-100 rounded-full h-2">
-                                <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: cor }} />
+              {/* Linha lado a lado: tabela de motoristas | painel de viagens */}
+              <div className="flex gap-3 min-h-0" style={{ height: "260px" }}>
+
+                {/* Esquerda — ranking de motoristas */}
+                <div className="w-1/2 overflow-auto border rounded-md">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-semibold text-xs uppercase sticky top-0">
+                        <th className="px-3 py-2 text-left">#</th>
+                        <th className="px-3 py-2 text-left">Motorista</th>
+                        <th className="px-3 py-2 text-left">Placa</th>
+                        <th className="px-3 py-2 text-center">Viagens</th>
+                        <th className="px-3 py-2 text-left">%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.resultado.map((r, i) => {
+                        const pct = data.totalViagens > 0 ? Math.round((r.total / data.totalViagens) * 100) : 0;
+                        const cor = MOTORISTA_CORES[i % MOTORISTA_CORES.length];
+                        return (
+                          <tr
+                            key={`${r.motorista}-${r.placa}`}
+                            onClick={() => handleMotoristaClick(r.motorista)}
+                            className={`border-t border-slate-200 cursor-pointer transition-colors ${selectedMotorista === r.motorista ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                          >
+                            <td className="px-3 py-2 text-slate-400 text-xs">{i + 1}</td>
+                            <td className="px-3 py-2 font-medium text-slate-800">{r.motorista}</td>
+                            <td className="px-3 py-2 font-mono text-slate-600 text-xs">{r.placa ?? "—"}</td>
+                            <td className="px-3 py-2 text-center font-bold" style={{ color: cor }}>{r.total}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-1">
+                                <div className="flex-1 bg-slate-100 rounded-full h-2">
+                                  <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: cor }} />
+                                </div>
+                                <span className="text-xs text-slate-500 w-7 text-right">{pct}%</span>
                               </div>
-                              <span className="text-xs text-slate-500 w-8 text-right">{pct}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Direita — viagens do motorista selecionado */}
+                <div className="w-1/2 rounded-md overflow-hidden border border-blue-200 flex flex-col">
+                  {!selectedMotorista ? (
+                    <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 9l6 6m0 0l-6 6m6-6H3" />
+                      </svg>
+                      <p className="text-xs">Clique em um motorista para ver as viagens</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-b border-blue-200 shrink-0">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-blue-700 truncate pr-2">
+                          {selectedMotorista}
+                          {motoristaViagens && !loadingViagens && (
+                            <span className="ml-2 font-normal text-blue-500 normal-case">
+                              · {motoristaViagens.length} viagem{motoristaViagens.length !== 1 ? "s" : ""} em {periodoLabel}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          onClick={() => { setSelectedMotorista(null); setMotoristaViagens(null); }}
+                          className="text-blue-400 hover:text-blue-600 text-lg leading-none shrink-0"
+                        >×</button>
+                      </div>
+                      {loadingViagens && (
+                        <div className="flex items-center justify-center flex-1">
+                          <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                        </div>
+                      )}
+                      {!loadingViagens && motoristaViagens?.length === 0 && (
+                        <p className="text-xs text-slate-400 text-center py-6 italic flex-1">Nenhuma viagem encontrada.</p>
+                      )}
+                      {!loadingViagens && motoristaViagens && motoristaViagens.length > 0 && (
+                        <div className="overflow-y-auto flex-1">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-blue-100">
+                              <tr>
+                                <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Data</th>
+                                <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Cliente</th>
+                                <th className="px-3 py-1.5 text-left font-semibold text-blue-700">Frete</th>
+                                <th className="px-3 py-1.5 text-left font-semibold text-blue-700">OBS</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {motoristaViagens.map((v, i) => (
+                                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-blue-50/40"}>
+                                  <td className="px-3 py-1.5 font-medium text-slate-700 whitespace-nowrap">
+                                    {v.date.slice(8)}/{v.date.slice(5,7)}/{v.date.slice(0,4)}
+                                  </td>
+                                  <td className="px-3 py-1.5 text-slate-600">{v.cliente || "—"}</td>
+                                  <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{v.frete || "—"}</td>
+                                  <td className="px-3 py-1.5 text-slate-500">{v.obs || ""}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end pt-1">

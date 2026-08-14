@@ -398,6 +398,40 @@ router.get("/entregas/motorista-relatorio", async (req, res): Promise<void> => {
   res.json({ filtro, valor, resultado, totalViagens: rows.length });
 });
 
+// ─── Motorista datas — viagens de um motorista no período ────────────────────
+router.get("/entregas/motorista-datas", async (req, res): Promise<void> => {
+  const filtro    = typeof req.query.filtro    === "string" ? req.query.filtro    : "mes";
+  const valor     = typeof req.query.valor     === "string" ? req.query.valor     : new Date().toISOString().slice(0, 7);
+  const motorista = typeof req.query.motorista === "string" ? req.query.motorista : "";
+
+  let dateFilter;
+  if (filtro === "dia") {
+    dateFilter = sql`${entregasTable.date} = ${valor}`;
+  } else if (filtro === "mes") {
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+  } else {
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
+  }
+
+  const rows = await db
+    .select({
+      date:      entregasTable.date,
+      cliente:   entregasTable.cliente,
+      frete:     entregasTable.frete,
+      obs:       entregasTable.obs,
+    })
+    .from(entregasTable)
+    .where(sql`(${dateFilter}) AND ${entregasTable.motorista} = ${motorista}`)
+    .orderBy(entregasTable.date);
+
+  res.json({ motorista, filtro, valor, viagens: rows.map(r => ({
+    date:    r.date,
+    cliente: r.cliente ?? "",
+    frete:   r.frete  ?? "",
+    obs:     r.obs    ?? "",
+  }))});
+});
+
 // ─── Cliente relatório ────────────────────────────────────────────────────────
 router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
   const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
