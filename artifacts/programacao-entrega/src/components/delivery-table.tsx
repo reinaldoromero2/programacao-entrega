@@ -439,24 +439,35 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       </div>
 
       {/* OBS — select nativo de motivos quando começa com "cancelad", senão input livre */}
-      <div className="p-1 border-r border-slate-200 flex flex-col justify-center">
+      <div className="p-1 border-r border-slate-200 flex items-center gap-1">
         {isCancelled && (motivos?.length ?? 0) > 0 ? (
-          <select
-            value={localState.obs.replace(/^CANCELAD[AO]\s*-\s*/i, "")}
-            onChange={(e) => {
-              const motivo = e.target.value;
-              const val = motivo === "" ? "" : `${obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO"} - ${motivo}`;
-              setLocalState(prev => ({ ...prev, obs: val }));
-              saveField("obs", val);
-            }}
-            className="w-full px-1 py-1 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white cursor-pointer"
-            data-testid={`select-obs-${entrega.id}`}
-          >
-            <option value="">— limpar —</option>
-            {motivos!.map((m) => (
-              <option key={m.id} value={m.motivo}>{m.motivo}</option>
-            ))}
-          </select>
+          <>
+            <select
+              value={localState.obs.replace(/^CANCELAD[AO]\s*-\s*/i, "")}
+              onChange={(e) => {
+                const motivo = e.target.value;
+                const prefix = obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO";
+                const val = motivo === "" ? prefix : `${prefix} - ${motivo}`;
+                setLocalState(prev => ({ ...prev, obs: val }));
+                saveField("obs", val);
+              }}
+              className="flex-1 min-w-0 px-1 py-1 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white cursor-pointer"
+              data-testid={`select-obs-${entrega.id}`}
+            >
+              <option value="">{obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO"}</option>
+              {motivos!.map((m) => (
+                <option key={m.id} value={m.motivo}>{m.motivo}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => {
+                setLocalState(prev => ({ ...prev, obs: "" }));
+                saveField("obs", "");
+              }}
+              className="flex-shrink-0 text-slate-400 hover:text-red-500 text-base leading-none px-0.5"
+              title="Limpar"
+            >×</button>
+          </>
         ) : (
           <input
             type="text"
