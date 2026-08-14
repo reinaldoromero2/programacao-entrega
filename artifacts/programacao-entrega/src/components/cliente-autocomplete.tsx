@@ -13,7 +13,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 
-interface DropdownPos { top: number; left: number; width: number; }
+interface DropdownPos { top: number; left: number; width: number; openUp: boolean; }
 
 interface ClienteAutocompleteProps {
   value: string;
@@ -75,10 +75,17 @@ export function ClienteAutocomplete({
   const updatePos = useCallback(() => {
     if (!inputRef.current) return;
     const rect = inputRef.current.getBoundingClientRect();
+    const maxH = 220;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUp = spaceBelow < maxH + 8 && spaceAbove > spaceBelow;
     setDropdownPos({
-      top: rect.bottom + window.scrollY + 2,
+      top: openUp
+        ? rect.top + window.scrollY - maxH - 2
+        : rect.bottom + window.scrollY + 2,
       left: rect.left + window.scrollX,
       width: Math.max(rect.width, 200),
+      openUp,
     });
   }, []);
 

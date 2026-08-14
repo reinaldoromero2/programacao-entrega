@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "fr_PyCEgxbF5UKRfhGAOT"
+uri = "file://clientes-cadastro.pdf"
+type = "pdf"
+title = "Cadastro de Clientes"
+description = "74 clientes extraídos do histórico de entregas"
