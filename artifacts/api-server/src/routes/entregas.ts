@@ -381,21 +381,30 @@ router.get("/entregas/motorista-relatorio", async (req, res): Promise<void> => {
   }
 
   const rows = await db
-    .select({ motorista: entregasTable.motorista, placa: entregasTable.placa, date: entregasTable.date })
+    .select({ motorista: entregasTable.motorista, placa: entregasTable.placa, date: entregasTable.date, cliente: entregasTable.cliente })
     .from(entregasTable)
     .where(whereExpr)
     .orderBy(asc(entregasTable.date));
 
-  // Group by motorista + placa
+  // Count destinations separated by "+" outside parentheses (e.g. "SUZANO SP + BOSCH OSASCO" = 2 trips)
+  function countDestinations(raw: string | null): number {
+    if (!raw) return 1;
+    return raw.replace(/\([^)]*\)/g, "").split("+").filter(p => p.trim()).length || 1;
+  }
+
+  // Group by motorista + placa, summing destinations per row
   const grouped = new Map<string, { motorista: string; placa: string | null; total: number }>();
+  let totalViagens = 0;
   for (const row of rows) {
+    const dest = countDestinations(row.cliente);
+    totalViagens += dest;
     const key = `${row.motorista}||${row.placa ?? ""}`;
     if (!grouped.has(key)) grouped.set(key, { motorista: row.motorista!, placa: row.placa, total: 0 });
-    grouped.get(key)!.total++;
+    grouped.get(key)!.total += dest;
   }
 
   const resultado = Array.from(grouped.values()).sort((a, b) => b.total - a.total);
-  res.json({ filtro, valor, resultado, totalViagens: rows.length });
+  res.json({ filtro, valor, resultado, totalViagens });
 });
 
 // ─── Motorista datas — viagens de um motorista no período ────────────────────

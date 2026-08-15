@@ -982,7 +982,7 @@ function MotoristaTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) => 
                           {selectedMotorista}
                           {motoristaViagens && !loadingViagens && (
                             <span className="ml-2 font-normal text-blue-500 normal-case">
-                              · {motoristaViagens.length} viagem{motoristaViagens.length !== 1 ? "s" : ""} em {periodoLabel}
+                              · {motoristaViagens.reduce((s, v) => s + (v.cliente.replace(/\([^)]*\)/g,"").split("+").filter(p=>p.trim()).length || 1), 0)} viagem{motoristaViagens.reduce((s, v) => s + (v.cliente.replace(/\([^)]*\)/g,"").split("+").filter(p=>p.trim()).length || 1), 0) !== 1 ? "s" : ""} em {periodoLabel}
                             </span>
                           )}
                         </span>

@@ -106134,7 +106134,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260815122710" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260815161158" });
 });
 var health_default = router;
 
@@ -106411,15 +106411,22 @@ router2.get("/entregas/motorista-relatorio", async (req, res) => {
       AND ${entregasTable.motorista} IS NOT NULL
       AND ${entregasTable.motorista} <> ''`;
   }
-  const rows = await db.select({ motorista: entregasTable.motorista, placa: entregasTable.placa, date: entregasTable.date }).from(entregasTable).where(whereExpr).orderBy(asc(entregasTable.date));
+  const rows = await db.select({ motorista: entregasTable.motorista, placa: entregasTable.placa, date: entregasTable.date, cliente: entregasTable.cliente }).from(entregasTable).where(whereExpr).orderBy(asc(entregasTable.date));
+  function countDestinations(raw) {
+    if (!raw) return 1;
+    return raw.replace(/\([^)]*\)/g, "").split("+").filter((p) => p.trim()).length || 1;
+  }
   const grouped = /* @__PURE__ */ new Map();
+  let totalViagens = 0;
   for (const row of rows) {
+    const dest = countDestinations(row.cliente);
+    totalViagens += dest;
     const key = `${row.motorista}||${row.placa ?? ""}`;
     if (!grouped.has(key)) grouped.set(key, { motorista: row.motorista, placa: row.placa, total: 0 });
-    grouped.get(key).total++;
+    grouped.get(key).total += dest;
   }
   const resultado = Array.from(grouped.values()).sort((a, b) => b.total - a.total);
-  res.json({ filtro, valor, resultado, totalViagens: rows.length });
+  res.json({ filtro, valor, resultado, totalViagens });
 });
 router2.get("/entregas/motorista-datas", async (req, res) => {
   const filtro = typeof req.query.filtro === "string" ? req.query.filtro : "mes";
