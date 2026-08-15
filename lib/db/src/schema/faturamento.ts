@@ -1,9 +1,11 @@
 import { pgTable, serial, text, numeric } from "drizzle-orm/pg-core";
 
 export const faturamentoDiarioTable = pgTable("faturamento_diario", {
-  id:    serial("id").primaryKey(),
-  date:  text("date").notNull().unique(),   // yyyy-MM-dd
-  valor: numeric("valor", { precision: 15, scale: 2 }).notNull(),
+  id:      serial("id").primaryKey(),
+  date:    text("date").notNull().unique(),   // yyyy-MM-dd
+  matriz:  numeric("matriz",  { precision: 15, scale: 2 }),
+  filial:  numeric("filial",  { precision: 15, scale: 2 }),
+  aglotec: numeric("aglotec", { precision: 15, scale: 2 }),
 });
 
 export const faturamentoMetaTable = pgTable("faturamento_meta", {

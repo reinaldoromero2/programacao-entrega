@@ -106098,7 +106098,9 @@ var faturamentoDiarioTable = pgTable("faturamento_diario", {
   id: serial("id").primaryKey(),
   date: text("date").notNull().unique(),
   // yyyy-MM-dd
-  valor: numeric("valor", { precision: 15, scale: 2 }).notNull()
+  matriz: numeric("matriz", { precision: 15, scale: 2 }),
+  filial: numeric("filial", { precision: 15, scale: 2 }),
+  aglotec: numeric("aglotec", { precision: 15, scale: 2 })
 });
 var faturamentoMetaTable = pgTable("faturamento_meta", {
   id: serial("id").primaryKey(),
@@ -106134,7 +106136,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260815161951" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260815163942" });
 });
 var health_default = router;
 
@@ -106834,33 +106836,48 @@ router6.get("/faturamento", async (req, res) => {
   res.json({
     mes,
     meta: metaRow ? Number(metaRow.meta) : null,
-    dias: filtered.map((r) => ({ date: r.date, valor: Number(r.valor) }))
+    dias: filtered.map((r) => ({
+      date: r.date,
+      matriz: r.matriz !== null && r.matriz !== void 0 ? Number(r.matriz) : null,
+      filial: r.filial !== null && r.filial !== void 0 ? Number(r.filial) : null,
+      aglotec: r.aglotec !== null && r.aglotec !== void 0 ? Number(r.aglotec) : null
+    }))
   });
 });
 router6.put("/faturamento/dia", async (req, res) => {
   const date6 = typeof req.body?.date === "string" ? req.body.date.trim() : "";
-  const valor = req.body?.valor;
+  const matrizRaw = req.body?.matriz;
+  const filialRaw = req.body?.filial;
+  const aglotecRaw = req.body?.aglotec;
   if (!date6 || !/^\d{4}-\d{2}-\d{2}$/.test(date6)) {
     res.status(400).json({ error: "date inv\xE1lido (yyyy-MM-dd)" });
     return;
   }
-  if (valor === null || valor === "" || valor === void 0) {
+  const toNum = (v) => {
+    if (v === null || v === "" || v === void 0) return null;
+    const n = Number(String(v).replace(",", "."));
+    return isNaN(n) || n < 0 ? null : n;
+  };
+  const matriz = toNum(matrizRaw);
+  const filial = toNum(filialRaw);
+  const aglotec = toNum(aglotecRaw);
+  if (matriz === null && filial === null && aglotec === null) {
     await db.delete(faturamentoDiarioTable).where(eq(faturamentoDiarioTable.date, date6));
     res.json({ deleted: true, date: date6 });
     return;
   }
-  const num = Number(String(valor).replace(",", "."));
-  if (isNaN(num) || num < 0) {
-    res.status(400).json({ error: "valor inv\xE1lido" });
-    return;
-  }
+  const vals = {
+    matriz: matriz !== null ? String(matriz) : null,
+    filial: filial !== null ? String(filial) : null,
+    aglotec: aglotec !== null ? String(aglotec) : null
+  };
   const existing = await db.select().from(faturamentoDiarioTable).where(eq(faturamentoDiarioTable.date, date6));
   if (existing.length > 0) {
-    const [row] = await db.update(faturamentoDiarioTable).set({ valor: String(num) }).where(eq(faturamentoDiarioTable.date, date6)).returning();
-    res.json({ date: row.date, valor: Number(row.valor) });
+    const [row] = await db.update(faturamentoDiarioTable).set(vals).where(eq(faturamentoDiarioTable.date, date6)).returning();
+    res.json({ date: row.date, matriz: row.matriz !== null ? Number(row.matriz) : null, filial: row.filial !== null ? Number(row.filial) : null, aglotec: row.aglotec !== null ? Number(row.aglotec) : null });
   } else {
-    const [row] = await db.insert(faturamentoDiarioTable).values({ date: date6, valor: String(num) }).returning();
-    res.json({ date: row.date, valor: Number(row.valor) });
+    const [row] = await db.insert(faturamentoDiarioTable).values({ date: date6, ...vals }).returning();
+    res.json({ date: row.date, matriz: row.matriz !== null ? Number(row.matriz) : null, filial: row.filial !== null ? Number(row.filial) : null, aglotec: row.aglotec !== null ? Number(row.aglotec) : null });
   }
 });
 router6.put("/faturamento/meta", async (req, res) => {

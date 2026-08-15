@@ -1372,12 +1372,17 @@ async function apiFetchPut<T = unknown>(path: string, body: unknown): Promise<T>
   return res.json() as Promise<T>;
 }
 
+type FatDia = { date: string; matriz: number | null; filial: number | null; aglotec: number | null };
+type FatCols = "matriz" | "filial" | "aglotec";
+
+// inputs keyed as "date|col", e.g. "2026-08-03|matriz"
+function inputKey(date: string, col: FatCols) { return `${date}|${col}`; }
+
 function FaturamentoTab() {
   const [mes, setMes] = useState(localMes);
-  const [data, setData] = useState<{ meta: number | null; dias: { date: string; valor: number }[] } | null>(null);
+  const [data, setData] = useState<{ meta: number | null; dias: FatDia[] } | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Raw string inputs per date (while editing or displaying)
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [metaInput, setMetaInput] = useState("");
   const [saving, setSaving] = useState<Set<string>>(new Set());
@@ -1385,16 +1390,21 @@ function FaturamentoTab() {
 
   const allDays = daysInMonth(mes);
 
-  // Load data when month changes
+  const numFmt = (v: number | null) => v !== null ? v.toFixed(2).replace(".", ",") : "";
+
   useEffect(() => {
     setLoading(true);
     setData(null);
-    apiFetch<{ meta: number | null; dias: { date: string; valor: number }[] }>(
+    apiFetch<{ meta: number | null; dias: FatDia[] }>(
       `/api/faturamento?mes=${mes}`
     ).then((d) => {
       setData(d);
       const map: Record<string, string> = {};
-      for (const dia of d.dias) map[dia.date] = dia.valor.toFixed(2).replace(".", ",");
+      for (const dia of d.dias) {
+        map[inputKey(dia.date, "matriz")]  = numFmt(dia.matriz);
+        map[inputKey(dia.date, "filial")]  = numFmt(dia.filial);
+        map[inputKey(dia.date, "aglotec")] = numFmt(dia.aglotec);
+      }
       setInputs(map);
       setMetaInput(d.meta !== null ? d.meta.toFixed(2).replace(".", ",") : "");
     }).catch(() => {}).finally(() => setLoading(false));
@@ -1409,27 +1419,46 @@ function FaturamentoTab() {
     setMes(`${m === 12 ? a + 1 : a}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`);
   };
 
-  const handleDiaBlur = async (date: string) => {
-    const raw = (inputs[date] ?? "").trim();
+  const getNum = (date: string, col: FatCols): number | null => {
+    const raw = (inputs[inputKey(date, col)] ?? "").trim();
+    return raw === "" ? null : parseBRL(raw);
+  };
+
+  const handleCellBlur = async (date: string, col: FatCols) => {
+    const raw = (inputs[inputKey(date, col)] ?? "").trim();
     const num = raw === "" ? null : parseBRL(raw);
     if (raw !== "" && num === null) {
-      // Invalid — revert to server value
+      // revert to server value
       const prev = data?.dias.find((d) => d.date === date);
-      setInputs((s) => ({ ...s, [date]: prev ? prev.valor.toFixed(2).replace(".", ",") : "" }));
+      setInputs((s) => ({ ...s, [inputKey(date, col)]: numFmt(prev?.[col] ?? null) }));
       return;
     }
-    setSaving((s) => { const n = new Set(s); n.add(date); return n; });
+    const key = inputKey(date, col);
+    setSaving((s) => { const n = new Set(s); n.add(key); return n; });
     try {
-      await apiFetchPut("/api/faturamento/dia", { date, valor: num });
+      // Build payload with current values for all three cols, overriding the changed one
+      const curMatriz  = col === "matriz"  ? num : getNum(date, "matriz");
+      const curFilial  = col === "filial"  ? num : getNum(date, "filial");
+      const curAglotec = col === "aglotec" ? num : getNum(date, "aglotec");
+      await apiFetchPut("/api/faturamento/dia", {
+        date, matriz: curMatriz, filial: curFilial, aglotec: curAglotec,
+      });
       setData((prev) => {
         if (!prev) return prev;
         const dias = prev.dias.filter((d) => d.date !== date);
-        if (num !== null) dias.push({ date, valor: num });
+        const updated: FatDia = {
+          date,
+          matriz:  col === "matriz"  ? num : (prev.dias.find(d => d.date === date)?.matriz  ?? null),
+          filial:  col === "filial"  ? num : (prev.dias.find(d => d.date === date)?.filial  ?? null),
+          aglotec: col === "aglotec" ? num : (prev.dias.find(d => d.date === date)?.aglotec ?? null),
+        };
+        if (updated.matriz !== null || updated.filial !== null || updated.aglotec !== null) {
+          dias.push(updated);
+        }
         return { ...prev, dias: dias.sort((a, b) => a.date.localeCompare(b.date)) };
       });
-      if (num === null) setInputs((s) => { const n = { ...s }; delete n[date]; return n; });
     } finally {
-      setSaving((s) => { const n = new Set(s); n.delete(date); return n; });
+      setSaving((s) => { const n = new Set(s); n.delete(key); return n; });
     }
   };
 
@@ -1450,21 +1479,29 @@ function FaturamentoTab() {
   };
 
   // ── Summary calculations ─────────────────────────────────────────────────
-  const diasComValor = allDays
-    .filter((d) => inputs[d] && parseBRL(inputs[d] ?? "") !== null)
-    .map((d) => ({ date: d, valor: parseBRL(inputs[d] ?? "") ?? 0 }));
+  const dailyTotals = allDays.map((date) => {
+    const m = getNum(date, "matriz")  ?? 0;
+    const f = getNum(date, "filial")  ?? 0;
+    const a = getNum(date, "aglotec") ?? 0;
+    return { date, total: m + f + a, matriz: m, filial: f, aglotec: a };
+  });
 
-  const totalFaturado = diasComValor.reduce((s, d) => s + d.valor, 0);
+  const totalMatriz  = dailyTotals.reduce((s, d) => s + d.matriz,  0);
+  const totalFilial  = dailyTotals.reduce((s, d) => s + d.filial,  0);
+  const totalAglotec = dailyTotals.reduce((s, d) => s + d.aglotec, 0);
+  const totalFaturado = totalMatriz + totalFilial + totalAglotec;
+
+  const diasComValor = dailyTotals.filter((d) => d.total > 0);
   const meta = data?.meta ?? null;
   const falta = meta !== null ? Math.max(0, meta - totalFaturado) : null;
   const pctAtingido = meta && meta > 0 ? Math.min(100, (totalFaturado / meta) * 100) : null;
   const pctFalta = meta && meta > 0 ? Math.max(0, ((meta - totalFaturado) / meta) * 100) : null;
   const atingiu = meta !== null && totalFaturado >= meta;
 
-  const maxDia = diasComValor.length > 0 ? diasComValor.reduce((a, b) => a.valor > b.valor ? a : b) : null;
-  const minDia = diasComValor.length > 0 ? diasComValor.reduce((a, b) => a.valor < b.valor ? a : b) : null;
+  const maxDia = diasComValor.length > 0 ? diasComValor.reduce((a, b) => a.total > b.total ? a : b) : null;
+  const minDia = diasComValor.length > 0 ? diasComValor.reduce((a, b) => a.total < b.total ? a : b) : null;
 
-  const barPct = pctAtingido ?? 0;
+  const inputCls = "w-full text-right text-xs px-1.5 py-0.5 rounded border border-transparent bg-transparent hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono";
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0">
@@ -1497,40 +1534,51 @@ function FaturamentoTab() {
       {!loading && (
         <div className="flex gap-4 flex-1 min-h-0">
           {/* Left — day table */}
-          <div className="flex flex-col" style={{ width: 260 }}>
-            <div className="overflow-y-auto border rounded-md flex-1" style={{ maxHeight: 480 }}>
-              <table className="w-full text-sm">
+          <div className="flex flex-col flex-1 min-w-0">
+            <div className="overflow-y-auto border rounded-t-md flex-1" style={{ maxHeight: 460 }}>
+              <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-slate-100 z-10">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Dia</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase">Faturamento</th>
+                    <th className="px-2 py-2 text-left font-semibold text-slate-600 uppercase w-14">Dia</th>
+                    <th className="px-2 py-2 text-right font-semibold text-slate-600 uppercase">Matriz</th>
+                    <th className="px-2 py-2 text-right font-semibold text-slate-600 uppercase">Filial</th>
+                    <th className="px-2 py-2 text-right font-semibold text-slate-600 uppercase">Aglotec</th>
+                    <th className="px-2 py-2 text-right font-semibold text-slate-700 uppercase bg-slate-200">Total Diário</th>
                   </tr>
                 </thead>
                 <tbody>
                   {allDays.map((date, i) => {
-                    const val = inputs[date];
-                    const isSaving = saving.has(date);
+                    const dayData = dailyTotals.find(d => d.date === date)!;
                     const isMax = maxDia?.date === date;
                     const isMin = minDia?.date === date && diasComValor.length > 1;
                     return (
                       <tr key={date} className={`border-t border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                        <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap font-mono text-xs">
+                        <td className="px-2 py-1 text-slate-600 whitespace-nowrap font-mono font-semibold">
                           {fmtDia(date)}
-                          {isMax && <span className="ml-1 text-xs text-emerald-600 font-bold" title="Maior faturamento">↑</span>}
-                          {isMin && <span className="ml-1 text-xs text-red-400 font-bold" title="Menor faturamento">↓</span>}
+                          {isMax && <span className="ml-0.5 text-emerald-600 font-bold" title="Maior dia">↑</span>}
+                          {isMin && <span className="ml-0.5 text-red-400 font-bold" title="Menor dia">↓</span>}
                         </td>
-                        <td className="px-2 py-1 text-right">
-                          <div className="relative flex items-center justify-end">
-                            <input
-                              type="text"
-                              value={val ?? ""}
-                              onChange={(e) => setInputs((s) => ({ ...s, [date]: e.target.value }))}
-                              onBlur={() => handleDiaBlur(date)}
-                              placeholder="—"
-                              className="w-full text-right text-sm px-2 py-0.5 rounded border border-transparent bg-transparent hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono"
-                            />
-                            {isSaving && <Loader2 className="w-3 h-3 animate-spin absolute right-1 text-slate-400 pointer-events-none" />}
-                          </div>
+                        {(["matriz", "filial", "aglotec"] as FatCols[]).map((col) => {
+                          const key = inputKey(date, col);
+                          const isSaving = saving.has(key);
+                          return (
+                            <td key={col} className="px-1 py-0.5">
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={inputs[key] ?? ""}
+                                  onChange={(e) => setInputs((s) => ({ ...s, [key]: e.target.value }))}
+                                  onBlur={() => handleCellBlur(date, col)}
+                                  placeholder="—"
+                                  className={inputCls}
+                                />
+                                {isSaving && <Loader2 className="w-2.5 h-2.5 animate-spin absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />}
+                              </div>
+                            </td>
+                          );
+                        })}
+                        <td className="px-2 py-1 text-right font-mono font-bold text-slate-700 bg-slate-50 whitespace-nowrap">
+                          {dayData.total > 0 ? dayData.total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0,00"}
                         </td>
                       </tr>
                     );
@@ -1539,94 +1587,90 @@ function FaturamentoTab() {
               </table>
             </div>
 
-            {/* Totals at bottom */}
-            <div className="border border-t-0 rounded-b-md overflow-hidden text-sm">
-              <div className="flex justify-between items-center px-3 py-2 bg-blue-600 text-white font-bold">
-                <span>FATURAMENTO</span>
-                <span className="font-mono">{BRL.format(totalFaturado)}</span>
+            {/* Totals footer */}
+            <div className="border border-t-0 rounded-b-md overflow-hidden text-xs">
+              <div className="grid bg-blue-600 text-white font-bold" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+                <span className="px-2 py-2">FATURAMENTO</span>
+                <span className="px-2 py-2 text-right font-mono">{totalMatriz  > 0 ? BRL.format(totalMatriz)  : "—"}</span>
+                <span className="px-2 py-2 text-right font-mono">{totalFilial  > 0 ? BRL.format(totalFilial)  : "—"}</span>
+                <span className="px-2 py-2 text-right font-mono">{totalAglotec > 0 ? BRL.format(totalAglotec) : "—"}</span>
+                <span className="px-2 py-2 text-right font-mono bg-blue-800">{BRL.format(totalFaturado)}</span>
               </div>
-              <div className="flex justify-between items-center px-3 py-2 bg-emerald-500 text-white font-bold">
-                <span>META</span>
-                <span className="font-mono">{meta !== null ? BRL.format(meta) : "—"}</span>
+              <div className="grid bg-emerald-500 text-white font-bold" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+                <span className="px-2 py-2">META</span>
+                <span className="col-span-3 px-2 py-2 text-right font-mono">{meta !== null ? BRL.format(meta) : "—"}</span>
+                <span className="px-2 py-2 text-right font-mono bg-emerald-700">{meta !== null ? BRL.format(meta) : "—"}</span>
               </div>
-              <div className={`flex justify-between items-center px-3 py-2 font-bold ${atingiu ? "bg-emerald-100 text-emerald-700" : "bg-red-500 text-white"}`}>
-                <span>{atingiu ? "SUPERADO" : "FALTA"}</span>
-                <span className="font-mono">{falta !== null ? BRL.format(falta) : "—"}</span>
+              <div className={`grid font-bold ${atingiu ? "bg-emerald-100 text-emerald-700" : "bg-red-500 text-white"}`} style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+                <span className="px-2 py-2">{atingiu ? "SUPERADO" : "FALTA"}</span>
+                <span className="col-span-3 px-2 py-2" />
+                <span className={`px-2 py-2 text-right font-mono ${atingiu ? "bg-emerald-200" : "bg-red-700"}`}>{falta !== null ? BRL.format(falta) : "—"}</span>
               </div>
             </div>
           </div>
 
           {/* Right — summary cards */}
-          <div className="flex-1 flex flex-col gap-3">
+          <div className="flex flex-col gap-3" style={{ width: 240 }}>
             {/* Progress bar */}
-            <div className="border rounded-md p-4 bg-white flex flex-col gap-3">
+            <div className="border rounded-md p-3 bg-white flex flex-col gap-2">
               <div className="flex justify-between items-baseline">
-                <span className="text-sm font-semibold text-slate-700">Progresso da meta</span>
-                <span className={`text-lg font-bold ${atingiu ? "text-emerald-600" : "text-blue-600"}`}>
+                <span className="text-xs font-semibold text-slate-700">Progresso da meta</span>
+                <span className={`text-base font-bold ${atingiu ? "text-emerald-600" : "text-blue-600"}`}>
                   {pctAtingido !== null ? `${pctAtingido.toFixed(1)}%` : "—"}
                 </span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">
                 <div
-                  className={`h-5 rounded-full transition-all ${atingiu ? "bg-emerald-500" : "bg-blue-500"}`}
-                  style={{ width: `${Math.min(100, barPct)}%` }}
+                  className={`h-4 rounded-full transition-all ${atingiu ? "bg-emerald-500" : "bg-blue-500"}`}
+                  style={{ width: `${Math.min(100, pctAtingido ?? 0)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-xs text-slate-500">
+              <div className="flex justify-between text-xs text-slate-400">
                 <span>R$ 0</span>
                 <span>{meta !== null ? BRL.format(meta) : "Meta não definida"}</span>
               </div>
             </div>
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="border rounded-md p-3 bg-blue-50">
+            {/* Stats */}
+            <div className="grid grid-cols-1 gap-2">
+              <div className="border rounded-md p-2.5 bg-blue-50">
                 <p className="text-xs text-blue-500 font-semibold uppercase tracking-wide">Faturado</p>
-                <p className="text-xl font-bold text-blue-700 font-mono mt-1">{BRL.format(totalFaturado)}</p>
-                {pctAtingido !== null && (
-                  <p className="text-xs text-blue-400 mt-0.5">{pctAtingido.toFixed(1)}% da meta</p>
-                )}
+                <p className="text-base font-bold text-blue-700 font-mono mt-0.5">{BRL.format(totalFaturado)}</p>
+                {pctAtingido !== null && <p className="text-xs text-blue-400">{pctAtingido.toFixed(1)}% da meta</p>}
               </div>
-              <div className={`border rounded-md p-3 ${atingiu ? "bg-emerald-50" : "bg-red-50"}`}>
+              <div className={`border rounded-md p-2.5 ${atingiu ? "bg-emerald-50" : "bg-red-50"}`}>
                 <p className={`text-xs font-semibold uppercase tracking-wide ${atingiu ? "text-emerald-500" : "text-red-400"}`}>
                   {atingiu ? "Meta superada!" : "Falta para meta"}
                 </p>
-                <p className={`text-xl font-bold font-mono mt-1 ${atingiu ? "text-emerald-700" : "text-red-600"}`}>
+                <p className={`text-base font-bold font-mono mt-0.5 ${atingiu ? "text-emerald-700" : "text-red-600"}`}>
                   {falta !== null ? BRL.format(falta) : "—"}
                 </p>
-                {pctFalta !== null && !atingiu && (
-                  <p className="text-xs text-red-400 mt-0.5">{pctFalta.toFixed(1)}% restante</p>
-                )}
+                {pctFalta !== null && !atingiu && <p className="text-xs text-red-400">{pctFalta.toFixed(1)}% restante</p>}
               </div>
-              <div className="border rounded-md p-3 bg-emerald-50">
-                <p className="text-xs text-emerald-500 font-semibold uppercase tracking-wide flex items-center gap-1">
-                  <span>↑</span> Maior dia
-                </p>
+              <div className="border rounded-md p-2.5 bg-emerald-50">
+                <p className="text-xs text-emerald-500 font-semibold uppercase tracking-wide">↑ Maior dia</p>
                 {maxDia ? (
                   <>
-                    <p className="text-xl font-bold text-emerald-700 font-mono mt-1">{BRL.format(maxDia.valor)}</p>
-                    <p className="text-xs text-emerald-500 mt-0.5">{fmtDia(maxDia.date)}</p>
+                    <p className="text-base font-bold text-emerald-700 font-mono mt-0.5">{BRL.format(maxDia.total)}</p>
+                    <p className="text-xs text-emerald-500">{fmtDia(maxDia.date)}</p>
                   </>
                 ) : <p className="text-sm text-slate-400 mt-1">—</p>}
               </div>
-              <div className="border rounded-md p-3 bg-red-50">
-                <p className="text-xs text-red-400 font-semibold uppercase tracking-wide flex items-center gap-1">
-                  <span>↓</span> Menor dia
-                </p>
+              <div className="border rounded-md p-2.5 bg-red-50">
+                <p className="text-xs text-red-400 font-semibold uppercase tracking-wide">↓ Menor dia</p>
                 {minDia ? (
                   <>
-                    <p className="text-xl font-bold text-red-600 font-mono mt-1">{BRL.format(minDia.valor)}</p>
-                    <p className="text-xs text-red-400 mt-0.5">{fmtDia(minDia.date)}</p>
+                    <p className="text-base font-bold text-red-600 font-mono mt-0.5">{BRL.format(minDia.total)}</p>
+                    <p className="text-xs text-red-400">{fmtDia(minDia.date)}</p>
                   </>
                 ) : <p className="text-sm text-slate-400 mt-1">—</p>}
               </div>
             </div>
 
-            {/* Dias com lançamento */}
-            <div className="border rounded-md p-3 bg-white text-sm text-slate-600">
-              <span className="font-semibold text-slate-700">{diasComValor.length}</span> dia{diasComValor.length !== 1 ? "s" : ""} lançado{diasComValor.length !== 1 ? "s" : ""} de <span className="font-semibold text-slate-700">{allDays.length}</span> em {mesLabel(mes)}
+            <div className="border rounded-md p-2.5 bg-white text-xs text-slate-600">
+              <span className="font-semibold text-slate-700">{diasComValor.length}</span> dia{diasComValor.length !== 1 ? "s" : ""} lançado{diasComValor.length !== 1 ? "s" : ""} de {allDays.length} em {mesLabel(mes)}
               {diasComValor.length > 0 && totalFaturado > 0 && (
-                <span className="text-slate-400 ml-2">· média {BRL.format(totalFaturado / diasComValor.length)}/dia</span>
+                <div className="text-slate-400 mt-0.5">média {BRL.format(totalFaturado / diasComValor.length)}/dia</div>
               )}
             </div>
           </div>
