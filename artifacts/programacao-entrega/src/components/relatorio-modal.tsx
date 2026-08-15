@@ -1372,11 +1372,98 @@ async function apiFetchPut<T = unknown>(path: string, body: unknown): Promise<T>
   return res.json() as Promise<T>;
 }
 
-type FatDia = { date: string; matriz: number | null; filial: number | null; aglotec: number | null };
+type FatDia = { date: string; matriz: number | null; filial: number | null; aglotec: number | null; tatu: number | null; tatu_qtd: string | null };
 type FatCols = "matriz" | "filial" | "aglotec";
 
 // inputs keyed as "date|col", e.g. "2026-08-03|matriz"
 function inputKey(date: string, col: FatCols) { return `${date}|${col}`; }
+
+// ── TATU product catalog ─────────────────────────────────────────────────────
+const TATU_ITEMS = [
+  { code: "1046-001", unitPrice: 50.46 },
+  { code: "1046-002", unitPrice: 46.16 },
+  { code: "1046-003", unitPrice: 46.10 },
+  { code: "1046-004", unitPrice: 127.00 },
+] as const;
+
+type TatuQtd = Record<string, number>;
+
+function calcTatuTotal(qtd: TatuQtd): number {
+  return TATU_ITEMS.reduce((s, item) => s + (qtd[item.code] ?? 0) * item.unitPrice, 0);
+}
+
+function TatuPopover({
+  date, initialQtd, onSave, onClose,
+}: {
+  date: string;
+  initialQtd: TatuQtd;
+  onSave: (qtd: TatuQtd, total: number) => void;
+  onClose: () => void;
+}) {
+  const [qtd, setQtd] = useState<TatuQtd>(initialQtd);
+  const total = calcTatuTotal(qtd);
+
+  const handleChange = (code: string, val: string) => {
+    const n = parseInt(val.replace(/\D/g, ""), 10);
+    setQtd((s) => ({ ...s, [code]: isNaN(n) ? 0 : n }));
+  };
+
+  const handleConfirm = () => { onSave(qtd, total); onClose(); };
+
+  return (
+    <div className="absolute z-50 right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-xl p-3 flex flex-col gap-2"
+      onMouseDown={(e) => e.stopPropagation()}>
+      <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+        <span className="text-xs font-bold uppercase tracking-wide text-slate-600">TATU — {fmtDia(date)}</span>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-base leading-none">×</button>
+      </div>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-slate-500 uppercase">
+            <th className="text-left py-1">Código</th>
+            <th className="text-right py-1">Unit.</th>
+            <th className="text-right py-1 w-20">Qtd</th>
+            <th className="text-right py-1">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {TATU_ITEMS.map((item) => {
+            const q = qtd[item.code] ?? 0;
+            return (
+              <tr key={item.code} className="border-t border-slate-100">
+                <td className="py-1.5 font-mono font-semibold text-slate-700">{item.code}</td>
+                <td className="py-1.5 text-right text-slate-500 font-mono">
+                  {item.unitPrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-1.5 pl-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={q === 0 ? "" : String(q)}
+                    onChange={(e) => handleChange(item.code, e.target.value)}
+                    placeholder="0"
+                    className="w-full text-right border border-slate-300 rounded px-1.5 py-0.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-400 bg-slate-50"
+                  />
+                </td>
+                <td className="py-1.5 text-right font-mono text-slate-700">
+                  {(q * item.unitPrice).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+        <span className="text-xs font-bold text-slate-600">TOTAL</span>
+        <span className="text-sm font-bold font-mono text-blue-700">{BRL.format(total)}</span>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onClose} className="px-3 py-1 text-xs rounded border border-slate-300 text-slate-600 hover:bg-slate-50">Cancelar</button>
+        <button onClick={handleConfirm} className="px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 font-semibold">Confirmar</button>
+      </div>
+    </div>
+  );
+}
 
 function FaturamentoTab() {
   const [mes, setMes] = useState(localMes);
@@ -1384,9 +1471,11 @@ function FaturamentoTab() {
   const [loading, setLoading] = useState(false);
 
   const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [tatuQtd, setTatuQtd] = useState<Record<string, TatuQtd>>({}); // keyed by date
   const [metaInput, setMetaInput] = useState("");
   const [saving, setSaving] = useState<Set<string>>(new Set());
   const [savingMeta, setSavingMeta] = useState(false);
+  const [tatuPopover, setTatuPopover] = useState<string | null>(null); // date of open popover
 
   const allDays = daysInMonth(mes);
 
@@ -1400,12 +1489,17 @@ function FaturamentoTab() {
     ).then((d) => {
       setData(d);
       const map: Record<string, string> = {};
+      const qtdMap: Record<string, TatuQtd> = {};
       for (const dia of d.dias) {
         map[inputKey(dia.date, "matriz")]  = numFmt(dia.matriz);
         map[inputKey(dia.date, "filial")]  = numFmt(dia.filial);
         map[inputKey(dia.date, "aglotec")] = numFmt(dia.aglotec);
+        if (dia.tatu_qtd) {
+          try { qtdMap[dia.date] = JSON.parse(dia.tatu_qtd); } catch { /* ignore */ }
+        }
       }
       setInputs(map);
+      setTatuQtd(qtdMap);
       setMetaInput(d.meta !== null ? d.meta.toFixed(2).replace(".", ",") : "");
     }).catch(() => {}).finally(() => setLoading(false));
   }, [mes]);
@@ -1424,42 +1518,57 @@ function FaturamentoTab() {
     return raw === "" ? null : parseBRL(raw);
   };
 
+  const saveDia = async (date: string, overrides: Partial<{ matriz: number | null; filial: number | null; aglotec: number | null; tatu: number | null; tatu_qtd: string | null }> = {}) => {
+    const prev = data?.dias.find((d) => d.date === date);
+    const payload = {
+      date,
+      matriz:   "matriz"   in overrides ? overrides.matriz   : getNum(date, "matriz"),
+      filial:   "filial"   in overrides ? overrides.filial   : getNum(date, "filial"),
+      aglotec:  "aglotec"  in overrides ? overrides.aglotec  : getNum(date, "aglotec"),
+      tatu:     "tatu"     in overrides ? overrides.tatu     : (prev?.tatu ?? null),
+      tatu_qtd: "tatu_qtd" in overrides ? overrides.tatu_qtd : (prev?.tatu_qtd ?? null),
+    };
+    await apiFetchPut("/api/faturamento/dia", payload);
+    setData((prev2) => {
+      if (!prev2) return prev2;
+      const dias = prev2.dias.filter((d) => d.date !== date);
+      const updated: FatDia = {
+        date,
+        matriz:   payload.matriz   ?? null,
+        filial:   payload.filial   ?? null,
+        aglotec:  payload.aglotec  ?? null,
+        tatu:     payload.tatu     ?? null,
+        tatu_qtd: payload.tatu_qtd ?? null,
+      };
+      if (Object.values(updated).some((v, i) => i > 0 && v !== null)) dias.push(updated);
+      return { ...prev2, dias: dias.sort((a, b) => a.date.localeCompare(b.date)) };
+    });
+  };
+
   const handleCellBlur = async (date: string, col: FatCols) => {
     const raw = (inputs[inputKey(date, col)] ?? "").trim();
     const num = raw === "" ? null : parseBRL(raw);
     if (raw !== "" && num === null) {
-      // revert to server value
       const prev = data?.dias.find((d) => d.date === date);
       setInputs((s) => ({ ...s, [inputKey(date, col)]: numFmt(prev?.[col] ?? null) }));
       return;
     }
     const key = inputKey(date, col);
     setSaving((s) => { const n = new Set(s); n.add(key); return n; });
+    try { await saveDia(date, { [col]: num }); }
+    finally { setSaving((s) => { const n = new Set(s); n.delete(key); return n; }); }
+  };
+
+  const handleTatuSave = async (date: string, qtd: TatuQtd, total: number) => {
+    setTatuQtd((s) => ({ ...s, [date]: qtd }));
+    const saveKey = `${date}|tatu`;
+    setSaving((s) => { const n = new Set(s); n.add(saveKey); return n; });
     try {
-      // Build payload with current values for all three cols, overriding the changed one
-      const curMatriz  = col === "matriz"  ? num : getNum(date, "matriz");
-      const curFilial  = col === "filial"  ? num : getNum(date, "filial");
-      const curAglotec = col === "aglotec" ? num : getNum(date, "aglotec");
-      await apiFetchPut("/api/faturamento/dia", {
-        date, matriz: curMatriz, filial: curFilial, aglotec: curAglotec,
+      await saveDia(date, {
+        tatu:     total > 0 ? total : null,
+        tatu_qtd: total > 0 ? JSON.stringify(qtd) : null,
       });
-      setData((prev) => {
-        if (!prev) return prev;
-        const dias = prev.dias.filter((d) => d.date !== date);
-        const updated: FatDia = {
-          date,
-          matriz:  col === "matriz"  ? num : (prev.dias.find(d => d.date === date)?.matriz  ?? null),
-          filial:  col === "filial"  ? num : (prev.dias.find(d => d.date === date)?.filial  ?? null),
-          aglotec: col === "aglotec" ? num : (prev.dias.find(d => d.date === date)?.aglotec ?? null),
-        };
-        if (updated.matriz !== null || updated.filial !== null || updated.aglotec !== null) {
-          dias.push(updated);
-        }
-        return { ...prev, dias: dias.sort((a, b) => a.date.localeCompare(b.date)) };
-      });
-    } finally {
-      setSaving((s) => { const n = new Set(s); n.delete(key); return n; });
-    }
+    } finally { setSaving((s) => { const n = new Set(s); n.delete(saveKey); return n; }); }
   };
 
   const handleMetaBlur = async () => {
@@ -1473,9 +1582,7 @@ function FaturamentoTab() {
     try {
       await apiFetchPut("/api/faturamento/meta", { mes, meta: num });
       setData((prev) => prev ? { ...prev, meta: num } : prev);
-    } finally {
-      setSavingMeta(false);
-    }
+    } finally { setSavingMeta(false); }
   };
 
   // ── Summary calculations ─────────────────────────────────────────────────
@@ -1483,13 +1590,15 @@ function FaturamentoTab() {
     const m = getNum(date, "matriz")  ?? 0;
     const f = getNum(date, "filial")  ?? 0;
     const a = getNum(date, "aglotec") ?? 0;
-    return { date, total: m + f + a, matriz: m, filial: f, aglotec: a };
+    const t = calcTatuTotal(tatuQtd[date] ?? {});
+    return { date, total: m + f + a + t, matriz: m, filial: f, aglotec: a, tatu: t };
   });
 
   const totalMatriz  = dailyTotals.reduce((s, d) => s + d.matriz,  0);
   const totalFilial  = dailyTotals.reduce((s, d) => s + d.filial,  0);
   const totalAglotec = dailyTotals.reduce((s, d) => s + d.aglotec, 0);
-  const totalFaturado = totalMatriz + totalFilial + totalAglotec;
+  const totalTatu    = dailyTotals.reduce((s, d) => s + d.tatu,    0);
+  const totalFaturado = totalMatriz + totalFilial + totalAglotec + totalTatu;
 
   const diasComValor = dailyTotals.filter((d) => d.total > 0);
   const meta = data?.meta ?? null;
@@ -1504,7 +1613,7 @@ function FaturamentoTab() {
   const inputCls = "w-full text-right text-xs px-1.5 py-0.5 rounded border border-transparent bg-transparent hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono";
 
   return (
-    <div className="flex flex-col gap-3 flex-1 min-h-0">
+    <div className="flex flex-col gap-3 flex-1 min-h-0" onClick={() => setTatuPopover(null)}>
       {/* Header: month nav + meta input */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1">
@@ -1534,7 +1643,7 @@ function FaturamentoTab() {
       {!loading && (
         <div className="flex gap-4 flex-1 min-h-0">
           {/* Left — day table */}
-          <div className="flex flex-col" style={{ width: "52%" }}>
+          <div className="flex flex-col" style={{ width: "58%" }}>
             <div className="overflow-y-auto border rounded-t-md flex-1" style={{ maxHeight: 460 }}>
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-100 z-10">
@@ -1543,6 +1652,7 @@ function FaturamentoTab() {
                     <th className="px-2 py-2 text-right font-semibold text-slate-600 uppercase">Matriz</th>
                     <th className="px-2 py-2 text-right font-semibold text-slate-600 uppercase">Filial</th>
                     <th className="px-2 py-2 text-right font-semibold text-slate-600 uppercase">Aglotec</th>
+                    <th className="px-2 py-2 text-right font-semibold text-amber-700 uppercase bg-amber-50">Tatu</th>
                     <th className="px-2 py-2 text-right font-semibold text-slate-700 uppercase bg-slate-200">Total Diário</th>
                   </tr>
                 </thead>
@@ -1551,6 +1661,8 @@ function FaturamentoTab() {
                     const dayData = dailyTotals.find(d => d.date === date)!;
                     const isMax = maxDia?.date === date;
                     const isMin = minDia?.date === date && diasComValor.length > 1;
+                    const tatuVal = dayData.tatu;
+                    const isSavingTatu = saving.has(`${date}|tatu`);
                     return (
                       <tr key={date} className={`border-t border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
                         <td className="px-2 py-1 text-slate-600 whitespace-nowrap font-mono font-semibold">
@@ -1562,7 +1674,7 @@ function FaturamentoTab() {
                           const key = inputKey(date, col);
                           const isSaving = saving.has(key);
                           return (
-                            <td key={col} className="px-1 py-0.5">
+                            <td key={col} className="px-1 py-0.5" onClick={(e) => e.stopPropagation()}>
                               <div className="relative">
                                 <input
                                   type="text"
@@ -1577,6 +1689,33 @@ function FaturamentoTab() {
                             </td>
                           );
                         })}
+                        {/* TATU cell */}
+                        <td className="px-1 py-0.5 bg-amber-50/60" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative">
+                            <button
+                              onClick={() => setTatuPopover((p) => p === date ? null : date)}
+                              className={`w-full text-right text-xs px-1.5 py-0.5 rounded font-mono border transition-colors ${
+                                tatuVal > 0
+                                  ? "text-amber-700 font-semibold border-amber-200 bg-amber-50 hover:border-amber-400"
+                                  : "text-slate-400 border-transparent hover:border-amber-300 hover:bg-amber-50"
+                              }`}
+                            >
+                              {isSavingTatu
+                                ? <Loader2 className="w-3 h-3 animate-spin inline" />
+                                : tatuVal > 0
+                                  ? tatuVal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                  : "—"}
+                            </button>
+                            {tatuPopover === date && (
+                              <TatuPopover
+                                date={date}
+                                initialQtd={tatuQtd[date] ?? {}}
+                                onSave={(qtd, total) => handleTatuSave(date, qtd, total)}
+                                onClose={() => setTatuPopover(null)}
+                              />
+                            )}
+                          </div>
+                        </td>
                         <td className="px-2 py-1 text-right font-mono font-bold text-slate-700 bg-slate-50 whitespace-nowrap">
                           {dayData.total > 0 ? dayData.total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0,00"}
                         </td>
@@ -1589,21 +1728,22 @@ function FaturamentoTab() {
 
             {/* Totals footer */}
             <div className="border border-t-0 rounded-b-md overflow-hidden text-sm font-bold">
-              <div className="grid bg-blue-600 text-white" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+              <div className="grid bg-blue-600 text-white" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr 1fr" }}>
                 <span className="px-2 py-2">FATURAMENTO</span>
                 <span className="px-2 py-2 text-right font-mono">{totalMatriz  > 0 ? BRL.format(totalMatriz)  : "—"}</span>
                 <span className="px-2 py-2 text-right font-mono">{totalFilial  > 0 ? BRL.format(totalFilial)  : "—"}</span>
                 <span className="px-2 py-2 text-right font-mono">{totalAglotec > 0 ? BRL.format(totalAglotec) : "—"}</span>
+                <span className="px-2 py-2 text-right font-mono">{totalTatu    > 0 ? BRL.format(totalTatu)    : "—"}</span>
                 <span className="px-2 py-2 text-right font-mono">{BRL.format(totalFaturado)}</span>
               </div>
-              <div className="grid bg-emerald-500 text-white" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+              <div className="grid bg-emerald-500 text-white" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr 1fr" }}>
                 <span className="px-2 py-2">META</span>
-                <span className="col-span-3 px-2 py-2 text-right font-mono">{meta !== null ? BRL.format(meta) : "—"}</span>
+                <span className="col-span-4 px-2 py-2 text-right font-mono">{meta !== null ? BRL.format(meta) : "—"}</span>
                 <span className="px-2 py-2 text-right font-mono">{meta !== null ? BRL.format(meta) : "—"}</span>
               </div>
-              <div className={`grid ${atingiu ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`} style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+              <div className={`grid ${atingiu ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`} style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr 1fr" }}>
                 <span className="px-2 py-2">{atingiu ? "SUPERADO" : "FALTA"}</span>
-                <span className="col-span-3 px-2 py-2" />
+                <span className="col-span-4 px-2 py-2" />
                 <span className="px-2 py-2 text-right font-mono">{falta !== null ? BRL.format(falta) : "—"}</span>
               </div>
             </div>

@@ -106100,7 +106100,10 @@ var faturamentoDiarioTable = pgTable("faturamento_diario", {
   // yyyy-MM-dd
   matriz: numeric("matriz", { precision: 15, scale: 2 }),
   filial: numeric("filial", { precision: 15, scale: 2 }),
-  aglotec: numeric("aglotec", { precision: 15, scale: 2 })
+  aglotec: numeric("aglotec", { precision: 15, scale: 2 }),
+  tatu: numeric("tatu", { precision: 15, scale: 2 }),
+  tatu_qtd: text("tatu_qtd")
+  // JSON: { "1046-001": 288, ... }
 });
 var faturamentoMetaTable = pgTable("faturamento_meta", {
   id: serial("id").primaryKey(),
@@ -106136,7 +106139,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260815164806" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260815165823" });
 });
 var health_default = router;
 
@@ -106838,17 +106841,16 @@ router6.get("/faturamento", async (req, res) => {
     meta: metaRow ? Number(metaRow.meta) : null,
     dias: filtered.map((r) => ({
       date: r.date,
-      matriz: r.matriz !== null && r.matriz !== void 0 ? Number(r.matriz) : null,
-      filial: r.filial !== null && r.filial !== void 0 ? Number(r.filial) : null,
-      aglotec: r.aglotec !== null && r.aglotec !== void 0 ? Number(r.aglotec) : null
+      matriz: r.matriz != null ? Number(r.matriz) : null,
+      filial: r.filial != null ? Number(r.filial) : null,
+      aglotec: r.aglotec != null ? Number(r.aglotec) : null,
+      tatu: r.tatu != null ? Number(r.tatu) : null,
+      tatu_qtd: r.tatu_qtd ?? null
     }))
   });
 });
 router6.put("/faturamento/dia", async (req, res) => {
   const date6 = typeof req.body?.date === "string" ? req.body.date.trim() : "";
-  const matrizRaw = req.body?.matriz;
-  const filialRaw = req.body?.filial;
-  const aglotecRaw = req.body?.aglotec;
   if (!date6 || !/^\d{4}-\d{2}-\d{2}$/.test(date6)) {
     res.status(400).json({ error: "date inv\xE1lido (yyyy-MM-dd)" });
     return;
@@ -106858,27 +106860,33 @@ router6.put("/faturamento/dia", async (req, res) => {
     const n = Number(String(v).replace(",", "."));
     return isNaN(n) || n < 0 ? null : n;
   };
-  const matriz = toNum(matrizRaw);
-  const filial = toNum(filialRaw);
-  const aglotec = toNum(aglotecRaw);
-  if (matriz === null && filial === null && aglotec === null) {
+  const matriz = toNum(req.body?.matriz);
+  const filial = toNum(req.body?.filial);
+  const aglotec = toNum(req.body?.aglotec);
+  const tatu = toNum(req.body?.tatu);
+  const tatu_qtd = typeof req.body?.tatu_qtd === "string" ? req.body.tatu_qtd : null;
+  if (matriz === null && filial === null && aglotec === null && tatu === null) {
     await db.delete(faturamentoDiarioTable).where(eq(faturamentoDiarioTable.date, date6));
     res.json({ deleted: true, date: date6 });
     return;
   }
   const vals = {
-    matriz: matriz !== null ? String(matriz) : null,
-    filial: filial !== null ? String(filial) : null,
-    aglotec: aglotec !== null ? String(aglotec) : null
+    matriz: matriz != null ? String(matriz) : null,
+    filial: filial != null ? String(filial) : null,
+    aglotec: aglotec != null ? String(aglotec) : null,
+    tatu: tatu != null ? String(tatu) : null,
+    tatu_qtd
   };
   const existing = await db.select().from(faturamentoDiarioTable).where(eq(faturamentoDiarioTable.date, date6));
-  if (existing.length > 0) {
-    const [row] = await db.update(faturamentoDiarioTable).set(vals).where(eq(faturamentoDiarioTable.date, date6)).returning();
-    res.json({ date: row.date, matriz: row.matriz !== null ? Number(row.matriz) : null, filial: row.filial !== null ? Number(row.filial) : null, aglotec: row.aglotec !== null ? Number(row.aglotec) : null });
-  } else {
-    const [row] = await db.insert(faturamentoDiarioTable).values({ date: date6, ...vals }).returning();
-    res.json({ date: row.date, matriz: row.matriz !== null ? Number(row.matriz) : null, filial: row.filial !== null ? Number(row.filial) : null, aglotec: row.aglotec !== null ? Number(row.aglotec) : null });
-  }
+  const [row] = existing.length > 0 ? await db.update(faturamentoDiarioTable).set(vals).where(eq(faturamentoDiarioTable.date, date6)).returning() : await db.insert(faturamentoDiarioTable).values({ date: date6, ...vals }).returning();
+  res.json({
+    date: row.date,
+    matriz: row.matriz != null ? Number(row.matriz) : null,
+    filial: row.filial != null ? Number(row.filial) : null,
+    aglotec: row.aglotec != null ? Number(row.aglotec) : null,
+    tatu: row.tatu != null ? Number(row.tatu) : null,
+    tatu_qtd: row.tatu_qtd ?? null
+  });
 });
 router6.put("/faturamento/meta", async (req, res) => {
   const mes = typeof req.body?.mes === "string" ? req.body.mes.trim() : "";
@@ -106898,13 +106906,8 @@ router6.put("/faturamento/meta", async (req, res) => {
     return;
   }
   const existing = await db.select().from(faturamentoMetaTable).where(eq(faturamentoMetaTable.mes, mes));
-  if (existing.length > 0) {
-    const [row] = await db.update(faturamentoMetaTable).set({ meta: String(num) }).where(eq(faturamentoMetaTable.mes, mes)).returning();
-    res.json({ mes: row.mes, meta: Number(row.meta) });
-  } else {
-    const [row] = await db.insert(faturamentoMetaTable).values({ mes, meta: String(num) }).returning();
-    res.json({ mes: row.mes, meta: Number(row.meta) });
-  }
+  const [row] = existing.length > 0 ? await db.update(faturamentoMetaTable).set({ meta: String(num) }).where(eq(faturamentoMetaTable.mes, mes)).returning() : await db.insert(faturamentoMetaTable).values({ mes, meta: String(num) }).returning();
+  res.json({ mes: row.mes, meta: Number(row.meta) });
 });
 var faturamento_default = router6;
 
