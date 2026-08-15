@@ -1394,9 +1394,9 @@ function FaturamentoTab() {
     ).then((d) => {
       setData(d);
       const map: Record<string, string> = {};
-      for (const dia of d.dias) map[dia.date] = String(dia.valor);
+      for (const dia of d.dias) map[dia.date] = dia.valor.toFixed(2).replace(".", ",");
       setInputs(map);
-      setMetaInput(d.meta !== null ? String(d.meta) : "");
+      setMetaInput(d.meta !== null ? d.meta.toFixed(2).replace(".", ",") : "");
     }).catch(() => {}).finally(() => setLoading(false));
   }, [mes]);
 
@@ -1415,7 +1415,7 @@ function FaturamentoTab() {
     if (raw !== "" && num === null) {
       // Invalid — revert to server value
       const prev = data?.dias.find((d) => d.date === date);
-      setInputs((s) => ({ ...s, [date]: prev ? String(prev.valor) : "" }));
+      setInputs((s) => ({ ...s, [date]: prev ? prev.valor.toFixed(2).replace(".", ",") : "" }));
       return;
     }
     setSaving((s) => { const n = new Set(s); n.add(date); return n; });
@@ -1437,7 +1437,7 @@ function FaturamentoTab() {
     const raw = metaInput.trim();
     const num = raw === "" ? null : parseBRL(raw);
     if (raw !== "" && num === null) {
-      setMetaInput(data?.meta !== null && data?.meta !== undefined ? String(data.meta) : "");
+      setMetaInput(data?.meta !== null && data?.meta !== undefined ? data.meta.toFixed(2).replace(".", ",") : "");
       return;
     }
     setSavingMeta(true);
