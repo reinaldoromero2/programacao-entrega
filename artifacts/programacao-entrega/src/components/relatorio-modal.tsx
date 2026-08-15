@@ -1534,9 +1534,9 @@ function FaturamentoTab() {
       {!loading && (
         <div className="flex gap-4 flex-1 min-h-0">
           {/* Left — day table */}
-          <div className="flex flex-col flex-1 min-w-0">
+          <div className="flex flex-col" style={{ width: "52%" }}>
             <div className="overflow-y-auto border rounded-t-md flex-1" style={{ maxHeight: 460 }}>
-              <table className="w-full text-xs">
+              <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-100 z-10">
                   <tr>
                     <th className="px-2 py-2 text-left font-semibold text-slate-600 uppercase w-14">Dia</th>
@@ -1588,23 +1588,23 @@ function FaturamentoTab() {
             </div>
 
             {/* Totals footer */}
-            <div className="border border-t-0 rounded-b-md overflow-hidden text-xs">
-              <div className="grid bg-blue-600 text-white font-bold" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+            <div className="border border-t-0 rounded-b-md overflow-hidden text-sm font-bold">
+              <div className="grid bg-blue-600 text-white" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
                 <span className="px-2 py-2">FATURAMENTO</span>
                 <span className="px-2 py-2 text-right font-mono">{totalMatriz  > 0 ? BRL.format(totalMatriz)  : "—"}</span>
                 <span className="px-2 py-2 text-right font-mono">{totalFilial  > 0 ? BRL.format(totalFilial)  : "—"}</span>
                 <span className="px-2 py-2 text-right font-mono">{totalAglotec > 0 ? BRL.format(totalAglotec) : "—"}</span>
-                <span className="px-2 py-2 text-right font-mono bg-blue-800">{BRL.format(totalFaturado)}</span>
+                <span className="px-2 py-2 text-right font-mono">{BRL.format(totalFaturado)}</span>
               </div>
-              <div className="grid bg-emerald-500 text-white font-bold" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+              <div className="grid bg-emerald-500 text-white" style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
                 <span className="px-2 py-2">META</span>
                 <span className="col-span-3 px-2 py-2 text-right font-mono">{meta !== null ? BRL.format(meta) : "—"}</span>
-                <span className="px-2 py-2 text-right font-mono bg-emerald-700">{meta !== null ? BRL.format(meta) : "—"}</span>
+                <span className="px-2 py-2 text-right font-mono">{meta !== null ? BRL.format(meta) : "—"}</span>
               </div>
-              <div className={`grid font-bold ${atingiu ? "bg-emerald-100 text-emerald-700" : "bg-red-500 text-white"}`} style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
+              <div className={`grid ${atingiu ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`} style={{ gridTemplateColumns: "auto 1fr 1fr 1fr 1fr" }}>
                 <span className="px-2 py-2">{atingiu ? "SUPERADO" : "FALTA"}</span>
                 <span className="col-span-3 px-2 py-2" />
-                <span className={`px-2 py-2 text-right font-mono ${atingiu ? "bg-emerald-200" : "bg-red-700"}`}>{falta !== null ? BRL.format(falta) : "—"}</span>
+                <span className="px-2 py-2 text-right font-mono">{falta !== null ? BRL.format(falta) : "—"}</span>
               </div>
             </div>
           </div>
