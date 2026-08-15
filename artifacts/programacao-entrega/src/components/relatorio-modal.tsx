@@ -1334,9 +1334,311 @@ function ClienteTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) => vo
   );
 }
 
+// ─── Faturamento tab ──────────────────────────────────────────────────────────
+
+const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+function parseBRL(s: string): number | null {
+  const cleaned = s.replace(/[R$\s.]/g, "").replace(",", ".");
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
+}
+
+function daysInMonth(mes: string): string[] {
+  const [y, m] = mes.split("-").map(Number);
+  const count = new Date(y, m, 0).getDate();
+  return Array.from({ length: count }, (_, i) => {
+    const d = String(i + 1).padStart(2, "0");
+    return `${mes}-${d}`;
+  });
+}
+
+const MES_ABREV = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+
+function fmtDia(date: string) {
+  const d = date.slice(8, 10);
+  const m = parseInt(date.slice(5, 7), 10) - 1;
+  return `${d}/${MES_ABREV[m]}`;
+}
+
+async function apiFetchPut<T = unknown>(path: string, body: unknown): Promise<T> {
+  const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+function FaturamentoTab() {
+  const [mes, setMes] = useState(localMes);
+  const [data, setData] = useState<{ meta: number | null; dias: { date: string; valor: number }[] } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Raw string inputs per date (while editing or displaying)
+  const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [metaInput, setMetaInput] = useState("");
+  const [saving, setSaving] = useState<Set<string>>(new Set());
+  const [savingMeta, setSavingMeta] = useState(false);
+
+  const allDays = daysInMonth(mes);
+
+  // Load data when month changes
+  useEffect(() => {
+    setLoading(true);
+    setData(null);
+    apiFetch<{ meta: number | null; dias: { date: string; valor: number }[] }>(
+      `/api/faturamento?mes=${mes}`
+    ).then((d) => {
+      setData(d);
+      const map: Record<string, string> = {};
+      for (const dia of d.dias) map[dia.date] = String(dia.valor);
+      setInputs(map);
+      setMetaInput(d.meta !== null ? String(d.meta) : "");
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [mes]);
+
+  const prevMes = () => {
+    const [a, m] = mes.split("-").map(Number);
+    setMes(`${m === 1 ? a - 1 : a}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}`);
+  };
+  const nextMes = () => {
+    const [a, m] = mes.split("-").map(Number);
+    setMes(`${m === 12 ? a + 1 : a}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`);
+  };
+
+  const handleDiaBlur = async (date: string) => {
+    const raw = (inputs[date] ?? "").trim();
+    const num = raw === "" ? null : parseBRL(raw);
+    if (raw !== "" && num === null) {
+      // Invalid — revert to server value
+      const prev = data?.dias.find((d) => d.date === date);
+      setInputs((s) => ({ ...s, [date]: prev ? String(prev.valor) : "" }));
+      return;
+    }
+    setSaving((s) => { const n = new Set(s); n.add(date); return n; });
+    try {
+      await apiFetchPut("/api/faturamento/dia", { date, valor: num });
+      setData((prev) => {
+        if (!prev) return prev;
+        const dias = prev.dias.filter((d) => d.date !== date);
+        if (num !== null) dias.push({ date, valor: num });
+        return { ...prev, dias: dias.sort((a, b) => a.date.localeCompare(b.date)) };
+      });
+      if (num === null) setInputs((s) => { const n = { ...s }; delete n[date]; return n; });
+    } finally {
+      setSaving((s) => { const n = new Set(s); n.delete(date); return n; });
+    }
+  };
+
+  const handleMetaBlur = async () => {
+    const raw = metaInput.trim();
+    const num = raw === "" ? null : parseBRL(raw);
+    if (raw !== "" && num === null) {
+      setMetaInput(data?.meta !== null && data?.meta !== undefined ? String(data.meta) : "");
+      return;
+    }
+    setSavingMeta(true);
+    try {
+      await apiFetchPut("/api/faturamento/meta", { mes, meta: num });
+      setData((prev) => prev ? { ...prev, meta: num } : prev);
+    } finally {
+      setSavingMeta(false);
+    }
+  };
+
+  // ── Summary calculations ─────────────────────────────────────────────────
+  const diasComValor = allDays
+    .filter((d) => inputs[d] && parseBRL(inputs[d] ?? "") !== null)
+    .map((d) => ({ date: d, valor: parseBRL(inputs[d] ?? "") ?? 0 }));
+
+  const totalFaturado = diasComValor.reduce((s, d) => s + d.valor, 0);
+  const meta = data?.meta ?? null;
+  const falta = meta !== null ? Math.max(0, meta - totalFaturado) : null;
+  const pctAtingido = meta && meta > 0 ? Math.min(100, (totalFaturado / meta) * 100) : null;
+  const pctFalta = meta && meta > 0 ? Math.max(0, ((meta - totalFaturado) / meta) * 100) : null;
+  const atingiu = meta !== null && totalFaturado >= meta;
+
+  const maxDia = diasComValor.length > 0 ? diasComValor.reduce((a, b) => a.valor > b.valor ? a : b) : null;
+  const minDia = diasComValor.length > 0 ? diasComValor.reduce((a, b) => a.valor < b.valor ? a : b) : null;
+
+  const barPct = pctAtingido ?? 0;
+
+  return (
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
+      {/* Header: month nav + meta input */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1">
+          <button onClick={prevMes} className="px-2 py-1 rounded border border-slate-300 text-sm hover:bg-slate-100">‹</button>
+          <span className="text-sm font-semibold text-slate-700 w-28 text-center">{mesLabel(mes)}</span>
+          <button onClick={nextMes} className="px-2 py-1 rounded border border-slate-300 text-sm hover:bg-slate-100">›</button>
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Meta do mês:</span>
+          <div className="relative">
+            <input
+              type="text"
+              value={metaInput}
+              onChange={(e) => setMetaInput(e.target.value)}
+              onBlur={handleMetaBlur}
+              placeholder="R$ 0,00"
+              className="border border-slate-300 rounded px-2 py-1 text-sm w-36 text-right font-semibold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+            {savingMeta && <Loader2 className="w-3 h-3 animate-spin absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />}
+          </div>
+        </div>
+      </div>
+
+      {loading && <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-blue-500 animate-spin" /></div>}
+
+      {!loading && (
+        <div className="flex gap-4 flex-1 min-h-0">
+          {/* Left — day table */}
+          <div className="flex flex-col" style={{ width: 260 }}>
+            <div className="overflow-y-auto border rounded-md flex-1" style={{ maxHeight: 480 }}>
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-100 z-10">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Dia</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase">Faturamento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allDays.map((date, i) => {
+                    const val = inputs[date];
+                    const isSaving = saving.has(date);
+                    const isMax = maxDia?.date === date;
+                    const isMin = minDia?.date === date && diasComValor.length > 1;
+                    return (
+                      <tr key={date} className={`border-t border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
+                        <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap font-mono text-xs">
+                          {fmtDia(date)}
+                          {isMax && <span className="ml-1 text-xs text-emerald-600 font-bold" title="Maior faturamento">↑</span>}
+                          {isMin && <span className="ml-1 text-xs text-red-400 font-bold" title="Menor faturamento">↓</span>}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          <div className="relative flex items-center justify-end">
+                            <input
+                              type="text"
+                              value={val ?? ""}
+                              onChange={(e) => setInputs((s) => ({ ...s, [date]: e.target.value }))}
+                              onBlur={() => handleDiaBlur(date)}
+                              placeholder="—"
+                              className="w-full text-right text-sm px-2 py-0.5 rounded border border-transparent bg-transparent hover:border-slate-300 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono"
+                            />
+                            {isSaving && <Loader2 className="w-3 h-3 animate-spin absolute right-1 text-slate-400 pointer-events-none" />}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals at bottom */}
+            <div className="border border-t-0 rounded-b-md overflow-hidden text-sm">
+              <div className="flex justify-between items-center px-3 py-2 bg-blue-600 text-white font-bold">
+                <span>FATURAMENTO</span>
+                <span className="font-mono">{BRL.format(totalFaturado)}</span>
+              </div>
+              <div className="flex justify-between items-center px-3 py-2 bg-emerald-500 text-white font-bold">
+                <span>META</span>
+                <span className="font-mono">{meta !== null ? BRL.format(meta) : "—"}</span>
+              </div>
+              <div className={`flex justify-between items-center px-3 py-2 font-bold ${atingiu ? "bg-emerald-100 text-emerald-700" : "bg-red-500 text-white"}`}>
+                <span>{atingiu ? "SUPERADO" : "FALTA"}</span>
+                <span className="font-mono">{falta !== null ? BRL.format(falta) : "—"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right — summary cards */}
+          <div className="flex-1 flex flex-col gap-3">
+            {/* Progress bar */}
+            <div className="border rounded-md p-4 bg-white flex flex-col gap-3">
+              <div className="flex justify-between items-baseline">
+                <span className="text-sm font-semibold text-slate-700">Progresso da meta</span>
+                <span className={`text-lg font-bold ${atingiu ? "text-emerald-600" : "text-blue-600"}`}>
+                  {pctAtingido !== null ? `${pctAtingido.toFixed(1)}%` : "—"}
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-5 overflow-hidden">
+                <div
+                  className={`h-5 rounded-full transition-all ${atingiu ? "bg-emerald-500" : "bg-blue-500"}`}
+                  style={{ width: `${Math.min(100, barPct)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>R$ 0</span>
+                <span>{meta !== null ? BRL.format(meta) : "Meta não definida"}</span>
+              </div>
+            </div>
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="border rounded-md p-3 bg-blue-50">
+                <p className="text-xs text-blue-500 font-semibold uppercase tracking-wide">Faturado</p>
+                <p className="text-xl font-bold text-blue-700 font-mono mt-1">{BRL.format(totalFaturado)}</p>
+                {pctAtingido !== null && (
+                  <p className="text-xs text-blue-400 mt-0.5">{pctAtingido.toFixed(1)}% da meta</p>
+                )}
+              </div>
+              <div className={`border rounded-md p-3 ${atingiu ? "bg-emerald-50" : "bg-red-50"}`}>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${atingiu ? "text-emerald-500" : "text-red-400"}`}>
+                  {atingiu ? "Meta superada!" : "Falta para meta"}
+                </p>
+                <p className={`text-xl font-bold font-mono mt-1 ${atingiu ? "text-emerald-700" : "text-red-600"}`}>
+                  {falta !== null ? BRL.format(falta) : "—"}
+                </p>
+                {pctFalta !== null && !atingiu && (
+                  <p className="text-xs text-red-400 mt-0.5">{pctFalta.toFixed(1)}% restante</p>
+                )}
+              </div>
+              <div className="border rounded-md p-3 bg-emerald-50">
+                <p className="text-xs text-emerald-500 font-semibold uppercase tracking-wide flex items-center gap-1">
+                  <span>↑</span> Maior dia
+                </p>
+                {maxDia ? (
+                  <>
+                    <p className="text-xl font-bold text-emerald-700 font-mono mt-1">{BRL.format(maxDia.valor)}</p>
+                    <p className="text-xs text-emerald-500 mt-0.5">{fmtDia(maxDia.date)}</p>
+                  </>
+                ) : <p className="text-sm text-slate-400 mt-1">—</p>}
+              </div>
+              <div className="border rounded-md p-3 bg-red-50">
+                <p className="text-xs text-red-400 font-semibold uppercase tracking-wide flex items-center gap-1">
+                  <span>↓</span> Menor dia
+                </p>
+                {minDia ? (
+                  <>
+                    <p className="text-xl font-bold text-red-600 font-mono mt-1">{BRL.format(minDia.valor)}</p>
+                    <p className="text-xs text-red-400 mt-0.5">{fmtDia(minDia.date)}</p>
+                  </>
+                ) : <p className="text-sm text-slate-400 mt-1">—</p>}
+              </div>
+            </div>
+
+            {/* Dias com lançamento */}
+            <div className="border rounded-md p-3 bg-white text-sm text-slate-600">
+              <span className="font-semibold text-slate-700">{diasComValor.length}</span> dia{diasComValor.length !== 1 ? "s" : ""} lançado{diasComValor.length !== 1 ? "s" : ""} de <span className="font-semibold text-slate-700">{allDays.length}</span> em {mesLabel(mes)}
+              {diasComValor.length > 0 && totalFaturado > 0 && (
+                <span className="text-slate-400 ml-2">· média {BRL.format(totalFaturado / diasComValor.length)}/dia</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-type Tab = "resumo" | "divergencias" | "frete" | "motoristas" | "clientes";
+type Tab = "resumo" | "divergencias" | "frete" | "motoristas" | "clientes" | "faturamento";
 
 export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: string) => void } = {}) {
   const [open, setOpen] = useState(false);
@@ -1365,6 +1667,7 @@ export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: 
             { key: "frete",        label: "Frete Mensal",     icon: <BarChart2 className="w-3.5 h-3.5" /> },
             { key: "motoristas",   label: "Viagens/Motorista", icon: <Truck className="w-3.5 h-3.5" /> },
             { key: "clientes",     label: "Clientes",           icon: <LayoutList className="w-3.5 h-3.5" /> },
+            { key: "faturamento",  label: "Faturamento",        icon: <BarChart2 className="w-3.5 h-3.5" /> },
           ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(({ key, label, icon }) => (
             <button
               key={key}
@@ -1386,6 +1689,7 @@ export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: 
           {open && tab === "frete"        && <FreteMensalTab />}
           {open && tab === "motoristas"   && <MotoristaTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "clientes"     && <ClienteTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
+          {open && tab === "faturamento"  && <FaturamentoTab />}
         </div>
       </DialogContent>
     </Dialog>

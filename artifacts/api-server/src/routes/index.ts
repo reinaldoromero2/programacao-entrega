@@ -4,6 +4,7 @@ import entregasRouter from "./entregas";
 import motoristasRouter from "./motoristas";
 import motivosCancelamentoRouter from "./motivos-cancelamento";
 import clientesCadastroRouter from "./clientes-cadastro";
+import faturamentoRouter from "./faturamento";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(entregasRouter);
 router.use(motoristasRouter);
 router.use(motivosCancelamentoRouter);
 router.use(clientesCadastroRouter);
+router.use(faturamentoRouter);
 
 export default router;

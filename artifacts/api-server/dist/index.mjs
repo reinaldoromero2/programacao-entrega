@@ -20651,27 +20651,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router7;
+    module.exports = Router8;
     module.exports.Route = Route;
-    function Router7(options) {
-      if (!(this instanceof Router7)) {
-        return new Router7(options);
+    function Router8(options) {
+      if (!(this instanceof Router8)) {
+        return new Router8(options);
       }
       const opts = options || {};
-      function router7(req, res, next) {
-        router7.handle(req, res, next);
+      function router8(req, res, next) {
+        router8.handle(req, res, next);
       }
-      Object.setPrototypeOf(router7, this);
-      router7.caseSensitive = opts.caseSensitive;
-      router7.mergeParams = opts.mergeParams;
-      router7.params = {};
-      router7.strict = opts.strict;
-      router7.stack = [];
-      return router7;
+      Object.setPrototypeOf(router8, this);
+      router8.caseSensitive = opts.caseSensitive;
+      router8.mergeParams = opts.mergeParams;
+      router8.params = {};
+      router8.strict = opts.strict;
+      router8.stack = [];
+      return router8;
     }
-    Router7.prototype = function() {
+    Router8.prototype = function() {
     };
-    Router7.prototype.param = function param(name, fn) {
+    Router8.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20691,7 +20691,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router7.prototype.handle = function handle(req, res, callback) {
+    Router8.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20818,7 +20818,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router7.prototype.use = function use(handler) {
+    Router8.prototype.use = function use(handler) {
       let offset = 0;
       let path = "/";
       if (typeof handler !== "function") {
@@ -20851,7 +20851,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router7.prototype.route = function route(path) {
+    Router8.prototype.route = function route(path) {
       const route2 = new Route(path);
       const layer = new Layer(path, {
         sensitive: this.caseSensitive,
@@ -20866,7 +20866,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router7.prototype[method] = function(path) {
+      Router8.prototype[method] = function(path) {
         const route = this.route(path);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21049,13 +21049,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router7 = require_router();
+    var Router8 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router7 = null;
+      var router8 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21064,13 +21064,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router7 === null) {
-            router7 = new Router7({
+          if (router8 === null) {
+            router8 = new Router8({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router7;
+          return router8;
         }
       });
     };
@@ -21141,15 +21141,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router7 = this.router;
+      var router8 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router7.use(path, fn2);
+          return router8.use(path, fn2);
         }
         debug(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router7.use(path, function mounted_app(req, res, next) {
+        router8.use(path, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23722,7 +23722,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router7 = require_router();
+    var Router8 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23744,8 +23744,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router7.Route;
-    exports.Router = Router7;
+    exports.Route = Router8.Route;
+    exports.Router = Router8;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -83637,12 +83637,12 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express7 = __toESM(require_express2(), 1);
+var import_express8 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 
 // src/routes/index.ts
-var import_express6 = __toESM(require_express2(), 1);
+var import_express7 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -94659,6 +94659,8 @@ var schema_exports = {};
 __export(schema_exports, {
   clientesCadastroTable: () => clientesCadastroTable,
   entregasTable: () => entregasTable,
+  faturamentoDiarioTable: () => faturamentoDiarioTable,
+  faturamentoMetaTable: () => faturamentoMetaTable,
   insertEntregaSchema: () => insertEntregaSchema,
   insertMotoristasSchema: () => insertMotoristasSchema,
   motivosCancelamentoTable: () => motivosCancelamentoTable,
@@ -106091,6 +106093,20 @@ var clientesCadastroTable = pgTable("clientes_cadastro", {
   nome: text("nome").notNull()
 });
 
+// ../../lib/db/src/schema/faturamento.ts
+var faturamentoDiarioTable = pgTable("faturamento_diario", {
+  id: serial("id").primaryKey(),
+  date: text("date").notNull().unique(),
+  // yyyy-MM-dd
+  valor: numeric("valor", { precision: 15, scale: 2 }).notNull()
+});
+var faturamentoMetaTable = pgTable("faturamento_meta", {
+  id: serial("id").primaryKey(),
+  mes: text("mes").notNull().unique(),
+  // yyyy-MM
+  meta: numeric("meta", { precision: 15, scale: 2 }).notNull()
+});
+
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
 if (!process.env.DATABASE_URL) {
@@ -106118,7 +106134,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260814162417" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260815121327" });
 });
 var health_default = router;
 
@@ -106786,14 +106802,83 @@ router5.delete("/clientes-cadastro/:id", async (req, res) => {
 });
 var clientes_cadastro_default = router5;
 
-// src/routes/index.ts
+// src/routes/faturamento.ts
+var import_express6 = __toESM(require_express2(), 1);
 var router6 = (0, import_express6.Router)();
-router6.use(health_default);
-router6.use(entregas_default);
-router6.use(motoristas_default);
-router6.use(motivos_cancelamento_default);
-router6.use(clientes_cadastro_default);
-var routes_default = router6;
+router6.get("/faturamento", async (req, res) => {
+  const mes = typeof req.query.mes === "string" ? req.query.mes : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+  const [metaRow] = await db.select().from(faturamentoMetaTable).where(eq(faturamentoMetaTable.mes, mes));
+  const allDias = await db.select().from(faturamentoDiarioTable);
+  const filtered = allDias.filter((r) => r.date.startsWith(mes)).sort((a, b) => a.date.localeCompare(b.date));
+  res.json({
+    mes,
+    meta: metaRow ? Number(metaRow.meta) : null,
+    dias: filtered.map((r) => ({ date: r.date, valor: Number(r.valor) }))
+  });
+});
+router6.put("/faturamento/dia", async (req, res) => {
+  const date6 = typeof req.body?.date === "string" ? req.body.date.trim() : "";
+  const valor = req.body?.valor;
+  if (!date6 || !/^\d{4}-\d{2}-\d{2}$/.test(date6)) {
+    res.status(400).json({ error: "date inv\xE1lido (yyyy-MM-dd)" });
+    return;
+  }
+  if (valor === null || valor === "" || valor === void 0) {
+    await db.delete(faturamentoDiarioTable).where(eq(faturamentoDiarioTable.date, date6));
+    res.json({ deleted: true, date: date6 });
+    return;
+  }
+  const num = Number(String(valor).replace(",", "."));
+  if (isNaN(num) || num < 0) {
+    res.status(400).json({ error: "valor inv\xE1lido" });
+    return;
+  }
+  const existing = await db.select().from(faturamentoDiarioTable).where(eq(faturamentoDiarioTable.date, date6));
+  if (existing.length > 0) {
+    const [row] = await db.update(faturamentoDiarioTable).set({ valor: String(num) }).where(eq(faturamentoDiarioTable.date, date6)).returning();
+    res.json({ date: row.date, valor: Number(row.valor) });
+  } else {
+    const [row] = await db.insert(faturamentoDiarioTable).values({ date: date6, valor: String(num) }).returning();
+    res.json({ date: row.date, valor: Number(row.valor) });
+  }
+});
+router6.put("/faturamento/meta", async (req, res) => {
+  const mes = typeof req.body?.mes === "string" ? req.body.mes.trim() : "";
+  const meta = req.body?.meta;
+  if (!mes || !/^\d{4}-\d{2}$/.test(mes)) {
+    res.status(400).json({ error: "mes inv\xE1lido (yyyy-MM)" });
+    return;
+  }
+  if (meta === null || meta === "" || meta === void 0) {
+    await db.delete(faturamentoMetaTable).where(eq(faturamentoMetaTable.mes, mes));
+    res.json({ deleted: true, mes });
+    return;
+  }
+  const num = Number(String(meta).replace(",", "."));
+  if (isNaN(num) || num < 0) {
+    res.status(400).json({ error: "meta inv\xE1lida" });
+    return;
+  }
+  const existing = await db.select().from(faturamentoMetaTable).where(eq(faturamentoMetaTable.mes, mes));
+  if (existing.length > 0) {
+    const [row] = await db.update(faturamentoMetaTable).set({ meta: String(num) }).where(eq(faturamentoMetaTable.mes, mes)).returning();
+    res.json({ mes: row.mes, meta: Number(row.meta) });
+  } else {
+    const [row] = await db.insert(faturamentoMetaTable).values({ mes, meta: String(num) }).returning();
+    res.json({ mes: row.mes, meta: Number(row.meta) });
+  }
+});
+var faturamento_default = router6;
+
+// src/routes/index.ts
+var router7 = (0, import_express7.Router)();
+router7.use(health_default);
+router7.use(entregas_default);
+router7.use(motoristas_default);
+router7.use(motivos_cancelamento_default);
+router7.use(clientes_cadastro_default);
+router7.use(faturamento_default);
+var routes_default = router7;
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -106822,7 +106907,7 @@ function errorHandler(err, _req, res, _next) {
 }
 
 // src/app.ts
-var app = (0, import_express7.default)();
+var app = (0, import_express8.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -106843,8 +106928,8 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express7.default.json());
-app.use(import_express7.default.urlencoded({ extended: true }));
+app.use(import_express8.default.json());
+app.use(import_express8.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 app.use(errorHandler);
 var app_default = app;
@@ -106859,7 +106944,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 async function assertSchema() {
-  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro"];
+  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro", "faturamento_diario", "faturamento_meta"];
   const client = await pool.connect();
   try {
     const result = await client.query(
