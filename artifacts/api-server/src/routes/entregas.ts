@@ -471,20 +471,24 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
     .from(entregasTable)
     .where(whereExpr);
 
+  // Display aliases: name stored in DB → name shown in reports
+  const CLIENTE_ALIAS: Record<string, string> = {
+    "SOLV": "UNIPAR",
+  };
+
   // Parse a raw cliente string into one or more normalized names:
   // 1. Strip ALL parenthetical content first (handles "BOEHRINGER (004 + 27 PEÇAS 009)" → "BOEHRINGER")
   // 2. Split by "+" to separate combined clients (handles "MBB-ITUPEVA + INNOMOTICS")
   // 3. Normalize each part: trim, collapse spaces, fix hyphen spacing, uppercase
+  // 4. Apply display aliases (e.g. SOLV → UNIPAR)
   function parseClientes(raw: string): string[] {
     return raw
       .replace(/\([^)]*\)/g, "")   // remove (anything) — before splitting by +
       .split("+")
-      .map(p => p
-        .trim()
-        .replace(/\s+/g, " ")
-        .replace(/\s*-\s*/g, "-")
-        .toUpperCase()
-      )
+      .map(p => {
+        const norm = p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase();
+        return CLIENTE_ALIAS[norm] ?? norm;
+      })
       .filter(Boolean);
   }
 
@@ -540,16 +544,31 @@ router.get("/entregas/cliente-datas", async (req, res): Promise<void> => {
     .where(sql`(${dateFilter}) AND (${clienteExists}) AND (${notCancelled})`)
     .orderBy(entregasTable.date);
 
-  // Keep only rows where the parsed cliente list includes the requested client
+  // Display aliases and reverse lookup
+  const CLIENTE_ALIAS: Record<string, string> = { "SOLV": "UNIPAR" };
+  const CLIENTE_ALIAS_REV: Record<string, string> = Object.fromEntries(
+    Object.entries(CLIENTE_ALIAS).map(([k, v]) => [v, k])
+  );
+
+  // Keep only rows where the parsed cliente list includes the requested client.
+  // Also matches via reverse alias (e.g. querying "UNIPAR" finds rows with "SOLV").
   function parseClientes(raw: string): string[] {
     return raw
       .replace(/\([^)]*\)/g, "")
       .split("+")
-      .map(p => p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase())
+      .map(p => {
+        const norm = p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase();
+        return CLIENTE_ALIAS[norm] ?? norm;
+      })
       .filter(Boolean);
   }
 
-  const filtered = rows.filter(r => parseClientes(r.cliente ?? "").includes(cliente));
+  // Accept both the display name and the original stored name
+  const clienteAliasOrigem = CLIENTE_ALIAS_REV[cliente] ?? cliente;
+  const filtered = rows.filter(r =>
+    parseClientes(r.cliente ?? "").includes(cliente) ||
+    parseClientes(r.cliente ?? "").includes(clienteAliasOrigem)
+  );
 
   res.json({ cliente, filtro, valor, viagens: filtered.map(r => ({
     date:      r.date,

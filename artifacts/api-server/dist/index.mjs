@@ -106134,7 +106134,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260815161158" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260815161951" });
 });
 var health_default = router;
 
@@ -106473,10 +106473,14 @@ router2.get("/entregas/cliente-relatorio", async (req, res) => {
   }
   const whereExpr = sql`(${dateFilter}) AND (${clienteExists}) AND (${notCancelled})`;
   const rows = await db.select({ cliente: entregasTable.cliente }).from(entregasTable).where(whereExpr);
+  const CLIENTE_ALIAS = {
+    "SOLV": "UNIPAR"
+  };
   function parseClientes(raw) {
-    return raw.replace(/\([^)]*\)/g, "").split("+").map(
-      (p) => p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase()
-    ).filter(Boolean);
+    return raw.replace(/\([^)]*\)/g, "").split("+").map((p) => {
+      const norm = p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase();
+      return CLIENTE_ALIAS[norm] ?? norm;
+    }).filter(Boolean);
   }
   const grouped = /* @__PURE__ */ new Map();
   for (const row of rows) {
@@ -106513,10 +106517,20 @@ router2.get("/entregas/cliente-datas", async (req, res) => {
     frete: entregasTable.frete,
     obs: entregasTable.obs
   }).from(entregasTable).where(sql`(${dateFilter}) AND (${clienteExists}) AND (${notCancelled})`).orderBy(entregasTable.date);
+  const CLIENTE_ALIAS = { "SOLV": "UNIPAR" };
+  const CLIENTE_ALIAS_REV = Object.fromEntries(
+    Object.entries(CLIENTE_ALIAS).map(([k, v]) => [v, k])
+  );
   function parseClientes(raw) {
-    return raw.replace(/\([^)]*\)/g, "").split("+").map((p) => p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase()).filter(Boolean);
+    return raw.replace(/\([^)]*\)/g, "").split("+").map((p) => {
+      const norm = p.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase();
+      return CLIENTE_ALIAS[norm] ?? norm;
+    }).filter(Boolean);
   }
-  const filtered = rows.filter((r) => parseClientes(r.cliente ?? "").includes(cliente));
+  const clienteAliasOrigem = CLIENTE_ALIAS_REV[cliente] ?? cliente;
+  const filtered = rows.filter(
+    (r) => parseClientes(r.cliente ?? "").includes(cliente) || parseClientes(r.cliente ?? "").includes(clienteAliasOrigem)
+  );
   res.json({ cliente, filtro, valor, viagens: filtered.map((r) => ({
     date: r.date,
     motorista: r.motorista ?? "",
