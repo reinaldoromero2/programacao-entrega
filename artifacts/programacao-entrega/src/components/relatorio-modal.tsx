@@ -462,7 +462,7 @@ function DivergenciasTab() {
 
 // ─── Frete mensal tab ─────────────────────────────────────────────────────────
 
-function FreteMensalTab() {
+function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) => void } = {}) {
   const [mes, setMes] = useState(mesAtual());
   const [data, setData] = useState<FreteMensalData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -728,7 +728,12 @@ function FreteMensalTab() {
                         </thead>
                         <tbody>
                           {freteList.map((c, i) => (
-                            <tr key={c.id} className={i % 2 === 0 ? "bg-white" : ""} style={i % 2 !== 0 ? { background: bgLight } : undefined}>
+                            <tr key={c.id}
+                              className={`${i % 2 === 0 ? "bg-white" : ""} ${isCancel && onNavigateDia ? "cursor-pointer hover:brightness-95" : ""}`}
+                              style={i % 2 !== 0 ? { background: bgLight } : undefined}
+                              onClick={isCancel && onNavigateDia ? () => onNavigateDia(c.date) : undefined}
+                              title={isCancel && onNavigateDia ? `Ir para ${c.date.slice(8)}/${c.date.slice(5,7)}/${c.date.slice(0,4)}` : undefined}
+                            >
                               <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.date.slice(8)}/{c.date.slice(5,7)}</td>
                               <td className="px-3 py-1.5 font-medium text-slate-800 whitespace-nowrap">{c.cliente || "—"}</td>
                               <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.motorista || "—"}</td>
@@ -1870,7 +1875,7 @@ export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: 
         <div className="flex-1 overflow-y-auto pt-1 min-h-0">
           {open && tab === "resumo"       && <ResumoMensalTab />}
           {open && tab === "divergencias" && <DivergenciasTab />}
-          {open && tab === "frete"        && <FreteMensalTab />}
+          {open && tab === "frete"        && <FreteMensalTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "motoristas"   && <MotoristaTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "clientes"     && <ClienteTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "faturamento"  && <FaturamentoTab />}
