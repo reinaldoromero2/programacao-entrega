@@ -106139,7 +106139,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260817133037" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260817133252" });
 });
 var health_default = router;
 
