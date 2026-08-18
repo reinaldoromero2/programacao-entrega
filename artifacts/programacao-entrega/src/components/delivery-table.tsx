@@ -359,9 +359,10 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
     saveField("frete", next);
   };
 
-  const isRipack = localState.frete === "RIPACK";
-  const obsUpper = localState.obs?.toUpperCase() ?? "";
-  const isCancelled = obsUpper.startsWith("CANCELADA") || obsUpper.startsWith("CANCELADO");
+  const isRipack    = localState.frete === "RIPACK";
+  const obsUpper    = localState.obs?.toUpperCase() ?? "";
+  const isCancelled  = obsUpper.startsWith("CANCELADA") || obsUpper.startsWith("CANCELADO");
+  const isDevolution = obsUpper.startsWith("DEVOLUÇÃO");
 
   const template = gridTemplate(colWidths);
 
@@ -380,8 +381,9 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       onDragEnd={() => { disableDrag(); onDragEnd(); }}
       className={cn(
         "border-b border-slate-200 group hover:bg-slate-50 transition-colors items-stretch",
-        isRipack && "bg-green-100 hover:bg-green-200",
+        isRipack    && "bg-green-100 hover:bg-green-200",
         isCancelled && "bg-red-100 hover:bg-red-200",
+        isDevolution && !isCancelled && "bg-yellow-100 hover:bg-yellow-200",
         isDragging && "opacity-30 scale-[0.99]",
         isDragOver && "border-t-2 border-blue-500",
       )}
@@ -438,15 +440,17 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         />
       </div>
 
-      {/* OBS — select nativo de motivos quando começa com "cancelad", senão input livre */}
+      {/* OBS — select nativo de motivos quando começa com "cancelad" ou "devolução", senão input livre */}
       <div className="p-1 border-r border-slate-200 flex items-center gap-1">
-        {isCancelled && (motivos?.length ?? 0) > 0 ? (
+        {(isCancelled || isDevolution) && (motivos?.length ?? 0) > 0 ? (
           <>
             <select
-              value={localState.obs.replace(/^CANCELAD[AO]\s*-\s*/i, "")}
+              value={localState.obs.replace(/^(?:CANCELAD[AO]|DEVOLUÇÃO)\s*-\s*/i, "")}
               onChange={(e) => {
                 const motivo = e.target.value;
-                const prefix = obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO";
+                const prefix = isDevolution
+                  ? "DEVOLUÇÃO"
+                  : (obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO");
                 const val = motivo === "" ? prefix : `${prefix} - ${motivo}`;
                 setLocalState(prev => ({ ...prev, obs: val }));
                 saveField("obs", val);
@@ -454,7 +458,9 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
               className="flex-1 min-w-0 px-1 py-1 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white cursor-pointer"
               data-testid={`select-obs-${entrega.id}`}
             >
-              <option value="">{obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO"}</option>
+              <option value="">
+                {isDevolution ? "DEVOLUÇÃO" : (obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO")}
+              </option>
               {motivos!.map((m) => (
                 <option key={m.id} value={m.motivo}>{m.motivo}</option>
               ))}

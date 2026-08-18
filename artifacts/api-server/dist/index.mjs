@@ -106139,7 +106139,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260817180644" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260818162004" });
 });
 var health_default = router;
 
@@ -106264,6 +106264,11 @@ router2.get("/entregas/por-frete", async (req, res) => {
           OR ${entregasTable.cg} = 'x'
         )
       `).orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
+  } else if (frete === "DEVOLU\xC7\xD5ES") {
+    rows = await db.select(cols).from(entregasTable).where(sql`
+        ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
+        AND UPPER(${entregasTable.obs}) LIKE 'DEVOLUÇÃO%'
+      `).orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
   } else {
     rows = await db.select(cols).from(entregasTable).where(sql`
         ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
@@ -106285,6 +106290,10 @@ router2.get("/entregas/frete-mensal", async (req, res) => {
         OR ${entregasTable.cg} = 'x'
       )
     `).orderBy(asc(entregasTable.date));
+  const devRows = await db.select({ date: entregasTable.date }).from(entregasTable).where(sql`
+      ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
+      AND UPPER(${entregasTable.obs}) LIKE 'DEVOLUÇÃO%'
+    `).orderBy(asc(entregasTable.date));
   const tipos = ["RIPACK", "TRANSPORTADORA", "3\xBA", "COLETA"];
   const resumo = tipos.map((tipo) => ({
     frete: tipo,
@@ -106301,8 +106310,13 @@ router2.get("/entregas/frete-mensal", async (req, res) => {
     const d = diasMap.get(row.date);
     d["CANCELADOS"] = (d["CANCELADOS"] ?? 0) + 1;
   }
+  for (const row of devRows) {
+    if (!diasMap.has(row.date)) diasMap.set(row.date, {});
+    const d = diasMap.get(row.date);
+    d["DEVOLU\xC7\xD5ES"] = (d["DEVOLU\xC7\xD5ES"] ?? 0) + 1;
+  }
   const porDia = Array.from(diasMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([date6, counts]) => ({ date: date6, ...counts }));
-  res.json({ mes, resumo, porDia, canceladosTotal: cancelRows.length });
+  res.json({ mes, resumo, porDia, canceladosTotal: cancelRows.length, devolucoesTotal: devRows.length });
 });
 function diasUteisNoMes(ano, mes) {
   const nationalHolidays = /* @__PURE__ */ new Set([

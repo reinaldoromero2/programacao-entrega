@@ -23,12 +23,12 @@ import {
 } from "recharts";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-/** Extract cancellation reason from obs field. "CANCELADO - Produção não terminou" → "Produção não terminou" */
+/** Extract cancellation/devolution reason from obs field. "CANCELADO - Produção não terminou" → "Produção não terminou" */
 function extractMotivo(obs: string | null): string {
   if (!obs) return "—";
-  const m = obs.match(/^CANCELAD[AO]\s*[-–]\s*(.+)/i);
+  const m = obs.match(/^(?:CANCELAD[AO]|DEVOLUÇÃO)\s*[-–]\s*(.+)/i);
   if (m) return m[1].trim();
-  if (/^CANCELAD[AO]$/i.test(obs.trim())) return "Sem motivo";
+  if (/^(?:CANCELAD[AO]|DEVOLUÇÃO)$/i.test(obs.trim())) return "Sem motivo";
   return obs;
 }
 
@@ -63,6 +63,7 @@ interface FretePorDia {
   "3º"?: number;
   COLETA?: number;
   CANCELADOS?: number;
+  DEVOLUÇÕES?: number;
 }
 
 interface FreteMensalData {
@@ -70,6 +71,7 @@ interface FreteMensalData {
   resumo: FreteResumo[];
   porDia: FretePorDia[];
   canceladosTotal: number;
+  devolucoesTotal: number;
 }
 
 interface CanceladoItem {
@@ -507,18 +509,26 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
 
   const total = data?.resumo.reduce((s, r) => s + r.total, 0) ?? 0;
   const canceladosTotal = data?.canceladosTotal ?? 0;
-  const hasCancelados = canceladosTotal > 0;
+  const devolucoesTotal = data?.devolucoesTotal ?? 0;
+  const hasCancelados  = canceladosTotal > 0;
+  const hasDevoluções  = devolucoesTotal > 0;
 
   const pieData = [
     ...( data?.resumo.filter((r) => r.total > 0) ?? [] ),
-    ...(hasCancelados ? [{ frete: "CANCELADOS", total: canceladosTotal }] : []),
+    ...(hasCancelados  ? [{ frete: "CANCELADOS",  total: canceladosTotal }] : []),
+    ...(hasDevoluções  ? [{ frete: "DEVOLUÇÕES",  total: devolucoesTotal }] : []),
   ];
 
-  const CANCELADOS_COR = "#dc2626";
-  const corOf = (frete: string) => frete === "CANCELADOS" ? CANCELADOS_COR : (FRETE_CORES[frete] ?? "#94a3b8");
+  const CANCELADOS_COR  = "#dc2626";
+  const DEVOLUÇÕES_COR  = "#ca8a04";
+  const corOf = (frete: string) =>
+    frete === "CANCELADOS"  ? CANCELADOS_COR :
+    frete === "DEVOLUÇÕES"  ? DEVOLUÇÕES_COR :
+    (FRETE_CORES[frete] ?? "#94a3b8");
 
-  const activeFreteTipos = TIPOS.filter((t) => data?.resumo.find((r) => r.frete === t && r.total > 0));
-  const hasCanceladosBar = data?.porDia.some((d) => (d as unknown as Record<string, number>)["CANCELADOS"] > 0);
+  const activeFreteTipos   = TIPOS.filter((t) => data?.resumo.find((r) => r.frete === t && r.total > 0));
+  const hasCanceladosBar   = data?.porDia.some((d) => (d as unknown as Record<string, number>)["CANCELADOS"] > 0);
+  const hasDevoluçõesBar   = data?.porDia.some((d) => (d as unknown as Record<string, number>)["DEVOLUÇÕES"] > 0);
 
   const exportExcel = () => {
     if (!data) return;
@@ -639,6 +649,24 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                       <span className="font-bold text-red-700">{canceladosTotal}</span>
                     </button>
                   )}
+                  {hasDevoluções && (
+                    <button
+                      onClick={() => handleFreteClick("DEVOLUÇÕES")}
+                      className="w-full flex items-center justify-between px-2 py-1 rounded text-xs mt-1 border transition-colors"
+                      style={{
+                        background: selectedFrete === "DEVOLUÇÕES" ? "#fef08a" : "#fefce8",
+                        borderColor: selectedFrete === "DEVOLUÇÕES" ? "#ca8a04" : "#fde047",
+                        outline: selectedFrete === "DEVOLUÇÕES" ? "2px solid #ca8a04" : undefined,
+                      }}
+                      title="Clique para ver as devoluções"
+                    >
+                      <span className="flex items-center gap-1.5 font-semibold" style={{ color: DEVOLUÇÕES_COR }}>
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ background: DEVOLUÇÕES_COR }} />
+                        DEVOLUÇÕES
+                      </span>
+                      <span className="font-bold" style={{ color: DEVOLUÇÕES_COR }}>{devolucoesTotal}</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -662,6 +690,9 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                       {hasCanceladosBar && (
                         <Bar dataKey="CANCELADOS" stackId="b" fill={CANCELADOS_COR} onClick={() => handleFreteClick("CANCELADOS")} style={{ cursor: "pointer" }} />
                       )}
+                      {hasDevoluçõesBar && (
+                        <Bar dataKey="DEVOLUÇÕES" stackId="c" fill={DEVOLUÇÕES_COR} onClick={() => handleFreteClick("DEVOLUÇÕES")} style={{ cursor: "pointer" }} />
+                      )}
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -669,11 +700,13 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
             </div>
             {/* ── Lista por tipo de frete ───────────────────────────── */}
             {selectedFrete && (() => {
-              const isCancel = selectedFrete === "CANCELADOS";
-              const accent   = isCancel ? "#dc2626" : (FRETE_CORES[selectedFrete] ?? "#2563eb");
-              const bgLight  = accent + "12";
-              const bgMed    = accent + "25";
-              const label    = isCancel ? "Cargas Canceladas" : `Cargas — ${selectedFrete}`;
+              const isCancel  = selectedFrete === "CANCELADOS";
+              const isDev     = selectedFrete === "DEVOLUÇÕES";
+              const isSpecial = isCancel || isDev;
+              const accent    = isCancel ? "#dc2626" : isDev ? DEVOLUÇÕES_COR : (FRETE_CORES[selectedFrete] ?? "#2563eb");
+              const bgLight   = accent + "12";
+              const bgMed     = accent + "25";
+              const label     = isCancel ? "Cargas Canceladas" : isDev ? "Devoluções" : `Cargas — ${selectedFrete}`;
               return (
                 <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${accent}40` }}>
                   <div className="flex items-center justify-between px-3 py-2 border-b" style={{ background: bgMed, borderColor: accent + "40" }}>
@@ -690,8 +723,8 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                   {!loadingFreteList && freteList !== null && freteList.length === 0 && (
                     <p className="text-xs text-slate-400 text-center py-4 italic" style={{ background: bgLight }}>Nenhuma carga encontrada.</p>
                   )}
-                  {/* Motivo breakdown summary (only for CANCELADOS) */}
-                  {!loadingFreteList && isCancel && freteList && freteList.length > 0 && (() => {
+                  {/* Motivo breakdown summary (CANCELADOS and DEVOLUÇÕES) */}
+                  {!loadingFreteList && isSpecial && freteList && freteList.length > 0 && (() => {
                     const summary = freteList.reduce<Record<string, number>>((acc, c) => {
                       const m = extractMotivo(c.obs);
                       acc[m] = (acc[m] ?? 0) + 1;
@@ -704,7 +737,7 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                         <div className="flex flex-wrap gap-x-6 gap-y-1">
                           {entries.map(([motivo, count]) => (
                             <span key={motivo} className="text-xs text-slate-700">
-                              <span className="font-bold" style={{ color: accent }}>{count}×</span> {motivo}
+                              <span className="font-bold" style={{ color: accent }}>{count}×</span> {isDev ? `DEVOLUÇÃO — ${motivo}` : motivo}
                             </span>
                           ))}
                         </div>
@@ -721,25 +754,29 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Cliente</th>
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Motorista</th>
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Placa</th>
-                            {isCancel && <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Frete</th>}
-                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>{isCancel ? "Motivo" : "OBS"}</th>
+                            {isSpecial && <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Frete</th>}
+                            <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>{isSpecial ? "Motivo" : "OBS"}</th>
                             <th className="text-left px-3 py-1.5 font-semibold" style={{ color: accent }}>Divergências</th>
                           </tr>
                         </thead>
                         <tbody>
                           {freteList.map((c, i) => (
                             <tr key={c.id}
-                              className={`${i % 2 === 0 ? "bg-white" : ""} ${isCancel && onNavigateDia ? "cursor-pointer hover:brightness-95" : ""}`}
+                              className={`${i % 2 === 0 ? "bg-white" : ""} ${isSpecial && onNavigateDia ? "cursor-pointer hover:brightness-95" : ""}`}
                               style={i % 2 !== 0 ? { background: bgLight } : undefined}
-                              onClick={isCancel && onNavigateDia ? () => onNavigateDia(c.date) : undefined}
-                              title={isCancel && onNavigateDia ? `Ir para ${c.date.slice(8)}/${c.date.slice(5,7)}/${c.date.slice(0,4)}` : undefined}
+                              onClick={isSpecial && onNavigateDia ? () => onNavigateDia(c.date) : undefined}
+                              title={isSpecial && onNavigateDia ? `Ir para ${c.date.slice(8)}/${c.date.slice(5,7)}/${c.date.slice(0,4)}` : undefined}
                             >
                               <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.date.slice(8)}/{c.date.slice(5,7)}</td>
                               <td className="px-3 py-1.5 font-medium text-slate-800 whitespace-nowrap">{c.cliente || "—"}</td>
                               <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.motorista || "—"}</td>
                               <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.placa || "—"}</td>
-                              {isCancel && <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.frete || "—"}</td>}
-                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{isCancel ? extractMotivo(c.obs) : (c.obs || "—")}</td>
+                              {isSpecial && <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.frete || "—"}</td>}
+                              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">
+                                {isSpecial
+                                  ? (isDev ? `DEVOLUÇÃO — ${extractMotivo(c.obs)}` : extractMotivo(c.obs))
+                                  : (c.obs || "—")}
+                              </td>
                               <td className="px-3 py-1.5 text-slate-600 min-w-[200px]">{c.divergencias || ""}</td>
                             </tr>
                           ))}

@@ -187,6 +187,13 @@ router.get("/entregas/por-frete", async (req, res): Promise<void> => {
         )
       `)
       .orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
+  } else if (frete === "DEVOLUÇÕES") {
+    rows = await db.select(cols).from(entregasTable)
+      .where(sql`
+        ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+        AND UPPER(${entregasTable.obs}) LIKE 'DEVOLUÇÃO%'
+      `)
+      .orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
   } else {
     rows = await db.select(cols).from(entregasTable)
       .where(sql`
@@ -225,6 +232,16 @@ router.get("/entregas/frete-mensal", async (req, res): Promise<void> => {
     `)
     .orderBy(asc(entregasTable.date));
 
+  // Devoluções: OBS LIKE 'DEVOLUÇÃO%'
+  const devRows = await db
+    .select({ date: entregasTable.date })
+    .from(entregasTable)
+    .where(sql`
+      ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
+      AND UPPER(${entregasTable.obs}) LIKE 'DEVOLUÇÃO%'
+    `)
+    .orderBy(asc(entregasTable.date));
+
   // Summary per frete type
   const tipos = ["RIPACK", "TRANSPORTADORA", "3º", "COLETA"];
   const resumo = tipos.map((tipo) => ({
@@ -232,7 +249,7 @@ router.get("/entregas/frete-mensal", async (req, res): Promise<void> => {
     total: freteRows.filter((r) => r.frete === tipo).length,
   }));
 
-  // Per-day breakdown (frete + cancelados merged)
+  // Per-day breakdown (frete + cancelados + devoluções merged)
   const diasMap = new Map<string, Record<string, number>>();
   for (const row of freteRows) {
     if (!diasMap.has(row.date)) diasMap.set(row.date, {});
@@ -244,11 +261,16 @@ router.get("/entregas/frete-mensal", async (req, res): Promise<void> => {
     const d = diasMap.get(row.date)!;
     d["CANCELADOS"] = (d["CANCELADOS"] ?? 0) + 1;
   }
+  for (const row of devRows) {
+    if (!diasMap.has(row.date)) diasMap.set(row.date, {});
+    const d = diasMap.get(row.date)!;
+    d["DEVOLUÇÕES"] = (d["DEVOLUÇÕES"] ?? 0) + 1;
+  }
   const porDia = Array.from(diasMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, counts]) => ({ date, ...counts }));
 
-  res.json({ mes, resumo, porDia, canceladosTotal: cancelRows.length });
+  res.json({ mes, resumo, porDia, canceladosTotal: cancelRows.length, devolucoesTotal: devRows.length });
 });
 
 // ─── Resumo Mensal ────────────────────────────────────────────────────────────
