@@ -8,6 +8,7 @@ import {
   useUpdateMotorista,
   useDeleteMotorista,
   getListMotoristasQueryKey,
+  type MotoristasInputFrete,
 } from "@workspace/api-client-react";
 import {
   Dialog,
@@ -19,11 +20,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { getOfflineSnapshot } from "@/lib/offline-snapshot";
 
 interface EditState {
   id: number;
   nome: string;
   placa: string;
+  frete: string;
+}
+
+const FRETE_OPTIONS = ["RIPACK", "TRANSPORTADORA", "3º", "COLETA"] as const;
+
+function parseFrete(value: string): MotoristasInputFrete {
+  return value === "" ? null : value as MotoristasInputFrete;
 }
 
 interface MotoristasModalProps {
@@ -38,13 +47,19 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
   const isControlled = controlledOnOpenChange !== undefined;
 
   const queryClient = useQueryClient();
-  const { data: motoristas = [] } = useListMotoristas();
+  const { data: motoristas = [] } = useListMotoristas({
+    query: {
+      queryKey: getListMotoristasQueryKey(),
+      initialData: () => getOfflineSnapshot()?.motoristas ?? [],
+    },
+  });
   const createMotorista = useCreateMotorista();
   const updateMotorista = useUpdateMotorista();
   const deleteMotorista = useDeleteMotorista();
 
   const [newNome, setNewNome] = useState("");
   const [newPlaca, setNewPlaca] = useState("");
+  const [newFrete, setNewFrete] = useState("");
   const [editing, setEditing] = useState<EditState | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -55,12 +70,13 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
     if (!newNome.trim() || !newPlaca.trim()) return;
     setIsAdding(true);
     createMotorista.mutate(
-      { data: { nome: newNome.trim(), placa: newPlaca.trim().toUpperCase() } },
+      { data: { nome: newNome.trim(), placa: newPlaca.trim().toUpperCase(), frete: parseFrete(newFrete) } },
       {
         onSuccess: () => {
           refresh();
           setNewNome("");
           setNewPlaca("");
+          setNewFrete("");
         },
         onError: () => {
           toast({ title: "Erro ao adicionar motorista", description: "Servidor indisponível. Verifique se o backend está rodando.", variant: "destructive" });
@@ -75,7 +91,7 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
     updateMotorista.mutate(
       {
         id: editing.id,
-        data: { nome: editing.nome.trim(), placa: editing.placa.trim().toUpperCase() },
+        data: { nome: editing.nome.trim(), placa: editing.placa.trim().toUpperCase(), frete: parseFrete(editing.frete) },
       },
       {
         onSuccess: () => {
@@ -143,6 +159,15 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
             className="w-28 text-sm font-mono uppercase"
             maxLength={8}
           />
+          <select
+            value={newFrete}
+            onChange={(e) => setNewFrete(e.target.value)}
+            className="w-36 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+            aria-label="Frete padrão do motorista"
+          >
+            <option value="">Frete padrão</option>
+            {FRETE_OPTIONS.map((frete) => <option key={frete} value={frete}>{frete}</option>)}
+          </select>
           <Button
             size="sm"
             onClick={handleAdd}
@@ -187,6 +212,15 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
                     className="w-24 h-7 text-sm font-mono uppercase"
                     maxLength={8}
                   />
+                  <select
+                    value={editing.frete}
+                    onChange={(e) => setEditing({ ...editing, frete: e.target.value })}
+                    className="w-32 h-7 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+                    aria-label="Frete padrão do motorista"
+                  >
+                    <option value="">Sem frete</option>
+                    {FRETE_OPTIONS.map((frete) => <option key={frete} value={frete}>{frete}</option>)}
+                  </select>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -212,10 +246,11 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
                   <span className="text-xs font-mono text-slate-500 bg-slate-200 px-2 py-0.5 rounded">
                     {m.placa}
                   </span>
+                  {m.frete && <span className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded">{m.frete}</span>}
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={() => setEditing({ id: m.id, nome: m.nome, placa: m.placa })}
+                    onClick={() => setEditing({ id: m.id, nome: m.nome, placa: m.placa, frete: m.frete ?? "" })}
                     className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
                   >
                     <Pencil className="w-3.5 h-3.5" />

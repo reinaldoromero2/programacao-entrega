@@ -22,17 +22,20 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { queueDelivery } from "@/lib/offline-deliveries";
+import { getOfflineSnapshot } from "@/lib/offline-snapshot";
 
 // ----------------------------------------------------------------------
 // Motivos de cancelamento hook
 // ----------------------------------------------------------------------
-const MOTIVOS_API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
+const MOTIVOS_API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
 
 interface MotivoItem { id: number; motivo: string; }
 
 function useMotivosCancelamento() {
   return useQuery({
     queryKey: ["motivos-cancelamento"],
+    initialData: () => getOfflineSnapshot()?.motivos ?? [],
     queryFn: async (): Promise<MotivoItem[]> => {
       const res = await fetch(`${MOTIVOS_API_BASE}/api/motivos-cancelamento`);
       if (!res.ok) return [];
@@ -54,6 +57,13 @@ const COL_LABELS = ["S", "#", "CLIENTE", "HRS", "OBS", "MOTORISTA • PLACA", "F
 
 const FRETE_OPTIONS = ["RIPACK", "TRANSPORTADORA", "3º", "COLETA"] as const;
 type FreteOption = typeof FRETE_OPTIONS[number];
+const DELIVERY_CACHE_PREFIX = "entregas-cache-";
+
+function saveDeliveryCache(date: string, deliveries: Entrega[]) {
+  try {
+    localStorage.setItem(`${DELIVERY_CACHE_PREFIX}${date}`, JSON.stringify(deliveries));
+  } catch {}
+}
 
 function loadWidths(): number[] {
   try {
@@ -299,6 +309,18 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const saveField = useCallback((field: keyof typeof localState, value: unknown) => {
     if (lastSavedRef.current[field] === value) return;
+
+    if (!navigator.onLine) {
+      const queryKey = getListEntregasQueryKey({ date });
+      queryClient.setQueryData<Entrega[]>(queryKey, (old) => {
+        const next = old?.map((item) => item.id === entrega.id ? { ...item, [field]: value === "" ? null : value } : item) ?? [];
+        saveDeliveryCache(date, next);
+        return next;
+      });
+      lastSavedRef.current = { ...lastSavedRef.current, [field]: value } as typeof localState;
+      return;
+    }
+
     setIsSaving(true);
     const updateData = { [field]: value === "" ? null : value };
     updateEntrega.mutate(
@@ -491,10 +513,11 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         <MotoristaCombobox
           motorista={localState.motorista}
           placa={localState.placa}
-          onSelect={(nome, pl) => {
-            setLocalState(prev => ({ ...prev, motorista: nome, placa: pl }));
+          onSelect={(nome, pl, frete) => {
+            setLocalState(prev => ({ ...prev, motorista: nome, placa: pl, frete: frete as FreteOption | null }));
             saveField("motorista", nome);
             saveField("placa", pl);
+            saveField("frete", frete);
           }}
           onMotoristaChange={(v) => setLocalState(prev => ({ ...prev, motorista: v }))}
           onMotoristaBlur={handleBlur("motorista")}
@@ -663,6 +686,39 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
   const handleCreate = (validatedCliente?: string) => {
     const value = (validatedCliente ?? newCliente).trim();
     if (!value || isCreating) return;
+
+    if (!navigator.onLine) {
+      const queryKey = getListEntregasQueryKey({ date });
+      const offlineEntrega: Entrega = {
+        id: -Date.now(),
+        date,
+        cliente: value,
+        sortOrder: index,
+        checked: "none",
+        hrs: null,
+        obs: null,
+        motorista: null,
+        placa: null,
+        unidade: "MATRIZ",
+        nf: "none",
+        cg: "none",
+        v: null,
+        divergencias: null,
+        frete: null,
+      };
+      queueDelivery({
+        temporaryId: offlineEntrega.id,
+        data: { date, cliente: value, sortOrder: index, checked: "none", unidade: "MATRIZ", cg: "none" },
+      });
+      queryClient.setQueryData<Entrega[]>(queryKey, (old) => {
+        const next = [...(old ?? []), offlineEntrega];
+        saveDeliveryCache(date, next);
+        return next;
+      });
+      setNewCliente("");
+      return;
+    }
+
     setIsCreating(true);
     createEntrega.mutate(
       { data: { date, cliente: value, sortOrder: index, checked: "none", unidade: "MATRIZ", cg: "none" } },

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 interface MotoristaCombboxProps {
   motorista: string;
   placa: string;
-  onSelect: (motorista: string, placa: string) => void;
+  onSelect: (motorista: string, placa: string, frete: string | null) => void;
   onMotoristaChange: (value: string) => void;
   onMotoristaBlur: () => void;
   onPlacaChange: (value: string) => void;
@@ -147,7 +147,7 @@ export function MotoristaCombobox({
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  onSelect(m.nome, m.placa);
+                  onSelect(m.nome, m.placa, m.frete ?? null);
                   setOpen(false);
                 }}
                 className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-blue-50 text-left transition-colors"

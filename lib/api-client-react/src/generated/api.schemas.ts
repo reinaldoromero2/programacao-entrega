@@ -308,15 +308,45 @@ export interface EntregaUpdate {
   sortOrder?: number | null;
 }
 
+/**
+ * @nullable
+ */
+export type MotoristaFrete = typeof MotoristaFrete[keyof typeof MotoristaFrete] | null;
+
+
+export const MotoristaFrete = {
+  RIPACK: 'RIPACK',
+  TRANSPORTADORA: 'TRANSPORTADORA',
+  '3º': '3º',
+  COLETA: 'COLETA',
+} as const;
+
 export interface Motorista {
   id: number;
   nome: string;
   placa: string;
+  /** @nullable */
+  frete?: MotoristaFrete;
 }
+
+/**
+ * @nullable
+ */
+export type MotoristasInputFrete = typeof MotoristasInputFrete[keyof typeof MotoristasInputFrete] | null;
+
+
+export const MotoristasInputFrete = {
+  RIPACK: 'RIPACK',
+  TRANSPORTADORA: 'TRANSPORTADORA',
+  '3º': '3º',
+  COLETA: 'COLETA',
+} as const;
 
 export interface MotoristasInput {
   nome: string;
   placa: string;
+  /** @nullable */
+  frete?: MotoristasInputFrete;
 }
 
 export interface ReorderInput {
