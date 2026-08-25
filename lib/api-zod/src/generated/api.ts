@@ -167,7 +167,8 @@ export const DeleteEntregaResponse = zod.void()
 export const ListMotoristasResponseItem = zod.object({
   "id": zod.number(),
   "nome": zod.string(),
-  "placa": zod.string()
+  "placa": zod.string(),
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish()
 })
 export const ListMotoristasResponse = zod.array(ListMotoristasResponseItem)
 
@@ -177,13 +178,15 @@ export const ListMotoristasResponse = zod.array(ListMotoristasResponseItem)
  */
 export const CreateMotoristaBody = zod.object({
   "nome": zod.string(),
-  "placa": zod.string()
+  "placa": zod.string(),
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish()
 })
 
 export const CreateMotoristaResponse = zod.object({
   "id": zod.number(),
   "nome": zod.string(),
-  "placa": zod.string()
+  "placa": zod.string(),
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish()
 })
 
 
@@ -196,13 +199,15 @@ export const UpdateMotoristaParams = zod.object({
 
 export const UpdateMotoristaBody = zod.object({
   "nome": zod.string(),
-  "placa": zod.string()
+  "placa": zod.string(),
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish()
 })
 
 export const UpdateMotoristaResponse = zod.object({
   "id": zod.number(),
   "nome": zod.string(),
-  "placa": zod.string()
+  "placa": zod.string(),
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish()
 })
 
 

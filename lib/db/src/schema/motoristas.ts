@@ -6,6 +6,7 @@ export const motoristasTable = pgTable("motoristas", {
   id: serial("id").primaryKey(),
   nome: text("nome").notNull(),
   placa: text("placa").notNull(),
+  frete: text("frete"),
 });
 
 export const insertMotoristasSchema = createInsertSchema(motoristasTable).omit({ id: true });

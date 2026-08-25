@@ -384,6 +384,9 @@ components:
           type: string
         placa:
           type: string
+        frete:
+          type: ["string", "null"]
+          enum: ["RIPACK", "TRANSPORTADORA", "3º", "COLETA", null]
 
     MotoristasInput:
       type: object
@@ -395,6 +398,9 @@ components:
           type: string
         placa:
           type: string
+        frete:
+          type: ["string", "null"]
+          enum: ["RIPACK", "TRANSPORTADORA", "3º", "COLETA", null]
 
     ReorderInput:
       type: object

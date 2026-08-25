@@ -5,9 +5,12 @@
  * API specification for Programação de Entrega
  * OpenAPI spec version: 0.1.0
  */
+import type { MotoristaFrete } from './motoristaFrete';
 
 export interface Motorista {
   id: number;
   nome: string;
   placa: string;
+  /** @nullable */
+  frete?: MotoristaFrete;
 }

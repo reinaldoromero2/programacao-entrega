@@ -24,7 +24,7 @@ router.post("/motoristas", async (req, res): Promise<void> => {
   }
   const [row] = await db
     .insert(motoristasTable)
-    .values({ nome: parsed.data.nome, placa: parsed.data.placa.toUpperCase() })
+    .values({ nome: parsed.data.nome, placa: parsed.data.placa.toUpperCase(), frete: parsed.data.frete ?? null })
     .returning();
   res.status(201).json(row);
 });
@@ -39,9 +39,10 @@ router.patch("/motoristas/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const updates: Record<string, string> = {};
+  const updates: Record<string, string | null> = {};
   if (parsed.data.nome) updates.nome = parsed.data.nome;
   if (parsed.data.placa) updates.placa = parsed.data.placa.toUpperCase();
+  if (parsed.data.frete !== undefined) updates.frete = parsed.data.frete;
 
   const [row] = await db
     .update(motoristasTable)
