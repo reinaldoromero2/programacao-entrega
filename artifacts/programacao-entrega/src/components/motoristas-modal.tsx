@@ -164,8 +164,9 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
             onChange={(e) => setNewFrete(e.target.value)}
             className="w-36 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
             aria-label="Frete padrão do motorista"
+            data-testid="select-frete-motorista"
           >
-            <option value="">Frete padrão</option>
+            <option value="">Transportadora/Frete</option>
             {FRETE_OPTIONS.map((frete) => <option key={frete} value={frete}>{frete}</option>)}
           </select>
           <Button
