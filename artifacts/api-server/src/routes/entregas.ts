@@ -21,6 +21,12 @@ import {
 
 const router: IRouter = Router();
 
+function getMonthEnd(mes: string): string {
+  const [year, month] = mes.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${mes}-${String(lastDay).padStart(2, "0")}`;
+}
+
 router.get("/entregas", async (req, res): Promise<void> => {
   const query = ListEntregasQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -131,7 +137,7 @@ router.get("/entregas/divergencias", async (_req, res): Promise<void> => {
 router.get("/entregas/cancelados", async (req, res): Promise<void> => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : new Date().toISOString().slice(0, 7);
   const start = `${mes}-01`;
-  const end   = `${mes}-31`;
+  const end   = getMonthEnd(mes);
 
   const rows = await db
     .select({
@@ -162,7 +168,7 @@ router.get("/entregas/por-frete", async (req, res): Promise<void> => {
   const mes   = typeof req.query.mes   === "string" ? req.query.mes   : new Date().toISOString().slice(0, 7);
   const frete = typeof req.query.frete === "string" ? req.query.frete : "";
   const start = `${mes}-01`;
-  const end   = `${mes}-31`;
+  const end   = getMonthEnd(mes);
 
   const cols = {
     id:           entregasTable.id,
@@ -209,7 +215,7 @@ router.get("/entregas/por-frete", async (req, res): Promise<void> => {
 router.get("/entregas/frete-mensal", async (req, res): Promise<void> => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : new Date().toISOString().slice(0, 7);
   const start = `${mes}-01`;
-  const end = `${mes}-31`;
+  const end = getMonthEnd(mes);
 
   // Frete rows
   const freteRows = await db
@@ -326,7 +332,7 @@ router.get("/entregas/resumo-mensal", async (req, res): Promise<void> => {
   const ano = parseInt(anoStr, 10);
   const mesNum = parseInt(mesStr, 10);
   const start = `${mes}-01`;
-  const end = `${mes}-31`;
+  const end = getMonthEnd(mes);
 
   // Entries with frete set (for active delivery counts)
   const freteRows = await db
@@ -392,7 +398,7 @@ router.get("/entregas/motorista-relatorio", async (req, res): Promise<void> => {
       AND ${entregasTable.motorista} <> ''`;
   } else if (filtro === "mes") {
     whereExpr = sql`${entregasTable.date} >= ${valor + "-01"}
-      AND ${entregasTable.date} <= ${valor + "-31"}
+      AND ${entregasTable.date} <= ${getMonthEnd(valor)}
       AND ${entregasTable.motorista} IS NOT NULL
       AND ${entregasTable.motorista} <> ''`;
   } else {
@@ -439,7 +445,7 @@ router.get("/entregas/motorista-datas", async (req, res): Promise<void> => {
   if (filtro === "dia") {
     dateFilter = sql`${entregasTable.date} = ${valor}`;
   } else if (filtro === "mes") {
-    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${getMonthEnd(valor)}`;
   } else {
     dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
   }
@@ -481,7 +487,7 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
   if (filtro === "dia") {
     dateFilter = sql`${entregasTable.date} = ${valor}`;
   } else if (filtro === "mes") {
-    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${getMonthEnd(valor)}`;
   } else {
     dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
   }
@@ -549,7 +555,7 @@ router.get("/entregas/cliente-datas", async (req, res): Promise<void> => {
   if (filtro === "dia") {
     dateFilter = sql`${entregasTable.date} = ${valor}`;
   } else if (filtro === "mes") {
-    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${getMonthEnd(valor)}`;
   } else {
     dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
   }

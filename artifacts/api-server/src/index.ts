@@ -24,6 +24,7 @@ async function assertSchema(): Promise<void> {
 
   const client = await pool.connect();
   try {
+    await client.query(`ALTER TABLE entregas ADD COLUMN IF NOT EXISTS frete text`);
     await client.query(`ALTER TABLE motoristas ADD COLUMN IF NOT EXISTS frete text`);
 
     const result = await client.query<{ table_name: string }>(
@@ -42,6 +43,21 @@ async function assertSchema(): Promise<void> {
         { missing },
         "Schema validation failed — tables not found in database. " +
           "Run `pnpm --filter @workspace/db run push` and redeploy.",
+      );
+      process.exit(1);
+    }
+
+    const columns = await client.query<{ column_name: string }>(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'entregas'
+          AND column_name = 'frete'`,
+    );
+
+    if (columns.rowCount === 0) {
+      logger.error(
+        "Schema validation failed — column entregas.frete not found in database.",
       );
       process.exit(1);
     }
