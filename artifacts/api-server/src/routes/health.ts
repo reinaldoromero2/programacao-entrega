@@ -9,7 +9,15 @@ declare const __BUILD_RELEASE__: string;
 
 const router: IRouter = Router();
 
-router.get("/healthz", async (_req, res) => {
+router.get("/ping", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+router.get("/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok", db: "not_checked", release: __BUILD_RELEASE__ });
+});
+
+router.get("/readyz", async (_req, res) => {
   let db: "ok" | "error" = "error";
   try {
     const client = await pool.connect();

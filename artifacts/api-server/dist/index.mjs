@@ -28141,7 +28141,7 @@ var require_pino = __commonJS({
     function pinoBundlerAbsolutePath(p) {
       try {
         const path = __require("path");
-        const outputDir = "/home/runner/workspace/artifacts/api-server/dist";
+        const outputDir = "C:\\Users\\Expedicao\\Desktop\\programacao-entrega\\artifacts\\api-server\\dist";
         return path.resolve(outputDir, p.replace(/^\.\//, ""));
       } catch (e) {
         const f = new Function("p", "return new URL(p, import.meta.url).pathname");
@@ -87653,29 +87653,34 @@ var DeleteEntregaResponse = voidType();
 var ListMotoristasResponseItem = objectType({
   "id": numberType(),
   "nome": stringType(),
-  "placa": stringType()
+  "placa": stringType(),
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish()
 });
 var ListMotoristasResponse = arrayType(ListMotoristasResponseItem);
 var CreateMotoristaBody = objectType({
   "nome": stringType(),
-  "placa": stringType()
+  "placa": stringType(),
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish()
 });
 var CreateMotoristaResponse = objectType({
   "id": numberType(),
   "nome": stringType(),
-  "placa": stringType()
+  "placa": stringType(),
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish()
 });
 var UpdateMotoristaParams = objectType({
   "id": coerce.number()
 });
 var UpdateMotoristaBody = objectType({
   "nome": stringType(),
-  "placa": stringType()
+  "placa": stringType(),
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish()
 });
 var UpdateMotoristaResponse = objectType({
   "id": numberType(),
   "nome": stringType(),
-  "placa": stringType()
+  "placa": stringType(),
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish()
 });
 var DeleteMotoristaParams = objectType({
   "id": coerce.number()
@@ -105806,7 +105811,7 @@ function date5(params) {
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v4/classic/external.js
 config(en_default2());
 
-// ../../node_modules/.pnpm/drizzle-zod@0.8.3_drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0__zod@3.25.76/node_modules/drizzle-zod/index.mjs
+// ../../node_modules/.pnpm/drizzle-zod@0.8.3_drizzle-o_9023862330606cbd2d7b4dbe0f6a6add/node_modules/drizzle-zod/index.mjs
 var CONSTANTS = {
   INT8_MIN: -128,
   INT8_MAX: 127,
@@ -106077,7 +106082,8 @@ var insertEntregaSchema = createInsertSchema(entregasTable).omit({ id: true });
 var motoristasTable = pgTable("motoristas", {
   id: serial("id").primaryKey(),
   nome: text("nome").notNull(),
-  placa: text("placa").notNull()
+  placa: text("placa").notNull(),
+  frete: text("frete")
 });
 var insertMotoristasSchema = createInsertSchema(motoristasTable).omit({ id: true });
 
@@ -106124,7 +106130,13 @@ var db = drizzle(pool, { schema: schema_exports });
 
 // src/routes/health.ts
 var router = (0, import_express.Router)();
-router.get("/healthz", async (_req, res) => {
+router.get("/ping", (_req, res) => {
+  res.json({ status: "ok" });
+});
+router.get("/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok", db: "not_checked", release: "20260914105039" });
+});
+router.get("/readyz", async (_req, res) => {
   let db2 = "error";
   try {
     const client = await pool.connect();
@@ -106139,7 +106151,7 @@ router.get("/healthz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260818162004" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "20260914105039" });
 });
 var health_default = router;
 
@@ -106149,6 +106161,11 @@ var XLSX = __toESM(require_xlsx(), 1);
 var import_multer = __toESM(require_multer(), 1);
 var upload = (0, import_multer.default)({ storage: import_multer.default.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 var router2 = (0, import_express2.Router)();
+function getMonthEnd(mes) {
+  const [year, month] = mes.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${mes}-${String(lastDay).padStart(2, "0")}`;
+}
 router2.get("/entregas", async (req, res) => {
   const query = ListEntregasQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -106219,7 +106236,7 @@ router2.get("/entregas/divergencias", async (_req, res) => {
 router2.get("/entregas/cancelados", async (req, res) => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
   const start2 = `${mes}-01`;
-  const end = `${mes}-31`;
+  const end = getMonthEnd(mes);
   const rows = await db.select({
     id: entregasTable.id,
     date: entregasTable.date,
@@ -106243,7 +106260,7 @@ router2.get("/entregas/por-frete", async (req, res) => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
   const frete = typeof req.query.frete === "string" ? req.query.frete : "";
   const start2 = `${mes}-01`;
-  const end = `${mes}-31`;
+  const end = getMonthEnd(mes);
   const cols = {
     id: entregasTable.id,
     date: entregasTable.date,
@@ -106280,7 +106297,7 @@ router2.get("/entregas/por-frete", async (req, res) => {
 router2.get("/entregas/frete-mensal", async (req, res) => {
   const mes = typeof req.query.mes === "string" ? req.query.mes : (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
   const start2 = `${mes}-01`;
-  const end = `${mes}-31`;
+  const end = getMonthEnd(mes);
   const freteRows = await db.select({ date: entregasTable.date, frete: entregasTable.frete }).from(entregasTable).where(sql`${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end} AND ${entregasTable.frete} IS NOT NULL`).orderBy(asc(entregasTable.date));
   const cancelRows = await db.select({ date: entregasTable.date }).from(entregasTable).where(sql`
       ${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end}
@@ -106373,7 +106390,7 @@ router2.get("/entregas/resumo-mensal", async (req, res) => {
   const ano = parseInt(anoStr, 10);
   const mesNum = parseInt(mesStr, 10);
   const start2 = `${mes}-01`;
-  const end = `${mes}-31`;
+  const end = getMonthEnd(mes);
   const freteRows = await db.select({
     frete: entregasTable.frete
   }).from(entregasTable).where(sql`${entregasTable.date} >= ${start2} AND ${entregasTable.date} <= ${end} AND ${entregasTable.frete} IS NOT NULL`);
@@ -106421,7 +106438,7 @@ router2.get("/entregas/motorista-relatorio", async (req, res) => {
       AND ${entregasTable.motorista} <> ''`;
   } else if (filtro === "mes") {
     whereExpr = sql`${entregasTable.date} >= ${valor + "-01"}
-      AND ${entregasTable.date} <= ${valor + "-31"}
+      AND ${entregasTable.date} <= ${getMonthEnd(valor)}
       AND ${entregasTable.motorista} IS NOT NULL
       AND ${entregasTable.motorista} <> ''`;
   } else {
@@ -106455,7 +106472,7 @@ router2.get("/entregas/motorista-datas", async (req, res) => {
   if (filtro === "dia") {
     dateFilter = sql`${entregasTable.date} = ${valor}`;
   } else if (filtro === "mes") {
-    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${getMonthEnd(valor)}`;
   } else {
     dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
   }
@@ -106486,7 +106503,7 @@ router2.get("/entregas/cliente-relatorio", async (req, res) => {
   if (filtro === "dia") {
     dateFilter = sql`${entregasTable.date} = ${valor}`;
   } else if (filtro === "mes") {
-    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${getMonthEnd(valor)}`;
   } else {
     dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
   }
@@ -106525,7 +106542,7 @@ router2.get("/entregas/cliente-datas", async (req, res) => {
   if (filtro === "dia") {
     dateFilter = sql`${entregasTable.date} = ${valor}`;
   } else if (filtro === "mes") {
-    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${valor + "-31"}`;
+    dateFilter = sql`${entregasTable.date} >= ${valor + "-01"} AND ${entregasTable.date} <= ${getMonthEnd(valor)}`;
   } else {
     dateFilter = sql`${entregasTable.date} >= ${valor + "-01-01"} AND ${entregasTable.date} <= ${valor + "-12-31"}`;
   }
@@ -106723,7 +106740,7 @@ router3.post("/motoristas", async (req, res) => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [row] = await db.insert(motoristasTable).values({ nome: parsed.data.nome, placa: parsed.data.placa.toUpperCase() }).returning();
+  const [row] = await db.insert(motoristasTable).values({ nome: parsed.data.nome, placa: parsed.data.placa.toUpperCase(), frete: parsed.data.frete ?? null }).returning();
   res.status(201).json(row);
 });
 router3.patch("/motoristas/:id", async (req, res) => {
@@ -106740,6 +106757,7 @@ router3.patch("/motoristas/:id", async (req, res) => {
   const updates = {};
   if (parsed.data.nome) updates.nome = parsed.data.nome;
   if (parsed.data.placa) updates.placa = parsed.data.placa.toUpperCase();
+  if (parsed.data.frete !== void 0) updates.frete = parsed.data.frete;
   const [row] = await db.update(motoristasTable).set(updates).where(eq(motoristasTable.id, id)).returning();
   if (!row) {
     res.status(404).json({ error: "Motorista n\xE3o encontrado" });
@@ -107002,6 +107020,8 @@ async function assertSchema() {
   const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro", "faturamento_diario", "faturamento_meta"];
   const client = await pool.connect();
   try {
+    await client.query(`ALTER TABLE entregas ADD COLUMN IF NOT EXISTS frete text`);
+    await client.query(`ALTER TABLE motoristas ADD COLUMN IF NOT EXISTS frete text`);
     const result = await client.query(
       `SELECT table_name
          FROM information_schema.tables
@@ -107015,6 +107035,19 @@ async function assertSchema() {
       logger.error(
         { missing },
         "Schema validation failed \u2014 tables not found in database. Run `pnpm --filter @workspace/db run push` and redeploy."
+      );
+      process.exit(1);
+    }
+    const columns = await client.query(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'entregas'
+          AND column_name = 'frete'`
+    );
+    if (columns.rowCount === 0) {
+      logger.error(
+        "Schema validation failed \u2014 column entregas.frete not found in database."
       );
       process.exit(1);
     }
