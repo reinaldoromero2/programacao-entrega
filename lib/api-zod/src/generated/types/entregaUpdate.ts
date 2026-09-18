@@ -13,6 +13,8 @@ import type { EntregaUpdateUnidade } from './entregaUpdateUnidade';
 import type { EntregaUpdateV } from './entregaUpdateV';
 
 export interface EntregaUpdate {
+  /** Date in YYYY-MM-DD format */
+  date?: string;
   checked?: EntregaUpdateChecked;
   /** @nullable */
   cliente?: string | null;

@@ -338,6 +338,9 @@ components:
     EntregaUpdate:
       type: object
       properties:
+        date:
+          type: string
+          description: Date in YYYY-MM-DD format
         checked:
           type: string
           enum: ["none", "filled", "confirmed"]

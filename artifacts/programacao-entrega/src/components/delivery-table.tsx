@@ -93,9 +93,11 @@ function gridTemplate(widths: number[]) {
 interface DeliveryTableProps {
   entregas: Entrega[];
   date: string;
+  selectedIds: Set<number>;
+  onToggleSelection: (id: number) => void;
 }
 
-export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
+export function DeliveryTable({ entregas, date, selectedIds, onToggleSelection }: DeliveryTableProps) {
   const queryClient = useQueryClient();
   const reorderEntregas = useReorderEntregas();
 
@@ -231,6 +233,8 @@ export function DeliveryTable({ entregas, date }: DeliveryTableProps) {
               onDragEnd={handleDragEnd}
               isDragging={draggedId === entrega.id}
               isDragOver={dragOverId === entrega.id}
+              isSelected={selectedIds.has(entrega.id)}
+              onToggleSelection={() => onToggleSelection(entrega.id)}
             />
           ))}
 
@@ -257,9 +261,11 @@ interface DeliveryRowProps {
   onDragEnd: () => void;
   isDragging: boolean;
   isDragOver: boolean;
+  isSelected: boolean;
+  onToggleSelection: () => void;
 }
 
-function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver }: DeliveryRowProps) {
+function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, onToggleSelection }: DeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const updateEntrega = useUpdateEntrega();
@@ -644,7 +650,16 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
       {/* Actions */}
       <div className="p-1 flex items-center justify-center gap-1 relative overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
+        <label className="absolute left-1 z-10 flex items-center justify-center w-6 h-6 cursor-pointer print:hidden" title="Selecionar carga">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelection}
+            className="w-4 h-4 accent-blue-600 cursor-pointer"
+            aria-label={`Selecionar carga ${entrega.cliente}`}
+          />
+        </label>
+        <div className="absolute right-0 inset-y-0 flex items-center justify-center gap-0.5 pl-7 pr-1 bg-white/90 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity print:hidden">
           <div
             onMouseDown={enableDrag}
             onMouseUp={disableDrag}

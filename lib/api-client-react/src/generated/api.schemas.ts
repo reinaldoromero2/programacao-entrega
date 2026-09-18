@@ -283,6 +283,8 @@ export const EntregaUpdateFrete = {
 } as const;
 
 export interface EntregaUpdate {
+  /** Date in YYYY-MM-DD format */
+  date?: string;
   checked?: EntregaUpdateChecked;
   /** @nullable */
   cliente?: string | null;

@@ -117,6 +117,7 @@ export const UpdateEntregaParams = zod.object({
 })
 
 export const UpdateEntregaBody = zod.object({
+  "date": zod.string().optional().describe('Date in YYYY-MM-DD format'),
   "checked": zod.enum(['none', 'filled', 'confirmed']).optional(),
   "cliente": zod.string().nullish(),
   "hrs": zod.string().nullish(),
