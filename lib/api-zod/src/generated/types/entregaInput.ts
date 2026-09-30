@@ -14,6 +14,8 @@ import type { EntregaInputV } from './entregaInputV';
 
 export interface EntregaInput {
   date: string;
+  /** Marks this delivery as an appointment */
+  agendamento?: boolean;
   /** @nullable */
   sortOrder?: number | null;
   checked?: EntregaInputChecked;

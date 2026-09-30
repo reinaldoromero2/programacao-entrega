@@ -23,9 +23,26 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MotoristasModal } from "@/components/motoristas-modal";
 import { MotivosCancelamentoModal } from "@/components/motivos-cancelamento-modal";
 import { ClientesCadastroModal } from "@/components/clientes-cadastro-modal";
+import { ClientesAgendamentoModal } from "@/components/clientes-agendamento-modal";
 import { BgColorModal } from "@/components/bg-color-modal";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
+const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
+const ZOOM_STORAGE_KEY = "programacao-entrega-zoom";
+const MIN_ZOOM = 0.8;
+const MAX_ZOOM = 1.3;
+const ZOOM_STEP = 0.1;
+
+function clampZoom(value: number) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(1))));
+}
+
+export function applyAppZoom(zoom: number) {
+  const clampedZoom = clampZoom(zoom);
+  document.documentElement.style.zoom = String(clampedZoom);
+  localStorage.setItem(ZOOM_STORAGE_KEY, String(clampedZoom));
+  window.dispatchEvent(new CustomEvent("app-zoom-change", { detail: clampedZoom }));
+  return clampedZoom;
+}
 
 export function OpcoesMenu() {
   const { toast } = useToast();
@@ -39,7 +56,23 @@ export function OpcoesMenu() {
   const [motoOpen, setMotoOpen] = useState(false);
   const [motivosOpen, setMotivosOpen] = useState(false);
   const [clientesOpen, setClientesOpen] = useState(false);
+  const [agendamentoOpen, setAgendamentoOpen] = useState(false);
   const [bgColorOpen, setBgColorOpen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    const savedZoom = Number(localStorage.getItem(ZOOM_STORAGE_KEY));
+    if (Number.isFinite(savedZoom)) setZoom(clampZoom(savedZoom));
+
+    const handleZoomChange = (event: Event) => {
+      const nextZoom = (event as CustomEvent<number>).detail;
+      if (Number.isFinite(nextZoom)) setZoom(clampZoom(nextZoom));
+    };
+    window.addEventListener("app-zoom-change", handleZoomChange);
+    return () => window.removeEventListener("app-zoom-change", handleZoomChange);
+  }, []);
+
+  const updateZoom = (nextZoom: number) => setZoom(applyAppZoom(nextZoom));
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -131,6 +164,23 @@ export function OpcoesMenu() {
 
           <DropdownMenuSeparator />
 
+          <DropdownMenuItem onClick={() => updateZoom(zoom - ZOOM_STEP)} className="gap-2 cursor-pointer">
+            <ZoomOut className="w-4 h-4" />
+            Diminuir zoom
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onClick={() => updateZoom(1)} className="gap-2 cursor-pointer">
+            <RotateCcw className="w-4 h-4" />
+            Zoom: {Math.round(zoom * 100)}%
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onClick={() => updateZoom(zoom + ZOOM_STEP)} className="gap-2 cursor-pointer">
+            <ZoomIn className="w-4 h-4" />
+            Aumentar zoom
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
           <DropdownMenuItem
             onClick={() => setMotoOpen(true)}
             className="gap-2 cursor-pointer"
@@ -155,6 +205,14 @@ export function OpcoesMenu() {
             Clientes Cadastro
           </DropdownMenuItem>
 
+          <DropdownMenuItem
+            onClick={() => setAgendamentoOpen(true)}
+            className="gap-2 cursor-pointer"
+          >
+            <Building2 className="w-4 h-4" />
+            Clientes c/ Agendamento
+          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
@@ -171,6 +229,7 @@ export function OpcoesMenu() {
       <MotoristasModal open={motoOpen} onOpenChange={setMotoOpen} />
       <MotivosCancelamentoModal open={motivosOpen} onOpenChange={setMotivosOpen} />
       <ClientesCadastroModal open={clientesOpen} onOpenChange={setClientesOpen} />
+      <ClientesAgendamentoModal open={agendamentoOpen} onOpenChange={setAgendamentoOpen} />
       <BgColorModal open={bgColorOpen} onOpenChange={setBgColorOpen} />
 
       {/* Import confirmation */}

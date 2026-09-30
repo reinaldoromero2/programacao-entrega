@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 export const entregasTable = pgTable("entregas", {
   id: serial("id").primaryKey(),
   date: date("date", { mode: "string" }).notNull(),
+  agendamento: boolean("agendamento").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   checked: text("checked").notNull().default("none"),
   cliente: text("cliente").notNull(),

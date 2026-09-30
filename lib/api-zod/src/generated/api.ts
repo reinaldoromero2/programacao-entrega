@@ -27,6 +27,7 @@ export const ListEntregasQueryParams = zod.object({
 export const ListEntregasResponseItem = zod.object({
   "id": zod.number(),
   "date": zod.string().describe('Date in YYYY-MM-DD format'),
+  "agendamento": zod.boolean().optional().describe('Indicates the delivery was created from the appointment scheduler'),
   "sortOrder": zod.number(),
   "checked": zod.enum(['none', 'filled', 'confirmed']).describe('S column state: none=unchecked, filled=checked, confirmed=verified'),
   "cliente": zod.string(),
@@ -49,6 +50,7 @@ export const ListEntregasResponse = zod.array(ListEntregasResponseItem)
  */
 export const CreateEntregaBody = zod.object({
   "date": zod.string(),
+  "agendamento": zod.boolean().optional().describe('Marks this delivery as an appointment'),
   "sortOrder": zod.number().nullish(),
   "checked": zod.enum(['none', 'filled', 'confirmed']).optional(),
   "cliente": zod.string(),
@@ -67,6 +69,7 @@ export const CreateEntregaBody = zod.object({
 export const CreateEntregaResponse = zod.object({
   "id": zod.number(),
   "date": zod.string().describe('Date in YYYY-MM-DD format'),
+  "agendamento": zod.boolean().optional().describe('Indicates the delivery was created from the appointment scheduler'),
   "sortOrder": zod.number(),
   "checked": zod.enum(['none', 'filled', 'confirmed']).describe('S column state: none=unchecked, filled=checked, confirmed=verified'),
   "cliente": zod.string(),
@@ -93,6 +96,7 @@ export const GetEntregaParams = zod.object({
 export const GetEntregaResponse = zod.object({
   "id": zod.number(),
   "date": zod.string().describe('Date in YYYY-MM-DD format'),
+  "agendamento": zod.boolean().optional().describe('Indicates the delivery was created from the appointment scheduler'),
   "sortOrder": zod.number(),
   "checked": zod.enum(['none', 'filled', 'confirmed']).describe('S column state: none=unchecked, filled=checked, confirmed=verified'),
   "cliente": zod.string(),
@@ -136,6 +140,7 @@ export const UpdateEntregaBody = zod.object({
 export const UpdateEntregaResponse = zod.object({
   "id": zod.number(),
   "date": zod.string().describe('Date in YYYY-MM-DD format'),
+  "agendamento": zod.boolean().optional().describe('Indicates the delivery was created from the appointment scheduler'),
   "sortOrder": zod.number(),
   "checked": zod.enum(['none', 'filled', 'confirmed']).describe('S column state: none=unchecked, filled=checked, confirmed=verified'),
   "cliente": zod.string(),

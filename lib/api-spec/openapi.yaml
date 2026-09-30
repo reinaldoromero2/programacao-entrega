@@ -249,6 +249,9 @@ components:
         date:
           type: string
           description: Date in YYYY-MM-DD format
+        agendamento:
+          type: boolean
+          description: Indicates the delivery was created from the appointment scheduler
         sortOrder:
           type: integer
         checked:
@@ -302,6 +305,9 @@ components:
       properties:
         date:
           type: string
+        agendamento:
+          type: boolean
+          description: Marks this delivery as an appointment
         sortOrder:
           type: ["integer", "null"]
         checked:

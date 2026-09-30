@@ -16,6 +16,8 @@ export interface Entrega {
   id: number;
   /** Date in YYYY-MM-DD format */
   date: string;
+  /** Indicates the delivery was created from the appointment scheduler */
+  agendamento?: boolean;
   sortOrder: number;
   /** S column state: none=unchecked, filled=checked, confirmed=verified */
   checked: EntregaChecked;
