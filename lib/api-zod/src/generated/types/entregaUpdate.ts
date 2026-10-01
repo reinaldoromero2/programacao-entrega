@@ -16,6 +16,8 @@ import type { EntregaUpdateV } from './entregaUpdateV';
 export interface EntregaUpdate {
   /** Date in YYYY-MM-DD format */
   date?: string;
+  /** Marks an existing delivery as an appointment */
+  agendamento?: boolean;
   checked?: EntregaUpdateChecked;
   /** @nullable */
   cliente?: string | null;

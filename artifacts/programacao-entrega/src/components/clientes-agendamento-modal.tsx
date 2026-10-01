@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, ListPlus, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getListEntregasQueryKey, useCreateEntrega, useUpdateEntrega, type Entrega } from "@workspace/api-client-react";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
@@ -28,8 +28,10 @@ interface AgendamentoMensalItem {
   date: string;
   cliente: string;
   hrs: string | null;
+  unidade: Entrega["unidade"];
   cg: Entrega["cg"];
   statusManual: Entrega["statusManual"];
+  agendamento: boolean;
 }
 
 async function fetchAgendamentosDoMes(month: Date): Promise<AgendamentoMensalItem[]> {
@@ -40,8 +42,16 @@ async function fetchAgendamentosDoMes(month: Date): Promise<AgendamentoMensalIte
   const deliveries = await response.json() as Entrega[];
 
   return deliveries
-    .filter((delivery) => delivery.agendamento)
-    .map(({ id, date, cliente, hrs, cg, statusManual }) => ({ id, date, cliente, hrs, cg, statusManual }))
+    .map(({ id, date, cliente, hrs, unidade, cg, statusManual, agendamento }) => ({
+      id,
+      date,
+      cliente,
+      hrs,
+      unidade,
+      cg,
+      statusManual,
+      agendamento: agendamento ?? false,
+    }))
     .sort((first, second) => first.date.localeCompare(second.date) || first.cliente.localeCompare(second.cliente));
 }
 
@@ -81,8 +91,11 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
   ]);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showImportPicker, setShowImportPicker] = useState(false);
+  const [importDate, setImportDate] = useState("");
+  const [importingId, setImportingId] = useState<number | null>(null);
   const monthKey = format(month, "yyyy-MM");
-  const { data: monthlyAgendamentos = [], isLoading: isLoadingMonth, isError: isMonthError } = useQuery({
+  const { data: monthlyDeliveries = [], isLoading: isLoadingMonth, isError: isMonthError } = useQuery({
     queryKey: ["clientes-agendamento-mensal", monthKey],
     queryFn: () => fetchAgendamentosDoMes(month),
     enabled: open,
@@ -90,6 +103,14 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
+  const monthlyAgendamentos = monthlyDeliveries.filter((item) => item.agendamento);
+  const availableImportDates = Array.from(new Set(
+    monthlyDeliveries.filter((item) => !item.agendamento).map((item) => item.date)
+  )).sort();
+  const activeImportDate = availableImportDates.includes(importDate)
+    ? importDate
+    : availableImportDates[0] ?? "";
+  const deliveriesToImport = monthlyDeliveries.filter((item) => !item.agendamento && item.date === activeImportDate);
 
   const refreshAgenda = async () => {
     setIsRefreshing(true);
@@ -97,6 +118,39 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
       await queryClient.refetchQueries({ queryKey: ["clientes-agendamento-mensal", monthKey], type: "active" });
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handleImportDelivery = async (item: AgendamentoMensalItem) => {
+    if (item.agendamento || importingId !== null) return;
+
+    const monthlyQueryKey = ["clientes-agendamento-mensal", monthKey];
+    const dailyQueryKey = getListEntregasQueryKey({ date: item.date });
+    setImportingId(item.id);
+    queryClient.setQueryData<AgendamentoMensalItem[]>(monthlyQueryKey, (items) =>
+      items?.map((delivery) => delivery.id === item.id ? { ...delivery, agendamento: true } : delivery)
+    );
+    queryClient.setQueryData<Entrega[]>(dailyQueryKey, (deliveries) =>
+      deliveries?.map((delivery) => delivery.id === item.id ? { ...delivery, agendamento: true } : delivery)
+    );
+
+    try {
+      await updateEntrega.mutateAsync({ id: item.id, data: { agendamento: true } });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: monthlyQueryKey }),
+        queryClient.invalidateQueries({ queryKey: dailyQueryKey }),
+      ]);
+      toast({ title: "Carga importada para a agenda", description: `${item.cliente} · ${item.hrs || "sem horário"}` });
+    } catch (error) {
+      void queryClient.invalidateQueries({ queryKey: monthlyQueryKey });
+      void queryClient.invalidateQueries({ queryKey: dailyQueryKey });
+      toast({
+        title: "Não foi possível importar a carga.",
+        description: error instanceof Error ? error.message : "Verifique a conexão e tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setImportingId(null);
     }
   };
 
@@ -298,6 +352,18 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
                 <Button type="button" variant="ghost" size="icon" aria-label="Próximo mês" onClick={() => setMonth((current) => addMonths(current, 1))} className="h-7 w-7">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
+                <Button
+                  type="button"
+                  variant={showImportPicker ? "secondary" : "outline"}
+                  size="icon"
+                  aria-label="Importar carga da programação"
+                  aria-expanded={showImportPicker}
+                  title="Importar carga da programação"
+                  onClick={() => setShowImportPicker((current) => !current)}
+                  className="h-7 w-7"
+                >
+                  <ListPlus className="h-4 w-4" />
+                </Button>
                 <Button type="button" variant="outline" size="sm" onClick={refreshAgenda} disabled={isRefreshing} className="h-7 gap-1 px-2 text-xs">
                   {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   Atualizar
@@ -312,54 +378,102 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
                 </div>
               ) : isMonthError ? (
                 <p className="py-8 text-center text-sm text-red-600">Não foi possível carregar a agenda deste mês.</p>
-              ) : monthlyAgendamentos.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">Nenhum agendamento salvo neste mês.</p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {Object.entries(
-                    monthlyAgendamentos.reduce<Record<string, AgendamentoMensalItem[]>>((acc, item) => {
-                      const key = item.date;
-                      acc[key] = acc[key] ? [...acc[key], item] : [item];
-                      return acc;
-                    }, {})
-                  ).map(([date, items]) => (
-                    <div key={date} className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-2 py-1.5">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                          {format(new Date(`${date}T12:00:00`), "EEE dd/MM", { locale: ptBR })}
-                        </span>
-                        <span className="text-[10px] font-medium text-slate-500">{items.length} agendamento{items.length !== 1 ? "s" : ""}</span>
-                      </div>
+                  {monthlyAgendamentos.length === 0 && !showImportPicker ? (
+                    <p className="py-8 text-center text-sm text-slate-500">Nenhum agendamento salvo neste mês.</p>
+                  ) : (
+                    Object.entries(
+                      monthlyAgendamentos.reduce<Record<string, AgendamentoMensalItem[]>>((acc, item) => {
+                        const key = item.date;
+                        acc[key] = acc[key] ? [...acc[key], item] : [item];
+                        return acc;
+                      }, {})
+                    ).map(([date, items]) => (
+                      <div key={date} className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-2 py-1.5">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                            {format(new Date(`${date}T12:00:00`), "EEE dd/MM", { locale: ptBR })}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-500">{items.length} agendamento{items.length !== 1 ? "s" : ""}</span>
+                        </div>
 
-                      <div className="flex flex-col">
-                        {items.map((item) => (
-                          <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_58px] items-center gap-2 border-b border-slate-100 px-2 py-2 last:border-0">
-                            <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-800" title={item.cliente}>
-                              <button
-                                type="button"
-                                onClick={() => handleStatusClick(item)}
-                                aria-label={`Alterar status de ${item.cliente}: ${getAppointmentStatus(item).label}`}
-                                title={`${getAppointmentStatus(item).label} (clique para alterar)`}
-                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                              >
-                                <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${getAppointmentStatus(item).color}`} />
-                              </button>
-                              <span className="truncate">{item.cliente}</span>
-                            </span>
-                            <span className="flex items-center justify-end gap-1 whitespace-nowrap text-xs font-semibold text-slate-600">
-                              <Clock3 className="h-3.5 w-3.5 text-blue-600" />
-                              {item.hrs || "—"}
-                            </span>
-                          </div>
-                        ))}
+                        <div className="flex flex-col">
+                          {items.map((item) => (
+                            <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_58px] items-center gap-2 border-b border-slate-100 px-2 py-2 last:border-0">
+                              <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-800" title={item.cliente}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStatusClick(item)}
+                                  aria-label={`Alterar status de ${item.cliente}: ${getAppointmentStatus(item).label}`}
+                                  title={`${getAppointmentStatus(item).label} (clique para alterar)`}
+                                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                >
+                                  <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${getAppointmentStatus(item).color}`} />
+                                </button>
+                                <span className="truncate">{item.cliente}</span>
+                              </span>
+                              <span className="flex items-center justify-end gap-1 whitespace-nowrap text-xs font-semibold text-slate-600">
+                                <Clock3 className="h-3.5 w-3.5 text-blue-600" />
+                                {item.hrs || "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
+                    ))
+                  )}
+
+                  {showImportPicker && (
+                    <div className="border-t border-slate-200 pt-3">
+                      <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-600">
+                        Dia da programação
+                        <select
+                          value={activeImportDate}
+                          onChange={(event) => setImportDate(event.target.value)}
+                          className="h-9 rounded border border-slate-200 bg-white px-2 text-sm text-slate-700"
+                        >
+                          <option value="">Nenhuma carga disponível</option>
+                          {availableImportDates.map((date) => (
+                            <option key={date} value={date}>
+                              {format(new Date(`${date}T12:00:00`), "EEE dd/MM", { locale: ptBR })}
+                              {` · ${monthlyDeliveries.filter((item) => !item.agendamento && item.date === date).length} cargas`}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {deliveriesToImport.length === 0 ? (
+                        <p className="py-4 text-center text-sm text-slate-500">Não há cargas para importar neste dia.</p>
+                      ) : (
+                        <div className="mt-2 flex flex-col divide-y divide-slate-100">
+                          {deliveriesToImport.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between gap-2 py-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-slate-800">{item.cliente}</p>
+                                <p className="text-xs text-slate-500">{item.hrs || "Sem horário"} · {item.unidade}</p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleImportDelivery(item)}
+                                disabled={importingId !== null}
+                                className="h-8 shrink-0 gap-1 px-2 text-xs"
+                              >
+                                {importingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                Importar
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
             <div className="border-t border-slate-200 px-3 py-2 text-xs text-slate-500">
-              {monthlyAgendamentos.length} entrega{monthlyAgendamentos.length !== 1 ? "s" : ""} no mês
+              {monthlyAgendamentos.length} agendamento{monthlyAgendamentos.length !== 1 ? "s" : ""} no mês
             </div>
           </section>
         </div>
