@@ -11,4 +11,12 @@ export type ListEntregasParams = {
  * Date in YYYY-MM-DD format (defaults to today)
  */
 date?: string;
+/**
+ * Start date in YYYY-MM-DD format for a range query
+ */
+from?: string;
+/**
+ * End date in YYYY-MM-DD format for a range query
+ */
+to?: string;
 };

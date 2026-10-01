@@ -19,6 +19,7 @@ export const entregasTable = pgTable("entregas", {
   v: text("v"),
   divergencias: text("divergencias"),
   frete: text("frete"),
+  statusManual: text("status_manual"),
 });
 
 export const insertEntregaSchema = createInsertSchema(entregasTable).omit({ id: true });

@@ -9,6 +9,7 @@ import type { EntregaCg } from './entregaCg';
 import type { EntregaChecked } from './entregaChecked';
 import type { EntregaFrete } from './entregaFrete';
 import type { EntregaNf } from './entregaNf';
+import type { EntregaStatusManual } from './entregaStatusManual';
 import type { EntregaUnidade } from './entregaUnidade';
 import type { EntregaV } from './entregaV';
 
@@ -63,4 +64,9 @@ export interface Entrega {
      * @nullable
      */
   frete?: EntregaFrete;
+  /**
+     * Manual appointment status color override
+     * @nullable
+     */
+  statusManual?: EntregaStatusManual;
 }

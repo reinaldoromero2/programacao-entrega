@@ -33,13 +33,23 @@ paths:
     get:
       operationId: listEntregas
       tags: [entregas]
-      summary: List all entregas for a given date
+      summary: List deliveries for a date or date range
       parameters:
         - in: query
           name: date
           schema:
             type: string
           description: Date in YYYY-MM-DD format (defaults to today)
+        - in: query
+          name: from
+          schema:
+            type: string
+          description: Start date in YYYY-MM-DD format for a range query
+        - in: query
+          name: to
+          schema:
+            type: string
+          description: End date in YYYY-MM-DD format for a range query
       responses:
         "200":
           description: List of entregas
@@ -295,6 +305,10 @@ components:
           type: ["string", "null"]
           enum: ["RIPACK", "TRANSPORTADORA", "3º", "COLETA", null]
           description: "Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA"
+        statusManual:
+          type: ["string", "null"]
+          enum: ["green", "red", "yellow", null]
+          description: Manual appointment status color override
 
     EntregaInput:
       type: object
@@ -340,6 +354,9 @@ components:
         frete:
           type: ["string", "null"]
           enum: ["RIPACK", "TRANSPORTADORA", "3º", "COLETA", null]
+        statusManual:
+          type: ["string", "null"]
+          enum: ["green", "red", "yellow", null]
 
     EntregaUpdate:
       type: object
@@ -377,6 +394,9 @@ components:
         frete:
           type: ["string", "null"]
           enum: ["RIPACK", "TRANSPORTADORA", "3º", "COLETA", null]
+        statusManual:
+          type: ["string", "null"]
+          enum: ["green", "red", "yellow", null]
         sortOrder:
           type: ["integer", "null"]
 

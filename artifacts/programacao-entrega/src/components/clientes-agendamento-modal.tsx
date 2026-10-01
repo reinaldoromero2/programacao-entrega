@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getListEntregasQueryKey, useCreateEntrega, type Entrega } from "@workspace/api-client-react";
+import { getListEntregasQueryKey, useCreateEntrega, useUpdateEntrega, type Entrega } from "@workspace/api-client-react";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -28,22 +28,39 @@ interface AgendamentoMensalItem {
   date: string;
   cliente: string;
   hrs: string | null;
+  cg: Entrega["cg"];
+  statusManual: Entrega["statusManual"];
 }
 
 async function fetchAgendamentosDoMes(month: Date): Promise<AgendamentoMensalItem[]> {
-  const dates = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) })
-    .map((day) => format(day, "yyyy-MM-dd"));
-  const dailyDeliveries = await Promise.all(dates.map(async (date) => {
-    const response = await fetch(`${API_BASE}/api/entregas?date=${date}`, { cache: "no-store" });
-    if (!response.ok) throw new Error(`Não foi possível carregar a programação de ${date}.`);
-    return response.json() as Promise<Entrega[]>;
-  }));
+  const from = format(startOfMonth(month), "yyyy-MM-dd");
+  const to = format(endOfMonth(month), "yyyy-MM-dd");
+  const response = await fetch(`${API_BASE}/api/entregas?from=${from}&to=${to}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Não foi possível carregar a programação de ${format(month, "MMMM yyyy", { locale: ptBR })}.`);
+  const deliveries = await response.json() as Entrega[];
 
-  return dailyDeliveries
-    .flat()
+  return deliveries
     .filter((delivery) => delivery.agendamento)
-    .map(({ id, date, cliente, hrs }) => ({ id, date, cliente, hrs }))
+    .map(({ id, date, cliente, hrs, cg, statusManual }) => ({ id, date, cliente, hrs, cg, statusManual }))
     .sort((first, second) => first.date.localeCompare(second.date) || first.cliente.localeCompare(second.cliente));
+}
+
+function getAppointmentStatus(item: AgendamentoMensalItem) {
+  if (item.statusManual) {
+    const manualStatus = {
+      green: { label: "CG conferido", color: "bg-green-500" },
+      red: { label: "CG com pendência", color: "bg-red-500" },
+      yellow: { label: "CG não conferido", color: "bg-yellow-400" },
+    };
+    return manualStatus[item.statusManual];
+  }
+  if (item.cg === "check") {
+    return { label: "CG conferido", color: "bg-green-500" };
+  }
+  if (item.cg === "x") {
+    return { label: "CG com pendência", color: "bg-red-500" };
+  }
+  return { label: "CG não conferido", color: "bg-yellow-400" };
 }
 
 interface ClientesAgendamentoModalProps {
@@ -54,6 +71,7 @@ interface ClientesAgendamentoModalProps {
 export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendamentoModalProps) {
   const queryClient = useQueryClient();
   const createEntrega = useCreateEntrega();
+  const updateEntrega = useUpdateEntrega();
   const { data: clientesCadastrados = [] } = useClientesCadastro();
   const [cliente, setCliente] = useState("");
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
@@ -62,13 +80,56 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
     { id: 0, date: format(new Date(), "yyyy-MM-dd"), hrs: "" },
   ]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const monthKey = format(month, "yyyy-MM");
   const { data: monthlyAgendamentos = [], isLoading: isLoadingMonth, isError: isMonthError } = useQuery({
     queryKey: ["clientes-agendamento-mensal", monthKey],
     queryFn: () => fetchAgendamentosDoMes(month),
     enabled: open,
     staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
+
+  const refreshAgenda = async () => {
+    setIsRefreshing(true);
+    try {
+      await queryClient.refetchQueries({ queryKey: ["clientes-agendamento-mensal", monthKey], type: "active" });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleStatusClick = (item: AgendamentoMensalItem) => {
+    const queryKey = ["clientes-agendamento-mensal", monthKey];
+    const current = queryClient.getQueryData<AgendamentoMensalItem[]>(queryKey)?.find((entry) => entry.id === item.id) ?? item;
+    const currentStatus = current.statusManual ?? (
+      current.cg === "check" ? "green" : current.cg === "x" ? "red" : "yellow"
+    );
+    const nextStatus = currentStatus === "green"
+      ? "red"
+      : currentStatus === "red"
+        ? "yellow"
+        : "green";
+
+    queryClient.setQueryData<AgendamentoMensalItem[]>(queryKey, (items) =>
+      items?.map((entry) => entry.id === item.id ? { ...entry, statusManual: nextStatus } : entry)
+    );
+    updateEntrega.mutate(
+      { id: item.id, data: { statusManual: nextStatus } },
+      {
+        onSuccess: () => void queryClient.invalidateQueries({ queryKey }),
+        onError: (error) => {
+          void queryClient.invalidateQueries({ queryKey });
+          toast({
+            title: "Não foi possível alterar o status.",
+            description: error instanceof Error ? error.message : "Verifique a conexão e tente novamente.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const updateDraft = (id: number, changes: Partial<Pick<AgendamentoRascunho, "date" | "hrs">>) => {
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...changes } : draft));
@@ -237,6 +298,10 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
                 <Button type="button" variant="ghost" size="icon" aria-label="Próximo mês" onClick={() => setMonth((current) => addMonths(current, 1))} className="h-7 w-7">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
+                <Button type="button" variant="outline" size="sm" onClick={refreshAgenda} disabled={isRefreshing} className="h-7 gap-1 px-2 text-xs">
+                  {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Atualizar
+                </Button>
               </div>
             </div>
 
@@ -250,17 +315,44 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
               ) : monthlyAgendamentos.length === 0 ? (
                 <p className="py-8 text-center text-sm text-slate-500">Nenhum agendamento salvo neste mês.</p>
               ) : (
-                <div className="flex flex-col gap-1">
-                  {monthlyAgendamentos.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[82px_minmax(0,1fr)_58px] items-center gap-2 border-b border-slate-100 px-2 py-2 last:border-0">
-                      <span className="text-xs font-medium capitalize text-slate-500">
-                        {format(new Date(`${item.date}T12:00:00`), "EEE dd/MM", { locale: ptBR })}
-                      </span>
-                      <span className="truncate text-sm font-medium text-slate-800" title={item.cliente}>{item.cliente}</span>
-                      <span className="flex items-center justify-end gap-1 whitespace-nowrap text-xs font-semibold text-slate-600">
-                        <Clock3 className="h-3.5 w-3.5 text-blue-600" />
-                        {item.hrs || "—"}
-                      </span>
+                <div className="flex flex-col gap-2">
+                  {Object.entries(
+                    monthlyAgendamentos.reduce<Record<string, AgendamentoMensalItem[]>>((acc, item) => {
+                      const key = item.date;
+                      acc[key] = acc[key] ? [...acc[key], item] : [item];
+                      return acc;
+                    }, {})
+                  ).map(([date, items]) => (
+                    <div key={date} className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-2 py-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                          {format(new Date(`${date}T12:00:00`), "EEE dd/MM", { locale: ptBR })}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500">{items.length} agendamento{items.length !== 1 ? "s" : ""}</span>
+                      </div>
+
+                      <div className="flex flex-col">
+                        {items.map((item) => (
+                          <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_58px] items-center gap-2 border-b border-slate-100 px-2 py-2 last:border-0">
+                            <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-800" title={item.cliente}>
+                              <button
+                                type="button"
+                                onClick={() => handleStatusClick(item)}
+                                aria-label={`Alterar status de ${item.cliente}: ${getAppointmentStatus(item).label}`}
+                                title={`${getAppointmentStatus(item).label} (clique para alterar)`}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                              >
+                                <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${getAppointmentStatus(item).color}`} />
+                              </button>
+                              <span className="truncate">{item.cliente}</span>
+                            </span>
+                            <span className="flex items-center justify-end gap-1 whitespace-nowrap text-xs font-semibold text-slate-600">
+                              <Clock3 className="h-3.5 w-3.5 text-blue-600" />
+                              {item.hrs || "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>

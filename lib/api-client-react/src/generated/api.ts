@@ -151,7 +151,7 @@ export const getListEntregasUrl = (params?: ListEntregasParams,) => {
 }
 
 /**
- * @summary List all entregas for a given date
+ * @summary List deliveries for a date or date range
  */
 export const listEntregas = async (params?: ListEntregasParams, options?: RequestInit): Promise<Entrega[]> => {
 
@@ -198,7 +198,7 @@ export type ListEntregasQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List all entregas for a given date
+ * @summary List deliveries for a date or date range
  */
 
 export function useListEntregas<TData = Awaited<ReturnType<typeof listEntregas>>, TError = ErrorType<unknown>>(

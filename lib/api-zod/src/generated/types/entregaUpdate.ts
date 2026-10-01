@@ -9,6 +9,7 @@ import type { EntregaUpdateCg } from './entregaUpdateCg';
 import type { EntregaUpdateChecked } from './entregaUpdateChecked';
 import type { EntregaUpdateFrete } from './entregaUpdateFrete';
 import type { EntregaUpdateNf } from './entregaUpdateNf';
+import type { EntregaUpdateStatusManual } from './entregaUpdateStatusManual';
 import type { EntregaUpdateUnidade } from './entregaUpdateUnidade';
 import type { EntregaUpdateV } from './entregaUpdateV';
 
@@ -36,6 +37,8 @@ export interface EntregaUpdate {
   divergencias?: string | null;
   /** @nullable */
   frete?: EntregaUpdateFrete;
+  /** @nullable */
+  statusManual?: EntregaUpdateStatusManual;
   /** @nullable */
   sortOrder?: number | null;
 }

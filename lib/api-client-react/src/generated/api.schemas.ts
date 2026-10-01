@@ -83,6 +83,19 @@ export const EntregaFrete = {
   COLETA: 'COLETA',
 } as const;
 
+/**
+ * Manual appointment status color override
+ * @nullable
+ */
+export type EntregaStatusManual = typeof EntregaStatusManual[keyof typeof EntregaStatusManual] | null;
+
+
+export const EntregaStatusManual = {
+  green: 'green',
+  red: 'red',
+  yellow: 'yellow',
+} as const;
+
 export interface Entrega {
   id: number;
   /** Date in YYYY-MM-DD format */
@@ -134,6 +147,11 @@ export interface Entrega {
      * @nullable
      */
   frete?: EntregaFrete;
+  /**
+     * Manual appointment status color override
+     * @nullable
+     */
+  statusManual?: EntregaStatusManual;
 }
 
 export type EntregaInputChecked = typeof EntregaInputChecked[keyof typeof EntregaInputChecked];
@@ -196,6 +214,18 @@ export const EntregaInputFrete = {
   COLETA: 'COLETA',
 } as const;
 
+/**
+ * @nullable
+ */
+export type EntregaInputStatusManual = typeof EntregaInputStatusManual[keyof typeof EntregaInputStatusManual] | null;
+
+
+export const EntregaInputStatusManual = {
+  green: 'green',
+  red: 'red',
+  yellow: 'yellow',
+} as const;
+
 export interface EntregaInput {
   date: string;
   /** Marks this delivery as an appointment */
@@ -221,6 +251,8 @@ export interface EntregaInput {
   divergencias?: string | null;
   /** @nullable */
   frete?: EntregaInputFrete;
+  /** @nullable */
+  statusManual?: EntregaInputStatusManual;
 }
 
 export type EntregaUpdateChecked = typeof EntregaUpdateChecked[keyof typeof EntregaUpdateChecked];
@@ -286,6 +318,18 @@ export const EntregaUpdateFrete = {
   COLETA: 'COLETA',
 } as const;
 
+/**
+ * @nullable
+ */
+export type EntregaUpdateStatusManual = typeof EntregaUpdateStatusManual[keyof typeof EntregaUpdateStatusManual] | null;
+
+
+export const EntregaUpdateStatusManual = {
+  green: 'green',
+  red: 'red',
+  yellow: 'yellow',
+} as const;
+
 export interface EntregaUpdate {
   /** Date in YYYY-MM-DD format */
   date?: string;
@@ -310,6 +354,8 @@ export interface EntregaUpdate {
   divergencias?: string | null;
   /** @nullable */
   frete?: EntregaUpdateFrete;
+  /** @nullable */
+  statusManual?: EntregaUpdateStatusManual;
   /** @nullable */
   sortOrder?: number | null;
 }
@@ -365,5 +411,13 @@ export type ListEntregasParams = {
  * Date in YYYY-MM-DD format (defaults to today)
  */
 date?: string;
+/**
+ * Start date in YYYY-MM-DD format for a range query
+ */
+from?: string;
+/**
+ * End date in YYYY-MM-DD format for a range query
+ */
+to?: string;
 };
 

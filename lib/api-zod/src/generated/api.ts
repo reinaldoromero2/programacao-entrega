@@ -18,10 +18,12 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * @summary List all entregas for a given date
+ * @summary List deliveries for a date or date range
  */
 export const ListEntregasQueryParams = zod.object({
-  "date": zod.coerce.string().optional().describe('Date in YYYY-MM-DD format (defaults to today)')
+  "date": zod.coerce.string().optional().describe('Date in YYYY-MM-DD format (defaults to today)'),
+  "from": zod.coerce.string().optional().describe('Start date in YYYY-MM-DD format for a range query'),
+  "to": zod.coerce.string().optional().describe('End date in YYYY-MM-DD format for a range query')
 })
 
 export const ListEntregasResponseItem = zod.object({
@@ -40,7 +42,8 @@ export const ListEntregasResponseItem = zod.object({
   "cg": zod.enum(['none', 'x', 'check']).describe('CG column state: none=empty, x=missing, check=confirmed'),
   "v": zod.union([zod.literal('V'),zod.literal('2A'),zod.literal(null)]).nullable().describe('V column flag — null=empty, V=concluido, 2A=segunda entrega'),
   "divergencias": zod.string().nullish().describe('Divergências \/ observations column'),
-  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish().describe('Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA')
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish().describe('Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA'),
+  "statusManual": zod.union([zod.literal('green'),zod.literal('red'),zod.literal('yellow'),zod.literal(null)]).nullish().describe('Manual appointment status color override')
 })
 export const ListEntregasResponse = zod.array(ListEntregasResponseItem)
 
@@ -63,7 +66,8 @@ export const CreateEntregaBody = zod.object({
   "cg": zod.enum(['none', 'x', 'check']).optional(),
   "v": zod.union([zod.literal('V'),zod.literal('2A'),zod.literal(null)]).nullish(),
   "divergencias": zod.string().nullish(),
-  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish()
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish(),
+  "statusManual": zod.union([zod.literal('green'),zod.literal('red'),zod.literal('yellow'),zod.literal(null)]).nullish()
 })
 
 export const CreateEntregaResponse = zod.object({
@@ -82,7 +86,8 @@ export const CreateEntregaResponse = zod.object({
   "cg": zod.enum(['none', 'x', 'check']).describe('CG column state: none=empty, x=missing, check=confirmed'),
   "v": zod.union([zod.literal('V'),zod.literal('2A'),zod.literal(null)]).nullable().describe('V column flag — null=empty, V=concluido, 2A=segunda entrega'),
   "divergencias": zod.string().nullish().describe('Divergências \/ observations column'),
-  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish().describe('Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA')
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish().describe('Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA'),
+  "statusManual": zod.union([zod.literal('green'),zod.literal('red'),zod.literal('yellow'),zod.literal(null)]).nullish().describe('Manual appointment status color override')
 })
 
 
@@ -109,7 +114,8 @@ export const GetEntregaResponse = zod.object({
   "cg": zod.enum(['none', 'x', 'check']).describe('CG column state: none=empty, x=missing, check=confirmed'),
   "v": zod.union([zod.literal('V'),zod.literal('2A'),zod.literal(null)]).nullable().describe('V column flag — null=empty, V=concluido, 2A=segunda entrega'),
   "divergencias": zod.string().nullish().describe('Divergências \/ observations column'),
-  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish().describe('Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA')
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish().describe('Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA'),
+  "statusManual": zod.union([zod.literal('green'),zod.literal('red'),zod.literal('yellow'),zod.literal(null)]).nullish().describe('Manual appointment status color override')
 })
 
 
@@ -134,6 +140,7 @@ export const UpdateEntregaBody = zod.object({
   "v": zod.union([zod.literal('V'),zod.literal('2A'),zod.literal(null)]).nullish(),
   "divergencias": zod.string().nullish(),
   "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish(),
+  "statusManual": zod.union([zod.literal('green'),zod.literal('red'),zod.literal('yellow'),zod.literal(null)]).nullish(),
   "sortOrder": zod.number().nullish()
 })
 
@@ -153,7 +160,8 @@ export const UpdateEntregaResponse = zod.object({
   "cg": zod.enum(['none', 'x', 'check']).describe('CG column state: none=empty, x=missing, check=confirmed'),
   "v": zod.union([zod.literal('V'),zod.literal('2A'),zod.literal(null)]).nullable().describe('V column flag — null=empty, V=concluido, 2A=segunda entrega'),
   "divergencias": zod.string().nullish().describe('Divergências \/ observations column'),
-  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish().describe('Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA')
+  "frete": zod.union([zod.literal('RIPACK'),zod.literal('TRANSPORTADORA'),zod.literal('3º'),zod.literal('COLETA'),zod.literal(null)]).nullish().describe('Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3º, COLETA'),
+  "statusManual": zod.union([zod.literal('green'),zod.literal('red'),zod.literal('yellow'),zod.literal(null)]).nullish().describe('Manual appointment status color override')
 })
 
 

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, asc, sql, inArray } from "drizzle-orm";
+import { eq, asc, sql, inArray, and, gte, lte } from "drizzle-orm";
 import { db, entregasTable, pool } from "@workspace/db";
 import * as XLSX from "xlsx";
 import multer from "multer";
@@ -34,12 +34,16 @@ router.get("/entregas", async (req, res): Promise<void> => {
     return;
   }
 
-  const date = query.data.date ?? new Date().toISOString().slice(0, 10);
+  const dateFilter = query.data.date
+    ? eq(entregasTable.date, query.data.date)
+    : query.data.from && query.data.to
+      ? and(gte(entregasTable.date, query.data.from), lte(entregasTable.date, query.data.to))
+      : eq(entregasTable.date, new Date().toISOString().slice(0, 10));
 
   const rows = await db
     .select()
     .from(entregasTable)
-    .where(eq(entregasTable.date, date))
+    .where(dateFilter)
     .orderBy(asc(entregasTable.sortOrder), asc(entregasTable.id));
 
   res.json(ListEntregasResponse.parse(rows));

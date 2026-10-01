@@ -25,6 +25,7 @@ async function assertSchema(): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query(`ALTER TABLE entregas ADD COLUMN IF NOT EXISTS frete text`);
+    await client.query(`ALTER TABLE entregas ADD COLUMN IF NOT EXISTS status_manual text`);
     await client.query(`ALTER TABLE motoristas ADD COLUMN IF NOT EXISTS frete text`);
 
     const result = await client.query<{ table_name: string }>(
