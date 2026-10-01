@@ -20,13 +20,22 @@ if (Number.isNaN(port) || port <= 0) {
  * mismatch would only surface later as 500 errors on every request.
  */
 async function assertSchema(): Promise<void> {
-  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro", "faturamento_diario", "faturamento_meta"];
+  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro", "faturamento_diario", "faturamento_meta", "lembretes"];
 
   const client = await pool.connect();
   try {
     await client.query(`ALTER TABLE entregas ADD COLUMN IF NOT EXISTS frete text`);
     await client.query(`ALTER TABLE entregas ADD COLUMN IF NOT EXISTS status_manual text`);
     await client.query(`ALTER TABLE motoristas ADD COLUMN IF NOT EXISTS frete text`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS lembretes (
+        id serial PRIMARY KEY,
+        date date NOT NULL,
+        text text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT lembretes_date_text_unique UNIQUE (date, text)
+      )
+    `);
 
     const result = await client.query<{ table_name: string }>(
       `SELECT table_name
