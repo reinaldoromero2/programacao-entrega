@@ -41,3 +41,24 @@ jobs:
         run: pnpm run electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure installer and update metadata are attached
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $assets = @(
+            "dist-electron/ProgramacaoEntrega-Setup-$version.exe",
+            "dist-electron/ProgramacaoEntrega-Setup-$version.exe.blockmap",
+            "dist-electron/latest.yml"
+          )
+          foreach ($asset in $assets) {
+            if (-not (Test-Path $asset)) {
+              throw "Required release asset was not generated: $asset"
+            }
+          }
+          gh release upload $env:GITHUB_REF_NAME @assets --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to attach all required assets to release $env:GITHUB_REF_NAME"
+          }

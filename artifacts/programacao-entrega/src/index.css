@@ -298,9 +298,38 @@
 }
 
 .app-acrylic .app-acrylic-row {
-  background-color: rgba(255, 255, 255, 0.28);
+  background-color: rgba(255, 255, 255, 0.2);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
+}
+
+.app-acrylic .app-acrylic-status-row {
+  -webkit-backdrop-filter: blur(8px) saturate(1.35);
+  backdrop-filter: blur(8px) saturate(1.35);
+}
+
+.app-acrylic .app-acrylic-status-row.delivery-row-status-ripack {
+  background-color: rgba(187, 247, 208, 0.68);
+}
+
+.app-acrylic .app-acrylic-status-row.delivery-row-status-ripack:hover {
+  background-color: rgba(134, 239, 172, 0.76);
+}
+
+.app-acrylic .app-acrylic-status-row.delivery-row-status-cancelled {
+  background-color: rgba(254, 202, 202, 0.68);
+}
+
+.app-acrylic .app-acrylic-status-row.delivery-row-status-cancelled:hover {
+  background-color: rgba(252, 165, 165, 0.76);
+}
+
+.app-acrylic .app-acrylic-status-row.delivery-row-status-devolution {
+  background-color: rgba(254, 240, 138, 0.68);
+}
+
+.app-acrylic .app-acrylic-status-row.delivery-row-status-devolution:hover {
+  background-color: rgba(253, 224, 71, 0.76);
 }
 
 .app-shell .delivery-row-themed {

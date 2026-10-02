@@ -477,10 +477,14 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       className={cn(
         "delivery-row border-b border-slate-200 group hover:bg-slate-50 transition-colors items-stretch",
         acrylicEnabled && "app-acrylic-row",
+        acrylicEnabled && (isRipack || isCancelled || isDevolution) && "app-acrylic-status-row",
+        acrylicEnabled && isRipack && "delivery-row-status-ripack",
+        acrylicEnabled && isCancelled && "delivery-row-status-cancelled",
+        acrylicEnabled && isDevolution && !isCancelled && "delivery-row-status-devolution",
         rowThemeColor && "delivery-row-themed",
-        isRipack    && (backgroundImageEnabled ? "bg-green-100/75 hover:bg-green-200/80" : "bg-green-100 hover:bg-green-200"),
-        isCancelled && (backgroundImageEnabled ? "bg-red-100/75 hover:bg-red-200/80" : "bg-red-100 hover:bg-red-200"),
-        isDevolution && !isCancelled && (backgroundImageEnabled ? "bg-yellow-100/75 hover:bg-yellow-200/80" : "bg-yellow-100 hover:bg-yellow-200"),
+        isRipack    && (backgroundImageEnabled || acrylicEnabled ? "bg-green-100/75 hover:bg-green-200/80" : "bg-green-100 hover:bg-green-200"),
+        isCancelled && (backgroundImageEnabled || acrylicEnabled ? "bg-red-100/75 hover:bg-red-200/80" : "bg-red-100 hover:bg-red-200"),
+        isDevolution && !isCancelled && (backgroundImageEnabled || acrylicEnabled ? "bg-yellow-100/75 hover:bg-yellow-200/80" : "bg-yellow-100 hover:bg-yellow-200"),
         isDragging && "opacity-30 scale-[0.99]",
         isDragOver && "border-t-2 border-blue-500",
       )}
