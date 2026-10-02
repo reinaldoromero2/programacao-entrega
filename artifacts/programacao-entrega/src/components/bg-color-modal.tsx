@@ -53,10 +53,15 @@ export function BgColorModal({ open, onOpenChange, settings }: Props) {
     setThemeRows,
     acrylic,
     setAcrylic,
+    acrylicModals,
+    setAcrylicModals,
     roundedCorners,
     setRoundedCorners,
     imageUrl,
+    imageSource,
+    bundledImageUrl,
     setImage,
+    setBundledImage,
     clearImage,
     imageError,
   } = settings;
@@ -94,6 +99,16 @@ export function BgColorModal({ open, onOpenChange, settings }: Props) {
     } catch (error) {
       console.error("[BgColorModal] Não foi possível remover a imagem de fundo:", error);
       setActionError("Não foi possível remover a imagem salva.");
+    }
+  };
+
+  const handleBundledImage = () => {
+    try {
+      setBundledImage();
+      setActionError(null);
+    } catch (error) {
+      console.error("[BgColorModal] Não foi possível ativar a imagem incluída:", error);
+      setActionError("Não foi possível salvar essa escolha neste dispositivo.");
     }
   };
 
@@ -174,9 +189,20 @@ export function BgColorModal({ open, onOpenChange, settings }: Props) {
             className="hidden"
           />
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleBundledImage}
+              className={imageSource === "bundled" ? "gap-2 border-blue-500 bg-blue-50 text-blue-700" : "gap-2"}
+              aria-pressed={imageSource === "bundled"}
+            >
+              <Image className="h-4 w-4" />
+              Usar imagem incluída
+            </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => imageRef.current?.click()} className="gap-2">
               <Upload className="h-4 w-4" />
-              Escolher imagem
+              Minha imagem
             </Button>
             {imageUrl && (
               <Button type="button" variant="ghost" size="sm" onClick={handleClearImage} className="gap-1.5 text-red-600 hover:text-red-700">
@@ -185,7 +211,9 @@ export function BgColorModal({ open, onOpenChange, settings }: Props) {
               </Button>
             )}
           </div>
-          <p className="text-xs text-slate-500">A imagem fica salva somente neste dispositivo (máximo 10 MB).</p>
+          <p className="text-xs text-slate-500">
+            A foto da praia vem incluída no app. Imagens próprias ficam salvas somente neste dispositivo (máximo 10 MB).
+          </p>
           {(actionError || imageError) && (
             <p role="alert" className="text-xs text-red-600">{actionError || imageError}</p>
           )}
@@ -208,6 +236,14 @@ export function BgColorModal({ open, onOpenChange, settings }: Props) {
                 Efeito transparente acrílico
               </span>
               <span className="block text-xs text-slate-500">Deixa barra, tabela e painéis translúcidos com desfoque.</span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <Checkbox checked={acrylicModals} onCheckedChange={(checked) => setAcrylicModals(checked === true)} className="mt-0.5" />
+            <span className="space-y-0.5">
+              <span className="block text-sm font-medium text-slate-700">Aplicar efeito acrílico também aos modais</span>
+              <span className="block text-xs text-slate-500">Inclui relatórios, agendamentos, recados e configurações.</span>
             </span>
           </label>
 

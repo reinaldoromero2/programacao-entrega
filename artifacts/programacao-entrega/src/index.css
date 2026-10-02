@@ -321,6 +321,14 @@
   background-color: color-mix(in srgb, var(--delivery-row-theme) 76%, transparent);
 }
 
+html.app-acrylic-modals [role="dialog"],
+html.app-acrylic-modals [role="alertdialog"] {
+  background-color: rgba(248, 250, 252, 0.76) !important;
+  border-color: rgba(255, 255, 255, 0.65);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
+}
+
 @media print {
   @page {
     size: A4 landscape;
