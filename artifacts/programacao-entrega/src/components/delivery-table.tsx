@@ -100,12 +100,15 @@ function gridTemplate(widths: number[]) {
 interface DeliveryTableProps {
   entregas: Entrega[];
   date: string;
+  backgroundImageEnabled: boolean;
+  rowThemeColor: string | null;
+  acrylicEnabled: boolean;
   selectedIds: Set<number>;
   selectionMode: boolean;
   onToggleSelection: (id: number) => void;
 }
 
-export function DeliveryTable({ entregas, date, selectedIds, selectionMode, onToggleSelection }: DeliveryTableProps) {
+export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectedIds, selectionMode, onToggleSelection }: DeliveryTableProps) {
   const queryClient = useQueryClient();
   const reorderEntregas = useReorderEntregas();
 
@@ -199,7 +202,10 @@ export function DeliveryTable({ entregas, date, selectedIds, selectionMode, onTo
       <div className="w-full flex flex-col text-sm overflow-x-auto">
         {/* Table Header */}
         <div
-          className="flex border-b-2 border-slate-300 bg-slate-100 font-bold text-slate-700 text-xs text-center sticky top-0 z-10 select-none"
+          className={cn(
+            "app-acrylic-surface flex border-b-2 border-slate-300 font-bold text-slate-700 text-xs text-center sticky top-0 z-10 select-none",
+            acrylicEnabled || backgroundImageEnabled ? "bg-slate-100/50 backdrop-blur-md" : "bg-slate-100"
+          )}
           style={{ display: "grid", gridTemplateColumns: template }}
         >
           {COL_LABELS.map((label, i) => (
@@ -242,13 +248,22 @@ export function DeliveryTable({ entregas, date, selectedIds, selectionMode, onTo
               isDragging={draggedId === entrega.id}
               isDragOver={dragOverId === entrega.id}
               isSelected={selectedIds.has(entrega.id)}
+              backgroundImageEnabled={backgroundImageEnabled}
+              rowThemeColor={rowThemeColor}
+              acrylicEnabled={acrylicEnabled}
               selectionMode={selectionMode}
               onToggleSelection={() => onToggleSelection(entrega.id)}
             />
           ))}
 
           {Array.from({ length: Math.max(5, 10 - sortedEntregas.length) }).map((_, i) => (
-            <NewDeliveryRow key={`new-${i}`} date={date} index={sortedEntregas.length + i} />
+            <NewDeliveryRow
+              key={`new-${i}`}
+              date={date}
+              index={sortedEntregas.length + i}
+              backgroundImageEnabled={backgroundImageEnabled}
+              acrylicEnabled={acrylicEnabled}
+            />
           ))}
         </div>
       </div>
@@ -271,11 +286,14 @@ interface DeliveryRowProps {
   isDragging: boolean;
   isDragOver: boolean;
   isSelected: boolean;
+  backgroundImageEnabled: boolean;
+  rowThemeColor: string | null;
+  acrylicEnabled: boolean;
   selectionMode: boolean;
   onToggleSelection: () => void;
 }
 
-function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, selectionMode, onToggleSelection }: DeliveryRowProps) {
+function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection }: DeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const updateEntrega = useUpdateEntrega();
@@ -457,14 +475,20 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
       onDragEnd={() => { disableDrag(); onDragEnd(); }}
       className={cn(
-        "border-b border-slate-200 group hover:bg-slate-50 transition-colors items-stretch",
-        isRipack    && "bg-green-100 hover:bg-green-200",
-        isCancelled && "bg-red-100 hover:bg-red-200",
-        isDevolution && !isCancelled && "bg-yellow-100 hover:bg-yellow-200",
+        "delivery-row border-b border-slate-200 group hover:bg-slate-50 transition-colors items-stretch",
+        acrylicEnabled && "app-acrylic-row",
+        rowThemeColor && "delivery-row-themed",
+        isRipack    && (backgroundImageEnabled ? "bg-green-100/75 hover:bg-green-200/80" : "bg-green-100 hover:bg-green-200"),
+        isCancelled && (backgroundImageEnabled ? "bg-red-100/75 hover:bg-red-200/80" : "bg-red-100 hover:bg-red-200"),
+        isDevolution && !isCancelled && (backgroundImageEnabled ? "bg-yellow-100/75 hover:bg-yellow-200/80" : "bg-yellow-100 hover:bg-yellow-200"),
         isDragging && "opacity-30 scale-[0.99]",
         isDragOver && "border-t-2 border-blue-500",
       )}
-      style={{ display: "grid", gridTemplateColumns: template }}
+      style={{
+        display: "grid",
+        gridTemplateColumns: template,
+        ...(rowThemeColor ? { "--delivery-row-theme": rowThemeColor } : {}),
+      } as React.CSSProperties}
     >
       {/* S */}
       <div className="p-2 border-r border-slate-200 flex items-center justify-center overflow-hidden">
@@ -770,9 +794,11 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 interface NewDeliveryRowProps {
   date: string;
   index: number;
+  backgroundImageEnabled: boolean;
+  acrylicEnabled: boolean;
 }
 
-function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
+function NewDeliveryRow({ date, index, backgroundImageEnabled, acrylicEnabled }: NewDeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const createEntrega = useCreateEntrega();
@@ -834,7 +860,11 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
 
   return (
     <div
-      className="border-b border-slate-100 hover:bg-blue-50/30 transition-colors items-stretch opacity-60 hover:opacity-100"
+      className={cn(
+        "border-b border-slate-100 hover:bg-blue-50/30 transition-colors items-stretch opacity-60 hover:opacity-100",
+        (backgroundImageEnabled || acrylicEnabled) && "bg-white/20",
+        acrylicEnabled && "app-acrylic-row"
+      )}
       style={{ display: "grid", gridTemplateColumns: template }}
     >
       <div className="p-2 border-r border-slate-100 flex items-center justify-center">

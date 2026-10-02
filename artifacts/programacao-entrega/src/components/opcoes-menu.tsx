@@ -24,6 +24,7 @@ import { MotoristasModal } from "@/components/motoristas-modal";
 import { MotivosCancelamentoModal } from "@/components/motivos-cancelamento-modal";
 import { ClientesCadastroModal } from "@/components/clientes-cadastro-modal";
 import { BgColorModal } from "@/components/bg-color-modal";
+import type { BgColorSettings } from "@/hooks/use-bg-color";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
 const ZOOM_STORAGE_KEY = "programacao-entrega-zoom";
@@ -43,7 +44,7 @@ export function applyAppZoom(zoom: number) {
   return clampedZoom;
 }
 
-export function OpcoesMenu() {
+export function OpcoesMenu({ backgroundSettings }: { backgroundSettings: BgColorSettings }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,7 +212,7 @@ export function OpcoesMenu() {
             className="gap-2 cursor-pointer"
           >
             <Palette className="w-4 h-4" />
-            Cor do plano de fundo
+            Plano de fundo
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -220,7 +221,7 @@ export function OpcoesMenu() {
       <MotoristasModal open={motoOpen} onOpenChange={setMotoOpen} />
       <MotivosCancelamentoModal open={motivosOpen} onOpenChange={setMotivosOpen} />
       <ClientesCadastroModal open={clientesOpen} onOpenChange={setClientesOpen} />
-      <BgColorModal open={bgColorOpen} onOpenChange={setBgColorOpen} />
+      <BgColorModal open={bgColorOpen} onOpenChange={setBgColorOpen} settings={backgroundSettings} />
       {/* Import confirmation */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>

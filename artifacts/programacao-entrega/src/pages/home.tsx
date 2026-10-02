@@ -108,7 +108,13 @@ export default function Home() {
   const [agendamentoOpen, setAgendamentoOpen] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
   const isOnline = useOnlineStatus();
-  const { color: bgColor } = useBgColor();
+  const backgroundSettings = useBgColor();
+  const {
+    color: bgColor,
+    imageUrl: bgImage,
+    themeRows,
+    acrylic,
+  } = backgroundSettings;
   const { savePdf, status: pdfStatus } = useSavePdf();
   const { canInstall, install } = usePwaInstall();
   const connectionStatus = useConnectionStatus();
@@ -355,9 +361,26 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center" style={{ backgroundColor: bgColor }}>
+    <div
+      className={cn("app-shell min-h-screen flex flex-col items-center", acrylic && "app-acrylic")}
+      style={{
+        backgroundColor: bgColor,
+        backgroundImage: bgImage ? `url("${bgImage}")` : undefined,
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "cover",
+        backgroundAttachment: "fixed",
+      }}
+    >
       {/* Screen header — hidden when printing */}
-      <header className="print-hidden w-full bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+      <header
+        className="app-acrylic-surface print-hidden w-full border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20 shadow-sm"
+        style={{
+          backgroundColor: acrylic || bgImage ? "rgba(255, 255, 255, 0.42)" : bgColor,
+          backdropFilter: acrylic || bgImage ? "blur(16px) saturate(1.3)" : undefined,
+          WebkitBackdropFilter: acrylic || bgImage ? "blur(16px) saturate(1.3)" : undefined,
+        }}
+      >
         {/* LEFT — título + navegação de data */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 text-slate-800">
@@ -375,7 +398,7 @@ export default function Home() {
           <div className="w-px h-10 bg-slate-200" />
 
           {/* Date navigator */}
-          <div className="flex items-center bg-slate-100 rounded-md p-1 border border-slate-200">
+          <div className="app-acrylic-surface flex items-center bg-slate-100 rounded-md p-1 border border-slate-200">
             <Button variant="ghost" size="icon" onClick={goPreviousDay} className="h-8 w-8 text-slate-600 hover:text-slate-900 hover:bg-white rounded" data-testid="button-prev-day">
               <ChevronLeft className="w-4 h-4" />
             </Button>
@@ -477,7 +500,7 @@ export default function Home() {
             </Button>
           )}
 
-          <OpcoesMenu />
+          <OpcoesMenu backgroundSettings={backgroundSettings} />
 
           <Button
             variant="outline"
@@ -626,7 +649,10 @@ export default function Home() {
 
       {/* Screen table */}
       <main className="print-hidden w-full max-w-[1400px] flex-1 p-6">
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <div className={cn(
+          "app-acrylic-surface rounded-lg shadow-sm border border-slate-200 overflow-hidden",
+          acrylic ? "bg-white/35 backdrop-blur-xl" : bgImage ? "bg-white/70 backdrop-blur-[1px]" : "bg-white"
+        )}>
           {isLoading ? (
             <div className="w-full h-[400px] flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
@@ -645,6 +671,9 @@ export default function Home() {
             <DeliveryTable
               entregas={entregas || []}
               date={dateStr}
+              backgroundImageEnabled={Boolean(bgImage)}
+              rowThemeColor={themeRows ? bgColor : null}
+              acrylicEnabled={acrylic}
               selectedIds={selectedIds}
               selectionMode={selectionMode}
               onToggleSelection={toggleSelection}

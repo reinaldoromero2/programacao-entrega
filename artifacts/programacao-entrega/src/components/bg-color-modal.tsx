@@ -1,5 +1,5 @@
-import { useRef } from "react";
-import { Palette, RotateCcw } from "lucide-react";
+import { useRef, useState } from "react";
+import { Image, Layers2, Palette, RotateCcw, Trash2, Upload } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useBgColor } from "@/hooks/use-bg-color";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { BgColorSettings } from "@/hooks/use-bg-color";
 
 const PRESETS: { label: string; color: string }[] = [
   // Neutros claros
@@ -40,11 +41,61 @@ const PRESETS: { label: string; color: string }[] = [
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  settings: BgColorSettings;
 }
 
-export function BgColorModal({ open, onOpenChange }: Props) {
-  const { color, setColor, reset } = useBgColor();
+export function BgColorModal({ open, onOpenChange, settings }: Props) {
+  const {
+    color,
+    setColor,
+    reset,
+    themeRows,
+    setThemeRows,
+    acrylic,
+    setAcrylic,
+    roundedCorners,
+    setRoundedCorners,
+    imageUrl,
+    setImage,
+    clearImage,
+    imageError,
+  } = settings;
   const customRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) {
+      setActionError("Escolha uma imagem PNG, JPG, WEBP ou GIF.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setActionError("A imagem deve ter no máximo 10 MB.");
+      return;
+    }
+
+    try {
+      await setImage(file);
+      setActionError(null);
+    } catch (error) {
+      console.error("[BgColorModal] Não foi possível salvar a imagem de fundo:", error);
+      setActionError("Não foi possível salvar a imagem neste dispositivo.");
+    }
+  };
+
+  const handleClearImage = async () => {
+    try {
+      await clearImage();
+      setActionError(null);
+    } catch (error) {
+      console.error("[BgColorModal] Não foi possível remover a imagem de fundo:", error);
+      setActionError("Não foi possível remover a imagem salva.");
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -52,7 +103,7 @@ export function BgColorModal({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Palette className="w-4 h-4 text-blue-600" />
-            Cor do plano de fundo
+            Plano de fundo
           </DialogTitle>
         </DialogHeader>
 
@@ -108,6 +159,65 @@ export function BgColorModal({ open, onOpenChange }: Props) {
             <RotateCcw className="w-3.5 h-3.5" />
             Padrão
           </Button>
+        </div>
+
+        <div className="space-y-2 border-t pt-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+            <Image className="h-4 w-4" />
+            Imagem de fundo
+          </div>
+          <input
+            ref={imageRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={handleImageChange}
+            className="hidden"
+          />
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => imageRef.current?.click()} className="gap-2">
+              <Upload className="h-4 w-4" />
+              Escolher imagem
+            </Button>
+            {imageUrl && (
+              <Button type="button" variant="ghost" size="sm" onClick={handleClearImage} className="gap-1.5 text-red-600 hover:text-red-700">
+                <Trash2 className="h-4 w-4" />
+                Remover
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">A imagem fica salva somente neste dispositivo (máximo 10 MB).</p>
+          {(actionError || imageError) && (
+            <p role="alert" className="text-xs text-red-600">{actionError || imageError}</p>
+          )}
+        </div>
+
+        <div className="space-y-3 border-t pt-3">
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <Checkbox checked={themeRows} onCheckedChange={(checked) => setThemeRows(checked === true)} className="mt-0.5" />
+            <span className="space-y-0.5">
+              <span className="block text-sm font-medium text-slate-700">Aplicar a cor do tema às linhas das cargas</span>
+              <span className="block text-xs text-slate-500">As linhas acompanham a cor escolhida acima.</span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <Checkbox checked={acrylic} onCheckedChange={(checked) => setAcrylic(checked === true)} className="mt-0.5" />
+            <span className="space-y-0.5">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <Layers2 className="h-4 w-4" />
+                Efeito transparente acrílico
+              </span>
+              <span className="block text-xs text-slate-500">Deixa barra, tabela e painéis translúcidos com desfoque.</span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <Checkbox checked={roundedCorners} onCheckedChange={(checked) => setRoundedCorners(checked === true)} className="mt-0.5" />
+            <span className="space-y-0.5">
+              <span className="block text-sm font-medium text-slate-700">Cantos arredondados em todo o aplicativo</span>
+              <span className="block text-xs text-slate-500">Arredonda botões, cards, calendário, tabelas e modais.</span>
+            </span>
+          </label>
         </div>
       </DialogContent>
     </Dialog>
