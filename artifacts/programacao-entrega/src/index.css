@@ -323,18 +323,16 @@
 
 html.app-acrylic-modals [role="dialog"],
 html.app-acrylic-modals [role="alertdialog"] {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  border-color: rgba(255, 255, 255, 0.45);
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  -webkit-backdrop-filter: blur(28px) saturate(1.55);
-  backdrop-filter: blur(28px) saturate(1.55);
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  -webkit-backdrop-filter: blur(22px) saturate(1.65);
+  backdrop-filter: blur(22px) saturate(1.65);
 }
 
 html.app-acrylic-modals [data-radix-dialog-overlay],
 html.app-acrylic-modals [data-radix-alert-dialog-overlay] {
-  background-color: rgba(15, 23, 42, 0.2) !important;
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  background-color: rgba(15, 23, 42, 0.1) !important;
 }
 
 @media print {
