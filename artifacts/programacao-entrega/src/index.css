@@ -365,6 +365,43 @@ html.app-acrylic-modals [data-acrylic-overlay] {
   backdrop-filter: blur(12px) saturate(1.2);
 }
 
+html.app-acrylic-modals [role="dialog"] [class*="bg-white"],
+html.app-acrylic-modals [role="dialog"] [class*="bg-slate-50"],
+html.app-acrylic-modals [role="dialog"] [class*="bg-slate-100"],
+html.app-acrylic-modals [role="dialog"] [class*="bg-gray-50"],
+html.app-acrylic-modals [role="dialog"] [class*="bg-gray-100"],
+html.app-acrylic-modals [role="dialog"] [class*="bg-background"],
+html.app-acrylic-modals [role="alertdialog"] [class*="bg-white"],
+html.app-acrylic-modals [role="alertdialog"] [class*="bg-slate-50"],
+html.app-acrylic-modals [role="alertdialog"] [class*="bg-slate-100"],
+html.app-acrylic-modals [role="alertdialog"] [class*="bg-gray-50"],
+html.app-acrylic-modals [role="alertdialog"] [class*="bg-gray-100"],
+html.app-acrylic-modals [role="alertdialog"] [class*="bg-background"] {
+  background-color: rgba(231, 241, 248, 0.3) !important;
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+html.app-acrylic-modals [role="dialog"] [class*="text-slate-300"],
+html.app-acrylic-modals [role="dialog"] [class*="text-slate-400"],
+html.app-acrylic-modals [role="dialog"] [class*="text-slate-500"],
+html.app-acrylic-modals [role="dialog"] [class*="text-gray-400"],
+html.app-acrylic-modals [role="dialog"] [class*="text-gray-500"],
+html.app-acrylic-modals [role="alertdialog"] [class*="text-slate-300"],
+html.app-acrylic-modals [role="alertdialog"] [class*="text-slate-400"],
+html.app-acrylic-modals [role="alertdialog"] [class*="text-slate-500"],
+html.app-acrylic-modals [role="alertdialog"] [class*="text-gray-400"],
+html.app-acrylic-modals [role="alertdialog"] [class*="text-gray-500"] {
+  color: #24364b !important;
+}
+
+html.app-acrylic-modals [role="dialog"] input::placeholder,
+html.app-acrylic-modals [role="dialog"] textarea::placeholder,
+html.app-acrylic-modals [role="alertdialog"] input::placeholder,
+html.app-acrylic-modals [role="alertdialog"] textarea::placeholder {
+  color: #475569 !important;
+  opacity: 1;
+}
+
 @media print {
   @page {
     size: A4 landscape;
