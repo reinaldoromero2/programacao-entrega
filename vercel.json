@@ -1,5 +1,5 @@
 {
   "buildCommand": "pnpm install --no-frozen-lockfile && BASE_PATH=/ pnpm --filter @workspace/programacao-entrega run build",
-  "outputDirectory": "artifacts/programacao-entrega/dist/public",
+  "outputDirectory": "dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

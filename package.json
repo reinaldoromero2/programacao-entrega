@@ -1,16 +1,49 @@
 {
   "name": "workspace",
-  "version": "0.0.0",
+  "version": "1.2.5",
   "license": "MIT",
+  "main": "electron/main.js",
   "scripts": {
-    "preinstall": "node -e \"try { require('fs').unlinkSync('package-lock.json') } catch(e) {} try { require('fs').unlinkSync('yarn.lock') } catch(e) {} if (!process.env.npm_config_user_agent || !process.env.npm_config_user_agent.startsWith('pnpm')) { console.error('Use pnpm instead'); process.exit(1) }\"",
+    "preinstall": "node -e \"try { require('fs').unlinkSync('package-lock.json') } catch(e) {}\"",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" typecheck",
+    "electron:build": "vite build artifacts/programacao-entrega --config artifacts/programacao-entrega/vite.config.ts && electron-builder"
   },
   "private": true,
   "devDependencies": {
-    "prettier": "^3.8.4",
-    "typescript": "~5.9.3"
+    "concurrently": "^10.0.5",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
+    "typescript": "^7.0.2",
+    "vite": "catalog:",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.programacaoentrega.app",
+    "productName": "ProgramacaoEntrega",
+    "files": [
+      "dist/**/*",
+      "artifacts/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "dist-electron"
+    },
+    "win": {
+      "target": "nsis",
+      "artifactName": "ProgramacaoEntrega-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Programação de Entrega"
+    }
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0"
   }
 }

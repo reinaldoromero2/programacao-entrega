@@ -4,20 +4,22 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
+import { readFileSync } from "fs";
 
-const rawPort = process.env.PORT;
-// PORT is optional: Replit sets it; Vercel/CI build environments may not.
-const port = rawPort ? Number(rawPort) : 3000;
-
-if (rawPort && (Number.isNaN(port) || port <= 0)) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-// BASE_PATH defaults to '/' for Vercel/Render deploys.
-const basePath = process.env.BASE_PATH ?? '/';
+const appVersion = JSON.parse(
+  readFileSync(path.resolve(__dirname, "../../package.json"), "utf-8")
+).version as string;
+const appDisplayVersion = appVersion.replace(/\.0$/, "");
 
 export default defineConfig({
-  base: basePath,
+  base: './',
+  define: {
+    "import.meta.env.VITE_APP_VERSION": JSON.stringify(appDisplayVersion),
+  },
+  build: {
+    outDir: path.resolve(__dirname, '../../dist'),
+    emptyOutDir: true,
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -28,115 +30,20 @@ export default defineConfig({
       manifest: {
         name: "Programação de Entrega",
         short_name: "Prog. Entrega",
-        description: "Controle logístico diário de programação de entregas",
-        theme_color: "#2b4590",
-        background_color: "#f8fafc",
+        description: "Controle logístico diário de programação de entrega",
+        theme_color: "#ffffff",
+        background_color: "#ffffff",
         display: "standalone",
-        orientation: "landscape-primary",
-        start_url: basePath || "/",
-        id: basePath || "/",
-        scope: basePath || "/",
         icons: [
-          {
-            src: "icon-192.svg",
-            sizes: "192x192",
-            type: "image/svg+xml",
-            purpose: "any maskable",
-          },
-          {
-            src: "icon-512.svg",
-            sizes: "512x512",
-            type: "image/svg+xml",
-            purpose: "any maskable",
-          },
-        ],
-      },
-      workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
-        navigateFallback: basePath || "/",
-        navigateFallbackAllowlist: [/^(?!\/api\/)/],
-        runtimeCaching: [
-          {
-            urlPattern: /\/api\/entregas(\?.*)?$/,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-entregas-cache",
-              networkTimeoutSeconds: 5,
-              expiration: {
-                maxEntries: 60,
-                maxAgeSeconds: 7 * 24 * 60 * 60,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /\/api\/motoristas(\?.*)?$/,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-motoristas-cache",
-              networkTimeoutSeconds: 5,
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 7 * 24 * 60 * 60,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-        ],
-      },
-      devOptions: {
-        enabled: true,
-        type: "module",
-      },
-    }),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, ".."),
-            }),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
+          { src: "icon-192.svg", sizes: "192x192", type: "image/svg+xml" },
+          { src: "icon-512.svg", sizes: "512x512", type: "image/svg+xml" }
         ]
-      : []),
+      }
+    })
   ],
   resolve: {
     alias: {
-      "@": path.resolve(import.meta.dirname, "src"),
-      "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
-    },
-    dedupe: ["react", "react-dom"],
-  },
-  root: path.resolve(import.meta.dirname),
-  build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
-    emptyOutDir: true,
-  },
-  server: {
-    port,
-    strictPort: true,
-    host: "0.0.0.0",
-    allowedHosts: true,
-    fs: {
-      strict: true,
-    },
-    proxy: {
-      "/api": {
-        target: "http://localhost:5001",
-        changeOrigin: true,
-      },
-    },
-  },
-  preview: {
-    port,
-    host: "0.0.0.0",
-    allowedHosts: true,
-  },
+      "@": path.resolve(__dirname, "./src")
+    }
+  }
 });

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, addDays, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Printer, WifiOff, RefreshCw, FolderDown, X, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Printer, WifiOff, RefreshCw, FolderDown, Download, BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useListEntregas, useCreateEntrega, useUpdateEntrega, getListEntregasQueryKey, type Entrega } from "@workspace/api-client-react";
@@ -13,15 +13,26 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RelatorioModal } from "@/components/relatorio-modal";
 import { OpcoesMenu } from "@/components/opcoes-menu";
+import { ClientesAgendamentoModal } from "@/components/clientes-agendamento-modal";
+import { LembretesModal } from "@/components/lembretes-modal";
 import { useSavePdf } from "@/hooks/use-save-pdf";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { useBgColor } from "@/hooks/use-bg-color";
 import { useConnectionStatus } from "@/hooks/use-connection-status";
 import { getPendingDeliveries, removePendingDelivery } from "@/lib/offline-deliveries";
 import { saveOfflineSnapshot, type OfflineSnapshot } from "@/lib/offline-snapshot";
+import { getReminders, parseReminders, saveReminders, type Reminder } from "@/lib/reminders";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
 const FULL_SYNC_KEY = "entregas-full-sync-date";
+const REMINDERS_MIGRATION_KEY = "programacao-entrega-reminders-shared-migrated";
+const REMINDER_SYNC_ERROR = "Sem conexão com o servidor de recados. O conteúdo exibido é deste dispositivo e ainda não está compartilhado.";
+
+async function fetchSharedReminders(): Promise<Reminder[]> {
+  const response = await fetch(`${API_BASE}/api/lembretes`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return parseReminders(await response.json());
+}
 
 function getDeliveryCache(date: string): Entrega[] | undefined {
   try {
@@ -94,21 +105,111 @@ export default function Home() {
   const queryClient = useQueryClient();
   const [date, setDate] = useState<Date>(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [agendamentoOpen, setAgendamentoOpen] = useState(false);
+  const [remindersOpen, setRemindersOpen] = useState(false);
   const isOnline = useOnlineStatus();
   const { color: bgColor } = useBgColor();
-  const { savePdf, status: pdfStatus, resetLocation } = useSavePdf();
+  const { savePdf, status: pdfStatus } = useSavePdf();
   const { canInstall, install } = usePwaInstall();
   const connectionStatus = useConnectionStatus();
   const createEntrega = useCreateEntrega();
   const updateEntrega = useUpdateEntrega();
   const syncingRef = useRef(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [movingDeliveries, setMovingDeliveries] = useState(false);
+  const [reminders, setReminders] = useState<Reminder[]>(getReminders);
+  const [reminderSyncError, setReminderSyncError] = useState<string | null>(null);
 
   const dateStr = format(date, "yyyy-MM-dd");
+  const dayReminders = reminders.filter((reminder) => reminder.date === dateStr);
+
+  useEffect(() => {
+    saveReminders(reminders);
+  }, [reminders]);
+
+  const addReminder = async (reminder: Omit<Reminder, "id">) => {
+    const response = await fetch(`${API_BASE}/api/lembretes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reminder),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const [created] = parseReminders([await response.json()]);
+    if (!created) throw new Error("Resposta inválida do servidor");
+    setReminders((current) => current.some((item) => item.id === created.id) ? current : [...current, created]);
+    setReminderSyncError(null);
+  };
+
+  const editReminder = async (id: string, reminder: Omit<Reminder, "id">) => {
+    const response = await fetch(`${API_BASE}/api/lembretes/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reminder),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const [updated] = parseReminders([await response.json()]);
+    if (!updated) throw new Error("Resposta inválida do servidor");
+    setReminders((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setReminderSyncError(null);
+  };
+
+  const removeReminder = async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/lembretes/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    setReminders((current) => current.filter((reminder) => reminder.id !== id));
+    setReminderSyncError(null);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    let syncInProgress = false;
+
+    const syncReminders = async () => {
+      if (!isOnline) {
+        setReminderSyncError(REMINDER_SYNC_ERROR);
+        return;
+      }
+      if (syncInProgress) return;
+      syncInProgress = true;
+
+      try {
+        let sharedReminders = await fetchSharedReminders();
+        if (localStorage.getItem(REMINDERS_MIGRATION_KEY) !== "true") {
+          for (const reminder of getReminders()) {
+            const response = await fetch(`${API_BASE}/api/lembretes`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ date: reminder.date, text: reminder.text }),
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          }
+          localStorage.setItem(REMINDERS_MIGRATION_KEY, "true");
+          sharedReminders = await fetchSharedReminders();
+        }
+
+        if (!cancelled) {
+          setReminders(sharedReminders);
+          setReminderSyncError(null);
+        }
+      } catch {
+        if (!cancelled) setReminderSyncError(REMINDER_SYNC_ERROR);
+      } finally {
+        syncInProgress = false;
+      }
+    };
+
+    void syncReminders();
+    const interval = window.setInterval(() => void syncReminders(), 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [isOnline]);
 
   useEffect(() => {
     setSelectedIds(new Set());
+    setSelectionMode(false);
   }, [dateStr]);
 
   const { data: entregas, isLoading, isError } = useListEntregas(
@@ -140,6 +241,7 @@ export default function Home() {
             .map((item): Entrega => ({
               id: item.temporaryId,
               date: item.data.date,
+              agendamento: false,
               sortOrder: item.data.sortOrder ?? 0,
               checked: item.data.checked ?? "none",
               cliente: item.data.cliente,
@@ -153,6 +255,7 @@ export default function Home() {
               v: item.data.v ?? null,
               divergencias: item.data.divergencias ?? null,
               frete: item.data.frete ?? null,
+              statusManual: null,
             }));
           const serverDeliveries = snapshot.entregas.filter((delivery) => delivery.date === date);
           const next = [...serverDeliveries, ...localPending];
@@ -329,6 +432,19 @@ export default function Home() {
           </div>
         </div>
 
+        {dayReminders.length > 0 && (
+          <div className="mx-3 min-w-0 max-w-[300px] flex-1">
+            <div role="status" className="flex items-start gap-2 rounded-md border border-red-700 bg-red-600 px-3 py-2 text-white shadow-md">
+              <BellRing className="mt-0.5 h-4 w-4 shrink-0" />
+              <ul className="max-h-12 min-w-0 flex-1 list-disc space-y-1 overflow-y-auto pl-4 text-xs font-semibold leading-4 marker:text-white">
+                {dayReminders.map((reminder) => (
+                  <li key={reminder.id} className="break-words">{reminder.text}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
         {/* RIGHT — ações */}
         <div className="flex items-center gap-2">
           <span
@@ -363,36 +479,98 @@ export default function Home() {
 
           <OpcoesMenu />
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!isOnline || selectedIds.size === 0 || movingDeliveries}
-                className="h-10 gap-2 text-blue-700 border-blue-300 hover:bg-blue-50 disabled:opacity-50"
-                title={selectedIds.size === 0 ? "Selecione uma ou mais cargas" : "Escolher novo dia para as cargas"}
-              >
-                {movingDeliveries ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarIcon className="w-4 h-4" />}
-                Alterar dia{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <div className="p-3 border-b border-slate-100">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Novo dia das cargas</p>
-                <p className="text-xs text-slate-400 mt-1">{selectedIds.size} carga{selectedIds.size !== 1 ? "s" : ""} selecionada{selectedIds.size !== 1 ? "s" : ""}</p>
-              </div>
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={(targetDate) => { if (targetDate) void moveSelectedDeliveries(targetDate); }}
-                captionLayout="dropdown"
-                locale={ptBR}
-                fromYear={2020}
-                toYear={2035}
-                defaultMonth={date}
-              />
-            </PopoverContent>
-          </Popover>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setRemindersOpen(true)}
+            className="h-10 w-10 border-red-700 bg-red-600 text-white hover:bg-red-700 hover:text-white"
+            title="Lembretes"
+            aria-label="Lembretes"
+            data-testid="button-reminders"
+          >
+            <BellRing className="h-4 w-4" />
+          </Button>
+          <LembretesModal
+            open={remindersOpen}
+            onOpenChange={setRemindersOpen}
+            selectedDate={dateStr}
+            reminders={reminders}
+            syncError={reminderSyncError}
+            onAdd={addReminder}
+            onEdit={editReminder}
+            onRemove={removeReminder}
+          />
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setAgendamentoOpen(true)}
+            className="h-10 w-10 border-amber-500 bg-amber-400 text-amber-950 hover:bg-amber-500 hover:text-amber-950"
+            title="Agendamentos"
+            aria-label="Agendamentos"
+            data-testid="button-agendamentos"
+          >
+            <span className="text-sm font-bold">A</span>
+          </Button>
+          <ClientesAgendamentoModal open={agendamentoOpen} onOpenChange={setAgendamentoOpen} />
+
+          {selectionMode && selectedIds.size > 0 ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  disabled={!isOnline || movingDeliveries}
+                  className="h-10 w-10 border-orange-700 bg-orange-600 text-white hover:bg-orange-700 hover:text-white disabled:opacity-50"
+                  title={`Escolher novo dia para ${selectedIds.size} carga${selectedIds.size !== 1 ? "s" : ""}`}
+                  aria-label={`Escolher novo dia para ${selectedIds.size} carga${selectedIds.size !== 1 ? "s" : ""}`}
+                  data-testid="button-change-delivery-day"
+                >
+                  {movingDeliveries ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarIcon className="w-4 h-4" />}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <div className="p-3 border-b border-slate-100">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Novo dia das cargas</p>
+                  <p className="text-xs text-slate-400 mt-1">{selectedIds.size} carga{selectedIds.size !== 1 ? "s" : ""} selecionada{selectedIds.size !== 1 ? "s" : ""}</p>
+                </div>
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={(targetDate) => { if (targetDate) void moveSelectedDeliveries(targetDate); }}
+                  captionLayout="dropdown"
+                  locale={ptBR}
+                  fromYear={2020}
+                  toYear={2035}
+                  defaultMonth={date}
+                />
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={!isOnline || movingDeliveries}
+              onClick={() => {
+                if (selectionMode) {
+                  setSelectedIds(new Set());
+                  setSelectionMode(false);
+                } else {
+                  setSelectionMode(true);
+                }
+              }}
+              className={cn(
+                "h-10 w-10 border-orange-700 bg-orange-600 text-white hover:bg-orange-700 hover:text-white disabled:opacity-50",
+                selectionMode && "ring-2 ring-orange-200"
+              )}
+              title={selectionMode ? "Cancelar seleção" : "Selecionar cargas para alterar o dia"}
+              aria-label={selectionMode ? "Cancelar seleção" : "Selecionar cargas para alterar o dia"}
+              aria-pressed={selectionMode}
+              data-testid="button-change-delivery-day"
+            >
+              {movingDeliveries ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarIcon className="w-4 h-4" />}
+            </Button>
+          )}
 
           <RelatorioModal onNavigateDate={(d) => setDate(new Date(d + "T12:00:00"))} />
 
@@ -401,44 +579,35 @@ export default function Home() {
             size="icon"
             onClick={handleRefresh}
             disabled={!isOnline}
-            className="h-10 w-10 text-slate-700 border-slate-300 hover:bg-slate-100 disabled:opacity-50"
+            className="h-10 w-10 border-pink-700 bg-pink-600 text-white hover:bg-pink-700 hover:text-white disabled:opacity-50"
             data-testid="button-refresh"
             title={!isOnline ? "Sem conexão" : "Atualizar"}
           >
             <RefreshCw className="w-5 h-5" />
           </Button>
 
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => savePdf(entregas || [], dateStr)}
-              disabled={pdfStatus === "saving"}
-              className={cn(
-                "h-10 w-10 border-slate-300 hover:bg-slate-100",
-                pdfStatus === "error" ? "text-red-600 border-red-300" : "text-slate-700"
-              )}
-              title={pdfStatus === "error" ? "Erro ao salvar PDF" : "Salvar PDF"}
-              data-testid="button-save-pdf"
-            >
-              {pdfStatus === "saving" ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderDown className="w-5 h-5" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={resetLocation}
-              className="h-10 w-10 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              title="Redefinir pasta de destino"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => savePdf(entregas || [], dateStr)}
+            disabled={pdfStatus === "saving"}
+            className={cn(
+              "h-10 w-10",
+              pdfStatus === "error"
+                ? "border-red-700 bg-red-600 text-white hover:bg-red-700 hover:text-white"
+                : "border-teal-700 bg-teal-600 text-white hover:bg-teal-700 hover:text-white"
+            )}
+            title={pdfStatus === "error" ? "Erro ao salvar PDF" : "Salvar PDF"}
+            data-testid="button-save-pdf"
+          >
+            {pdfStatus === "saving" ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderDown className="w-5 h-5" />}
+          </Button>
 
           <Button
             variant="outline"
             size="icon"
             onClick={handlePrint}
-            className="h-10 w-10 text-slate-700 border-slate-300 hover:bg-slate-100"
+            className="h-10 w-10 border-blue-700 bg-blue-600 text-white hover:bg-blue-700 hover:text-white"
             data-testid="button-print"
             title="Imprimir"
           >
@@ -477,6 +646,7 @@ export default function Home() {
               entregas={entregas || []}
               date={dateStr}
               selectedIds={selectedIds}
+              selectionMode={selectionMode}
               onToggleSelection={toggleSelection}
             />
           )}

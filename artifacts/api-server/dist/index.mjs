@@ -18,6 +18,9 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __commonJS = (cb, mod) => function __require2() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
@@ -41,6 +44,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // ../../node_modules/.pnpm/ms@2.1.3/node_modules/ms/index.js
 var require_ms = __commonJS({
@@ -158,10 +162,10 @@ var require_ms = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/common.js
+// ../../node_modules/.pnpm/debug@4.4.3_supports-color@10.2.2/node_modules/debug/src/common.js
 var require_common = __commonJS({
-  "../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/common.js"(exports, module) {
-    function setup(env) {
+  "../../node_modules/.pnpm/debug@4.4.3_supports-color@10.2.2/node_modules/debug/src/common.js"(exports, module) {
+    function setup(env2) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
       createDebug.coerce = coerce2;
@@ -170,8 +174,8 @@ var require_common = __commonJS({
       createDebug.enabled = enabled;
       createDebug.humanize = require_ms();
       createDebug.destroy = destroy;
-      Object.keys(env).forEach((key) => {
-        createDebug[key] = env[key];
+      Object.keys(env2).forEach((key) => {
+        createDebug[key] = env2[key];
       });
       createDebug.names = [];
       createDebug.skips = [];
@@ -335,9 +339,9 @@ var require_common = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/browser.js
+// ../../node_modules/.pnpm/debug@4.4.3_supports-color@10.2.2/node_modules/debug/src/browser.js
 var require_browser = __commonJS({
-  "../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/browser.js"(exports, module) {
+  "../../node_modules/.pnpm/debug@4.4.3_supports-color@10.2.2/node_modules/debug/src/browser.js"(exports, module) {
     exports.formatArgs = formatArgs;
     exports.save = save;
     exports.load = load;
@@ -505,10 +509,159 @@ var require_browser = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/node.js
+// ../../node_modules/.pnpm/supports-color@10.2.2/node_modules/supports-color/index.js
+var supports_color_exports = {};
+__export(supports_color_exports, {
+  createSupportsColor: () => createSupportsColor,
+  default: () => supports_color_default
+});
+import process2 from "node:process";
+import os from "node:os";
+import tty from "node:tty";
+function hasFlag(flag, argv = globalThis.Deno ? globalThis.Deno.args : process2.argv) {
+  const prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
+  const position = argv.indexOf(prefix + flag);
+  const terminatorPosition = argv.indexOf("--");
+  return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
+}
+function envForceColor() {
+  if (!("FORCE_COLOR" in env)) {
+    return;
+  }
+  if (env.FORCE_COLOR === "true") {
+    return 1;
+  }
+  if (env.FORCE_COLOR === "false") {
+    return 0;
+  }
+  if (env.FORCE_COLOR.length === 0) {
+    return 1;
+  }
+  const level = Math.min(Number.parseInt(env.FORCE_COLOR, 10), 3);
+  if (![0, 1, 2, 3].includes(level)) {
+    return;
+  }
+  return level;
+}
+function translateLevel(level) {
+  if (level === 0) {
+    return false;
+  }
+  return {
+    level,
+    hasBasic: true,
+    has256: level >= 2,
+    has16m: level >= 3
+  };
+}
+function _supportsColor(haveStream, { streamIsTTY, sniffFlags = true } = {}) {
+  const noFlagForceColor = envForceColor();
+  if (noFlagForceColor !== void 0) {
+    flagForceColor = noFlagForceColor;
+  }
+  const forceColor = sniffFlags ? flagForceColor : noFlagForceColor;
+  if (forceColor === 0) {
+    return 0;
+  }
+  if (sniffFlags) {
+    if (hasFlag("color=16m") || hasFlag("color=full") || hasFlag("color=truecolor")) {
+      return 3;
+    }
+    if (hasFlag("color=256")) {
+      return 2;
+    }
+  }
+  if ("TF_BUILD" in env && "AGENT_NAME" in env) {
+    return 1;
+  }
+  if (haveStream && !streamIsTTY && forceColor === void 0) {
+    return 0;
+  }
+  const min = forceColor || 0;
+  if (env.TERM === "dumb") {
+    return min;
+  }
+  if (process2.platform === "win32") {
+    const osRelease = os.release().split(".");
+    if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) {
+      return Number(osRelease[2]) >= 14931 ? 3 : 2;
+    }
+    return 1;
+  }
+  if ("CI" in env) {
+    if (["GITHUB_ACTIONS", "GITEA_ACTIONS", "CIRCLECI"].some((key) => key in env)) {
+      return 3;
+    }
+    if (["TRAVIS", "APPVEYOR", "GITLAB_CI", "BUILDKITE", "DRONE"].some((sign) => sign in env) || env.CI_NAME === "codeship") {
+      return 1;
+    }
+    return min;
+  }
+  if ("TEAMCITY_VERSION" in env) {
+    return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env.TEAMCITY_VERSION) ? 1 : 0;
+  }
+  if (env.COLORTERM === "truecolor") {
+    return 3;
+  }
+  if (env.TERM === "xterm-kitty") {
+    return 3;
+  }
+  if (env.TERM === "xterm-ghostty") {
+    return 3;
+  }
+  if (env.TERM === "wezterm") {
+    return 3;
+  }
+  if ("TERM_PROGRAM" in env) {
+    const version3 = Number.parseInt((env.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
+    switch (env.TERM_PROGRAM) {
+      case "iTerm.app": {
+        return version3 >= 3 ? 3 : 2;
+      }
+      case "Apple_Terminal": {
+        return 2;
+      }
+    }
+  }
+  if (/-256(color)?$/i.test(env.TERM)) {
+    return 2;
+  }
+  if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env.TERM)) {
+    return 1;
+  }
+  if ("COLORTERM" in env) {
+    return 1;
+  }
+  return min;
+}
+function createSupportsColor(stream, options = {}) {
+  const level = _supportsColor(stream, {
+    streamIsTTY: stream && stream.isTTY,
+    ...options
+  });
+  return translateLevel(level);
+}
+var env, flagForceColor, supportsColor, supports_color_default;
+var init_supports_color = __esm({
+  "../../node_modules/.pnpm/supports-color@10.2.2/node_modules/supports-color/index.js"() {
+    ({ env } = process2);
+    if (hasFlag("no-color") || hasFlag("no-colors") || hasFlag("color=false") || hasFlag("color=never")) {
+      flagForceColor = 0;
+    } else if (hasFlag("color") || hasFlag("colors") || hasFlag("color=true") || hasFlag("color=always")) {
+      flagForceColor = 1;
+    }
+    supportsColor = {
+      stdout: createSupportsColor({ isTTY: tty.isatty(1) }),
+      stderr: createSupportsColor({ isTTY: tty.isatty(2) })
+    };
+    supports_color_default = supportsColor;
+  }
+});
+
+// ../../node_modules/.pnpm/debug@4.4.3_supports-color@10.2.2/node_modules/debug/src/node.js
 var require_node = __commonJS({
-  "../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/node.js"(exports, module) {
-    var tty = __require("tty");
+  "../../node_modules/.pnpm/debug@4.4.3_supports-color@10.2.2/node_modules/debug/src/node.js"(exports, module) {
+    var tty2 = __require("tty");
     var util2 = __require("util");
     exports.init = init;
     exports.log = log;
@@ -523,8 +676,8 @@ var require_node = __commonJS({
     );
     exports.colors = [6, 2, 3, 4, 5, 1];
     try {
-      const supportsColor = __require("supports-color");
-      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+      const supportsColor2 = (init_supports_color(), __toCommonJS(supports_color_exports));
+      if (supportsColor2 && (supportsColor2.stderr || supportsColor2).level >= 2) {
         exports.colors = [
           20,
           21,
@@ -626,7 +779,7 @@ var require_node = __commonJS({
       return obj;
     }, {});
     function useColors() {
-      return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+      return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty2.isatty(process.stderr.fd);
     }
     function formatArgs(args) {
       const { namespace: name, useColors: useColors2 } = this;
@@ -679,9 +832,9 @@ var require_node = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/index.js
+// ../../node_modules/.pnpm/debug@4.4.3_supports-color@10.2.2/node_modules/debug/src/index.js
 var require_src = __commonJS({
-  "../../node_modules/.pnpm/debug@4.4.3/node_modules/debug/src/index.js"(exports, module) {
+  "../../node_modules/.pnpm/debug@4.4.3_supports-color@10.2.2/node_modules/debug/src/index.js"(exports, module) {
     if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
       module.exports = require_browser();
     } else {
@@ -15436,9 +15589,9 @@ var require_type_is = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/utils.js
+// ../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/utils.js
 var require_utils = __commonJS({
-  "../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/utils.js"(exports, module) {
+  "../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/utils.js"(exports, module) {
     "use strict";
     var bytes = require_bytes();
     var contentType = require_dist();
@@ -15488,9 +15641,9 @@ var require_utils = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/read.js
+// ../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/read.js
 var require_read = __commonJS({
-  "../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/read.js"(exports, module) {
+  "../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/read.js"(exports, module) {
     "use strict";
     var createError = require_http_errors();
     var getBody = require_raw_body();
@@ -15646,9 +15799,9 @@ var require_read = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/types/json.js
+// ../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/types/json.js
 var require_json = __commonJS({
-  "../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/types/json.js"(exports, module) {
+  "../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/types/json.js"(exports, module) {
     "use strict";
     var debug = require_src()("body-parser:json");
     var read2 = require_read();
@@ -15745,9 +15898,9 @@ var require_json = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/types/raw.js
+// ../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/types/raw.js
 var require_raw = __commonJS({
-  "../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/types/raw.js"(exports, module) {
+  "../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/types/raw.js"(exports, module) {
     "use strict";
     var debug = require_src()("body-parser:raw");
     var read2 = require_read();
@@ -15767,9 +15920,9 @@ var require_raw = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/types/text.js
+// ../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/types/text.js
 var require_text = __commonJS({
-  "../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/types/text.js"(exports, module) {
+  "../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/types/text.js"(exports, module) {
     "use strict";
     var debug = require_src()("body-parser:text");
     var read2 = require_read();
@@ -18321,9 +18474,9 @@ var require_lib2 = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/types/urlencoded.js
+// ../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/types/urlencoded.js
 var require_urlencoded = __commonJS({
-  "../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/lib/types/urlencoded.js"(exports, module) {
+  "../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/lib/types/urlencoded.js"(exports, module) {
     "use strict";
     var createError = require_http_errors();
     var debug = require_src()("body-parser:urlencoded");
@@ -18407,9 +18560,9 @@ var require_urlencoded = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/index.js
+// ../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/index.js
 var require_body_parser = __commonJS({
-  "../../node_modules/.pnpm/body-parser@2.3.0/node_modules/body-parser/index.js"(exports, module) {
+  "../../node_modules/.pnpm/body-parser@2.3.0_supports-color@10.2.2/node_modules/body-parser/index.js"(exports, module) {
     "use strict";
     exports = module.exports = bodyParser;
     exports.json = require_json();
@@ -18591,9 +18744,9 @@ var require_parseurl = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/finalhandler@2.1.1/node_modules/finalhandler/index.js
+// ../../node_modules/.pnpm/finalhandler@2.1.1_supports-color@10.2.2/node_modules/finalhandler/index.js
 var require_finalhandler = __commonJS({
-  "../../node_modules/.pnpm/finalhandler@2.1.1/node_modules/finalhandler/index.js"(exports, module) {
+  "../../node_modules/.pnpm/finalhandler@2.1.1_supports-color@10.2.2/node_modules/finalhandler/index.js"(exports, module) {
     "use strict";
     var debug = require_src()("finalhandler");
     var encodeUrl = require_encodeurl();
@@ -18609,7 +18762,7 @@ var require_finalhandler = __commonJS({
     module.exports = finalhandler;
     function finalhandler(req, res, options) {
       var opts = options || {};
-      var env = opts.env || process.env.NODE_ENV || "development";
+      var env2 = opts.env || process.env.NODE_ENV || "development";
       var onerror = opts.onerror;
       return function(err) {
         var headers;
@@ -18626,7 +18779,7 @@ var require_finalhandler = __commonJS({
           } else {
             headers = getErrorHeaders(err);
           }
-          msg = getErrorMessage(err, status, env);
+          msg = getErrorMessage(err, status, env2);
         } else {
           status = 404;
           msg = "Cannot " + req.method + " " + encodeUrl(getResourceName(req));
@@ -18651,9 +18804,9 @@ var require_finalhandler = __commonJS({
       }
       return { ...err.headers };
     }
-    function getErrorMessage(err, status, env) {
+    function getErrorMessage(err, status, env2) {
       var msg;
-      if (env !== "production") {
+      if (env2 !== "production") {
         msg = err.stack;
         if (!msg && typeof err.toString === "function") {
           msg = err.toString();
@@ -18718,9 +18871,9 @@ var require_finalhandler = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/view.js
+// ../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/view.js
 var require_view = __commonJS({
-  "../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/view.js"(exports, module) {
+  "../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/view.js"(exports, module) {
     "use strict";
     var debug = require_src()("express:view");
     var path = __require("node:path");
@@ -19786,9 +19939,9 @@ var require_proxy_addr = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/utils.js
+// ../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/utils.js
 var require_utils3 = __commonJS({
-  "../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/utils.js"(exports) {
+  "../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/utils.js"(exports) {
     "use strict";
     var { METHODS } = __require("node:http");
     var contentType = require_content_type();
@@ -20221,10 +20374,10 @@ var require_dist2 = __commonJS({
       const keys = [];
       let source = "";
       let combinations = 0;
-      function process2(path2) {
+      function process3(path2) {
         if (Array.isArray(path2)) {
           for (const p of path2)
-            process2(p);
+            process3(p);
           return;
         }
         const data = typeof path2 === "object" ? path2 : parse3(path2, options);
@@ -20238,7 +20391,7 @@ var require_dist2 = __commonJS({
           combinations++;
         });
       }
-      process2(path);
+      process3(path);
       let pattern = `^(?:${source})`;
       if (trailing)
         pattern += "(?:" + escape2(delimiter) + "$)?";
@@ -20367,9 +20520,9 @@ var require_dist2 = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js
+// ../../node_modules/.pnpm/router@2.2.0_supports-color@10.2.2/node_modules/router/lib/layer.js
 var require_layer = __commonJS({
-  "../../node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js"(exports, module) {
+  "../../node_modules/.pnpm/router@2.2.0_supports-color@10.2.2/node_modules/router/lib/layer.js"(exports, module) {
     "use strict";
     var isPromise = require_is_promise();
     var pathRegexp = require_dist2();
@@ -20517,9 +20670,9 @@ var require_layer = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js
+// ../../node_modules/.pnpm/router@2.2.0_supports-color@10.2.2/node_modules/router/lib/route.js
 var require_route = __commonJS({
-  "../../node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js"(exports, module) {
+  "../../node_modules/.pnpm/router@2.2.0_supports-color@10.2.2/node_modules/router/lib/route.js"(exports, module) {
     "use strict";
     var debug = require_src()("router:route");
     var Layer = require_layer();
@@ -20637,9 +20790,9 @@ var require_route = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/router@2.2.0/node_modules/router/index.js
+// ../../node_modules/.pnpm/router@2.2.0_supports-color@10.2.2/node_modules/router/index.js
 var require_router = __commonJS({
-  "../../node_modules/.pnpm/router@2.2.0/node_modules/router/index.js"(exports, module) {
+  "../../node_modules/.pnpm/router@2.2.0_supports-color@10.2.2/node_modules/router/index.js"(exports, module) {
     "use strict";
     var isPromise = require_is_promise();
     var Layer = require_layer();
@@ -20651,27 +20804,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router8;
+    module.exports = Router9;
     module.exports.Route = Route;
-    function Router8(options) {
-      if (!(this instanceof Router8)) {
-        return new Router8(options);
+    function Router9(options) {
+      if (!(this instanceof Router9)) {
+        return new Router9(options);
       }
       const opts = options || {};
-      function router8(req, res, next) {
-        router8.handle(req, res, next);
+      function router9(req, res, next) {
+        router9.handle(req, res, next);
       }
-      Object.setPrototypeOf(router8, this);
-      router8.caseSensitive = opts.caseSensitive;
-      router8.mergeParams = opts.mergeParams;
-      router8.params = {};
-      router8.strict = opts.strict;
-      router8.stack = [];
-      return router8;
+      Object.setPrototypeOf(router9, this);
+      router9.caseSensitive = opts.caseSensitive;
+      router9.mergeParams = opts.mergeParams;
+      router9.params = {};
+      router9.strict = opts.strict;
+      router9.stack = [];
+      return router9;
     }
-    Router8.prototype = function() {
+    Router9.prototype = function() {
     };
-    Router8.prototype.param = function param(name, fn) {
+    Router9.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20691,7 +20844,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router8.prototype.handle = function handle(req, res, callback) {
+    Router9.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20818,7 +20971,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router8.prototype.use = function use(handler) {
+    Router9.prototype.use = function use(handler) {
       let offset = 0;
       let path = "/";
       if (typeof handler !== "function") {
@@ -20851,7 +21004,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router8.prototype.route = function route(path) {
+    Router9.prototype.route = function route(path) {
       const route2 = new Route(path);
       const layer = new Layer(path, {
         sensitive: this.caseSensitive,
@@ -20866,7 +21019,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router8.prototype[method] = function(path) {
+      Router9.prototype[method] = function(path) {
         const route = this.route(path);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21035,9 +21188,9 @@ var require_router = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/application.js
+// ../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/application.js
 var require_application = __commonJS({
-  "../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/application.js"(exports, module) {
+  "../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/application.js"(exports, module) {
     "use strict";
     var finalhandler = require_finalhandler();
     var debug = require_src()("express:application");
@@ -21049,13 +21202,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router8 = require_router();
+    var Router9 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router8 = null;
+      var router9 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21064,21 +21217,21 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router8 === null) {
-            router8 = new Router8({
+          if (router9 === null) {
+            router9 = new Router9({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router8;
+          return router9;
         }
       });
     };
     app2.defaultConfiguration = function defaultConfiguration() {
-      var env = process.env.NODE_ENV || "development";
+      var env2 = process.env.NODE_ENV || "development";
       this.enable("x-powered-by");
       this.set("etag", "weak");
-      this.set("env", env);
+      this.set("env", env2);
       this.set("query parser", "simple");
       this.set("subdomain offset", 2);
       this.set("trust proxy", false);
@@ -21086,7 +21239,7 @@ var require_application = __commonJS({
         configurable: true,
         value: true
       });
-      debug("booting in %s mode", env);
+      debug("booting in %s mode", env2);
       this.on("mount", function onmount(parent) {
         if (this.settings[trustProxyDefaultSymbol] === true && typeof parent.settings["trust proxy fn"] === "function") {
           delete this.settings["trust proxy"];
@@ -21103,7 +21256,7 @@ var require_application = __commonJS({
       this.set("view", View2);
       this.set("views", resolve("views"));
       this.set("jsonp callback name", "callback");
-      if (env === "production") {
+      if (env2 === "production") {
         this.enable("view cache");
       }
     };
@@ -21141,15 +21294,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router8 = this.router;
+      var router9 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router8.use(path, fn2);
+          return router9.use(path, fn2);
         }
         debug(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router8.use(path, function mounted_app(req, res, next) {
+        router9.use(path, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -22043,9 +22196,9 @@ var require_range_parser = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/request.js
+// ../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/request.js
 var require_request = __commonJS({
-  "../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/request.js"(exports, module) {
+  "../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/request.js"(exports, module) {
     "use strict";
     var accepts = require_accepts();
     var isIP = __require("node:net").isIP;
@@ -22584,9 +22737,9 @@ var require_cookie = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/send@1.2.1/node_modules/send/index.js
+// ../../node_modules/.pnpm/send@1.2.1_supports-color@10.2.2/node_modules/send/index.js
 var require_send = __commonJS({
-  "../../node_modules/.pnpm/send@1.2.1/node_modules/send/index.js"(exports, module) {
+  "../../node_modules/.pnpm/send@1.2.1_supports-color@10.2.2/node_modules/send/index.js"(exports, module) {
     "use strict";
     var createError = require_http_errors();
     var debug = require_src()("send");
@@ -23140,9 +23293,9 @@ var require_vary = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/response.js
+// ../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/response.js
 var require_response = __commonJS({
-  "../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/response.js"(exports, module) {
+  "../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/response.js"(exports, module) {
     "use strict";
     var contentDisposition = require_content_disposition();
     var createError = require_http_errors();
@@ -23610,9 +23763,9 @@ var require_response = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/serve-static@2.2.1/node_modules/serve-static/index.js
+// ../../node_modules/.pnpm/serve-static@2.2.1_supports-color@10.2.2/node_modules/serve-static/index.js
 var require_serve_static = __commonJS({
-  "../../node_modules/.pnpm/serve-static@2.2.1/node_modules/serve-static/index.js"(exports, module) {
+  "../../node_modules/.pnpm/serve-static@2.2.1_supports-color@10.2.2/node_modules/serve-static/index.js"(exports, module) {
     "use strict";
     var encodeUrl = require_encodeurl();
     var escapeHtml = require_escape_html();
@@ -23714,15 +23867,15 @@ var require_serve_static = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/express.js
+// ../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/express.js
 var require_express = __commonJS({
-  "../../node_modules/.pnpm/express@5.2.1/node_modules/express/lib/express.js"(exports, module) {
+  "../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/lib/express.js"(exports, module) {
     "use strict";
     var bodyParser = require_body_parser();
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router8 = require_router();
+    var Router9 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23744,8 +23897,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router8.Route;
-    exports.Router = Router8;
+    exports.Route = Router9.Route;
+    exports.Router = Router9;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -23754,9 +23907,9 @@ var require_express = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/express@5.2.1/node_modules/express/index.js
+// ../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/index.js
 var require_express2 = __commonJS({
-  "../../node_modules/.pnpm/express@5.2.1/node_modules/express/index.js"(exports, module) {
+  "../../node_modules/.pnpm/express@5.2.1_supports-color@10.2.2/node_modules/express/index.js"(exports, module) {
     "use strict";
     module.exports = require_express();
   }
@@ -28149,7 +28302,7 @@ var require_pino = __commonJS({
       }
     }
     globalThis.__bundlerPathsOverrides = { ...globalThis.__bundlerPathsOverrides || {}, "thread-stream-worker": pinoBundlerAbsolutePath("./thread-stream-worker.mjs"), "pino-worker": pinoBundlerAbsolutePath("./pino-worker.mjs"), "pino/file": pinoBundlerAbsolutePath("./pino-file.mjs"), "pino-pretty": pinoBundlerAbsolutePath("./pino-pretty.mjs") };
-    var os = __require("node:os");
+    var os2 = __require("node:os");
     var stdSerializers = require_pino_std_serializers();
     var caller = require_caller();
     var redaction = require_redaction();
@@ -28196,7 +28349,7 @@ var require_pino = __commonJS({
     } = symbols;
     var { epochTime, nullTime } = time4;
     var { pid } = process;
-    var hostname2 = os.hostname();
+    var hostname2 = os2.hostname();
     var defaultErrorSerializer = stdSerializers.err;
     var defaultOptions = {
       level: "info",
@@ -32061,8 +32214,8 @@ var require_helper = __commonJS({
       return old;
     };
     module.exports.getFileName = function(rawEnv) {
-      var env = rawEnv || process.env;
-      var file2 = env.PGPASSFILE || (isWin ? path.join(env.APPDATA || "./", "postgresql", "pgpass.conf") : path.join(env.HOME || "./", ".pgpass"));
+      var env2 = rawEnv || process.env;
+      var file2 = env2.PGPASSFILE || (isWin ? path.join(env2.APPDATA || "./", "postgresql", "pgpass.conf") : path.join(env2.HOME || "./", ".pgpass"));
       return file2;
     };
     module.exports.usePgPass = function(stats, fname) {
@@ -44421,9 +44574,9 @@ var require_xlsx = __commonJS({
         cell.isst = blob.read_shift(4);
         return cell;
       }
-      function write_LabelSst(R, C, v, os) {
+      function write_LabelSst(R, C, v, os2) {
         var o = new_buf(10);
-        write_XLSCell(R, C, os, o);
+        write_XLSCell(R, C, os2, o);
         o.write_shift(4, v);
         return o;
       }
@@ -44436,10 +44589,10 @@ var require_xlsx = __commonJS({
         cell.val = str;
         return cell;
       }
-      function write_Label(R, C, v, os, opts) {
+      function write_Label(R, C, v, os2, opts) {
         var b8 = !opts || opts.biff == 8;
         var o = new_buf(6 + 2 + +b8 + (1 + b8) * v.length);
-        write_XLSCell(R, C, os, o);
+        write_XLSCell(R, C, os2, o);
         o.write_shift(2, v.length);
         if (b8) o.write_shift(1, 1);
         o.write_shift((1 + b8) * v.length, v, b8 ? "utf16le" : "sbcs");
@@ -44593,9 +44746,9 @@ var require_xlsx = __commonJS({
         cell.t = val === true || val === false ? "b" : "e";
         return cell;
       }
-      function write_BoolErr(R, C, v, os, opts, t) {
+      function write_BoolErr(R, C, v, os2, opts, t) {
         var o = new_buf(8);
-        write_XLSCell(R, C, os, o);
+        write_XLSCell(R, C, os2, o);
         write_Bes(v, t, o);
         return o;
       }
@@ -44606,9 +44759,9 @@ var require_xlsx = __commonJS({
         cell.val = xnum;
         return cell;
       }
-      function write_Number(R, C, v, os) {
+      function write_Number(R, C, v, os2) {
         var o = new_buf(14);
-        write_XLSCell(R, C, os, o);
+        write_XLSCell(R, C, os2, o);
         write_Xnum(v, o);
         return o;
       }
@@ -44960,9 +45113,9 @@ var require_xlsx = __commonJS({
       var parse_String = parse_XLUnicodeString;
       function parse_ImData(blob) {
         var cf = blob.read_shift(2);
-        var env = blob.read_shift(2);
+        var env2 = blob.read_shift(2);
         var lcb = blob.read_shift(4);
-        var o = { fmt: cf, env, len: lcb, data: blob.slice(blob.l, blob.l + lcb) };
+        var o = { fmt: cf, env: env2, len: lcb, data: blob.slice(blob.l, blob.l + lcb) };
         blob.l += lcb;
         return o;
       }
@@ -51431,8 +51584,8 @@ var require_xlsx = __commonJS({
         var cbf = parse_XLSCellParsedFormula(blob, end - blob.l, opts);
         return { cell, val: val[0], formula: cbf, shared: flags >> 3 & 1, tt: val[1] };
       }
-      function write_Formula(cell, R, C, opts, os) {
-        var o1 = write_XLSCell(R, C, os);
+      function write_Formula(cell, R, C, opts, os2) {
+        var o1 = write_XLSCell(R, C, os2);
         var o2 = write_FormulaValue(cell.v);
         var o3 = new_buf(6);
         var flags = 1 | 32;
@@ -53011,8 +53164,8 @@ var require_xlsx = __commonJS({
             break;
         }
         var v = writetag("v", escapexml(vv)), o = { r: ref };
-        var os = get_cell_style(opts.cellXfs, cell, opts);
-        if (os !== 0) o.s = os;
+        var os2 = get_cell_style(opts.cellXfs, cell, opts);
+        if (os2 !== 0) o.s = os2;
         switch (cell.t) {
           case "n":
             break;
@@ -56827,8 +56980,8 @@ var require_xlsx = __commonJS({
             p = escapexlml(cell.v || "");
             break;
         }
-        var os = get_cell_style(opts.cellXfs, cell, opts);
-        attr["ss:StyleID"] = "s" + (21 + os);
+        var os2 = get_cell_style(opts.cellXfs, cell, opts);
+        attr["ss:StyleID"] = "s" + (21 + os2);
         attr["ss:Index"] = addr.c + 1;
         var _v = cell.v != null ? p : "";
         var m = cell.t == "z" ? "" : '<Data ss:Type="' + t + '">' + _v + "</Data>";
@@ -62663,32 +62816,32 @@ var require_xlsx = __commonJS({
         });
       }
       function write_ws_biff8_cell(ba, cell, R, C, opts) {
-        var os = 16 + get_cell_style(opts.cellXfs, cell, opts);
+        var os2 = 16 + get_cell_style(opts.cellXfs, cell, opts);
         if (cell.v == null && !cell.bf) {
-          write_biff_rec(ba, 513, write_XLSCell(R, C, os));
+          write_biff_rec(ba, 513, write_XLSCell(R, C, os2));
           return;
         }
-        if (cell.bf) write_biff_rec(ba, 6, write_Formula(cell, R, C, opts, os));
+        if (cell.bf) write_biff_rec(ba, 6, write_Formula(cell, R, C, opts, os2));
         else switch (cell.t) {
           case "d":
           case "n":
             var v = cell.t == "d" ? datenum(parseDate(cell.v)) : cell.v;
-            write_biff_rec(ba, 515, write_Number(R, C, v, os, opts));
+            write_biff_rec(ba, 515, write_Number(R, C, v, os2, opts));
             break;
           case "b":
           case "e":
-            write_biff_rec(ba, 517, write_BoolErr(R, C, cell.v, os, opts, cell.t));
+            write_biff_rec(ba, 517, write_BoolErr(R, C, cell.v, os2, opts, cell.t));
             break;
           /* TODO: codepage, sst */
           case "s":
           case "str":
             if (opts.bookSST) {
               var isst = get_sst_id(opts.Strings, cell.v, opts.revStrings);
-              write_biff_rec(ba, 253, write_LabelSst(R, C, isst, os, opts));
-            } else write_biff_rec(ba, 516, write_Label(R, C, (cell.v || "").slice(0, 255), os, opts));
+              write_biff_rec(ba, 253, write_LabelSst(R, C, isst, os2, opts));
+            } else write_biff_rec(ba, 516, write_Label(R, C, (cell.v || "").slice(0, 255), os2, opts));
             break;
           default:
-            write_biff_rec(ba, 513, write_XLSCell(R, C, os));
+            write_biff_rec(ba, 513, write_XLSCell(R, C, os2));
         }
       }
       function write_ws_biff8(idx, opts, wb) {
@@ -80069,7 +80222,7 @@ var require_make_middleware = __commonJS({
 var require_disk = __commonJS({
   "../../node_modules/.pnpm/multer@2.2.0/node_modules/multer/storage/disk.js"(exports, module) {
     var fs = __require("fs");
-    var os = __require("os");
+    var os2 = __require("os");
     var path = __require("path");
     var crypto2 = __require("crypto");
     function getFilename(req, file2, cb) {
@@ -80078,7 +80231,7 @@ var require_disk = __commonJS({
       });
     }
     function getDestination(req, file2, cb) {
-      cb(null, os.tmpdir());
+      cb(null, os2.tmpdir());
     }
     function DiskStorage(opts) {
       this.getFilename = opts.filename || getFilename;
@@ -83637,12 +83790,12 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express8 = __toESM(require_express2(), 1);
+var import_express9 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 
 // src/routes/index.ts
-var import_express7 = __toESM(require_express2(), 1);
+var import_express8 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -87538,11 +87691,14 @@ var HealthCheckResponse = objectType({
   "status": stringType()
 });
 var ListEntregasQueryParams = objectType({
-  "date": coerce.string().optional().describe("Date in YYYY-MM-DD format (defaults to today)")
+  "date": coerce.string().optional().describe("Date in YYYY-MM-DD format (defaults to today)"),
+  "from": coerce.string().optional().describe("Start date in YYYY-MM-DD format for a range query"),
+  "to": coerce.string().optional().describe("End date in YYYY-MM-DD format for a range query")
 });
 var ListEntregasResponseItem = objectType({
   "id": numberType(),
   "date": stringType().describe("Date in YYYY-MM-DD format"),
+  "agendamento": booleanType().optional().describe("Indicates the delivery was created from the appointment scheduler"),
   "sortOrder": numberType(),
   "checked": enumType(["none", "filled", "confirmed"]).describe("S column state: none=unchecked, filled=checked, confirmed=verified"),
   "cliente": stringType(),
@@ -87555,11 +87711,13 @@ var ListEntregasResponseItem = objectType({
   "cg": enumType(["none", "x", "check"]).describe("CG column state: none=empty, x=missing, check=confirmed"),
   "v": unionType([literalType("V"), literalType("2A"), literalType(null)]).nullable().describe("V column flag \u2014 null=empty, V=concluido, 2A=segunda entrega"),
   "divergencias": stringType().nullish().describe("Diverg\xEAncias / observations column"),
-  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish().describe("Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3\xBA, COLETA")
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish().describe("Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3\xBA, COLETA"),
+  "statusManual": unionType([literalType("green"), literalType("red"), literalType("yellow"), literalType(null)]).nullish().describe("Manual appointment status color override")
 });
 var ListEntregasResponse = arrayType(ListEntregasResponseItem);
 var CreateEntregaBody = objectType({
   "date": stringType(),
+  "agendamento": booleanType().optional().describe("Marks this delivery as an appointment"),
   "sortOrder": numberType().nullish(),
   "checked": enumType(["none", "filled", "confirmed"]).optional(),
   "cliente": stringType(),
@@ -87572,11 +87730,13 @@ var CreateEntregaBody = objectType({
   "cg": enumType(["none", "x", "check"]).optional(),
   "v": unionType([literalType("V"), literalType("2A"), literalType(null)]).nullish(),
   "divergencias": stringType().nullish(),
-  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish()
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish(),
+  "statusManual": unionType([literalType("green"), literalType("red"), literalType("yellow"), literalType(null)]).nullish()
 });
 var CreateEntregaResponse = objectType({
   "id": numberType(),
   "date": stringType().describe("Date in YYYY-MM-DD format"),
+  "agendamento": booleanType().optional().describe("Indicates the delivery was created from the appointment scheduler"),
   "sortOrder": numberType(),
   "checked": enumType(["none", "filled", "confirmed"]).describe("S column state: none=unchecked, filled=checked, confirmed=verified"),
   "cliente": stringType(),
@@ -87589,7 +87749,8 @@ var CreateEntregaResponse = objectType({
   "cg": enumType(["none", "x", "check"]).describe("CG column state: none=empty, x=missing, check=confirmed"),
   "v": unionType([literalType("V"), literalType("2A"), literalType(null)]).nullable().describe("V column flag \u2014 null=empty, V=concluido, 2A=segunda entrega"),
   "divergencias": stringType().nullish().describe("Diverg\xEAncias / observations column"),
-  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish().describe("Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3\xBA, COLETA")
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish().describe("Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3\xBA, COLETA"),
+  "statusManual": unionType([literalType("green"), literalType("red"), literalType("yellow"), literalType(null)]).nullish().describe("Manual appointment status color override")
 });
 var GetEntregaParams = objectType({
   "id": coerce.number()
@@ -87597,6 +87758,7 @@ var GetEntregaParams = objectType({
 var GetEntregaResponse = objectType({
   "id": numberType(),
   "date": stringType().describe("Date in YYYY-MM-DD format"),
+  "agendamento": booleanType().optional().describe("Indicates the delivery was created from the appointment scheduler"),
   "sortOrder": numberType(),
   "checked": enumType(["none", "filled", "confirmed"]).describe("S column state: none=unchecked, filled=checked, confirmed=verified"),
   "cliente": stringType(),
@@ -87609,12 +87771,15 @@ var GetEntregaResponse = objectType({
   "cg": enumType(["none", "x", "check"]).describe("CG column state: none=empty, x=missing, check=confirmed"),
   "v": unionType([literalType("V"), literalType("2A"), literalType(null)]).nullable().describe("V column flag \u2014 null=empty, V=concluido, 2A=segunda entrega"),
   "divergencias": stringType().nullish().describe("Diverg\xEAncias / observations column"),
-  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish().describe("Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3\xBA, COLETA")
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish().describe("Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3\xBA, COLETA"),
+  "statusManual": unionType([literalType("green"), literalType("red"), literalType("yellow"), literalType(null)]).nullish().describe("Manual appointment status color override")
 });
 var UpdateEntregaParams = objectType({
   "id": coerce.number()
 });
 var UpdateEntregaBody = objectType({
+  "date": stringType().optional().describe("Date in YYYY-MM-DD format"),
+  "agendamento": booleanType().optional().describe("Marks an existing delivery as an appointment"),
   "checked": enumType(["none", "filled", "confirmed"]).optional(),
   "cliente": stringType().nullish(),
   "hrs": stringType().nullish(),
@@ -87627,11 +87792,13 @@ var UpdateEntregaBody = objectType({
   "v": unionType([literalType("V"), literalType("2A"), literalType(null)]).nullish(),
   "divergencias": stringType().nullish(),
   "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish(),
+  "statusManual": unionType([literalType("green"), literalType("red"), literalType("yellow"), literalType(null)]).nullish(),
   "sortOrder": numberType().nullish()
 });
 var UpdateEntregaResponse = objectType({
   "id": numberType(),
   "date": stringType().describe("Date in YYYY-MM-DD format"),
+  "agendamento": booleanType().optional().describe("Indicates the delivery was created from the appointment scheduler"),
   "sortOrder": numberType(),
   "checked": enumType(["none", "filled", "confirmed"]).describe("S column state: none=unchecked, filled=checked, confirmed=verified"),
   "cliente": stringType(),
@@ -87644,7 +87811,8 @@ var UpdateEntregaResponse = objectType({
   "cg": enumType(["none", "x", "check"]).describe("CG column state: none=empty, x=missing, check=confirmed"),
   "v": unionType([literalType("V"), literalType("2A"), literalType(null)]).nullable().describe("V column flag \u2014 null=empty, V=concluido, 2A=segunda entrega"),
   "divergencias": stringType().nullish().describe("Diverg\xEAncias / observations column"),
-  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish().describe("Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3\xBA, COLETA")
+  "frete": unionType([literalType("RIPACK"), literalType("TRANSPORTADORA"), literalType("3\xBA"), literalType("COLETA"), literalType(null)]).nullish().describe("Tipo de frete: RIPACK=verde, TRANSPORTADORA, 3\xBA, COLETA"),
+  "statusManual": unionType([literalType("green"), literalType("red"), literalType("yellow"), literalType(null)]).nullish().describe("Manual appointment status color override")
 });
 var DeleteEntregaParams = objectType({
   "id": coerce.number()
@@ -87706,7 +87874,7 @@ var TypeOverrides = import_lib.default.TypeOverrides;
 var defaults = import_lib.default.defaults;
 var esm_default = import_lib.default;
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/entity.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/entity.js
 var entityKind = /* @__PURE__ */ Symbol.for("drizzle:entityKind");
 function is(value, type) {
   if (!value || typeof value !== "object") {
@@ -87732,7 +87900,7 @@ function is(value, type) {
   return false;
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/logger.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/logger.js
 var ConsoleLogWriter = class {
   static [entityKind] = "ConsoleLogWriter";
   write(message) {
@@ -87763,7 +87931,7 @@ var NoopLogger = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/query-promise.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/query-promise.js
 var QueryPromise = class {
   static [entityKind] = "QueryPromise";
   [Symbol.toStringTag] = "QueryPromise";
@@ -87787,7 +87955,7 @@ var QueryPromise = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/column.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/column.js
 var Column = class {
   constructor(table, config2) {
     this.table = table;
@@ -87838,7 +88006,7 @@ var Column = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/column-builder.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/column-builder.js
 var ColumnBuilder = class {
   static [entityKind] = "ColumnBuilder";
   config;
@@ -87941,10 +88109,10 @@ var ColumnBuilder = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/table.utils.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/table.utils.js
 var TableName = /* @__PURE__ */ Symbol.for("drizzle:Name");
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/foreign-keys.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/foreign-keys.js
 var ForeignKeyBuilder = class {
   static [entityKind] = "PgForeignKeyBuilder";
   /** @internal */
@@ -88001,12 +88169,15 @@ var ForeignKey = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/tracing-utils.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/tracing-utils.js
 function iife(fn, ...args) {
   return fn(...args);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/unique-constraint.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/unique-constraint.js
+function unique(name) {
+  return new UniqueOnConstraintBuilder(name);
+}
 function uniqueKeyName(table, columns) {
   return `${table[TableName]}_${columns.join("_")}_unique`;
 }
@@ -88056,7 +88227,7 @@ var UniqueConstraint = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/utils/array.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/utils/array.js
 function parsePgArrayValue(arrayString, startFrom, inQuotes) {
   for (let i = startFrom; i < arrayString.length; i++) {
     const char2 = arrayString[i];
@@ -88132,7 +88303,7 @@ function makePgArray(array2) {
   }).join(",")}}`;
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/common.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/common.js
 var PgColumnBuilder = class extends ColumnBuilder {
   foreignKeyConfigs = [];
   static [entityKind] = "PgColumnBuilder";
@@ -88316,7 +88487,7 @@ var PgArray = class _PgArray extends PgColumn {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/enum.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/enum.js
 var PgEnumObjectColumnBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgEnumObjectColumnBuilder";
   constructor(name, enumInstance) {
@@ -88374,7 +88545,7 @@ var PgEnumColumn = class extends PgColumn {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/subquery.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/subquery.js
 var Subquery = class {
   static [entityKind] = "Subquery";
   constructor(sql2, fields, alias, isWith = false, usedTables = []) {
@@ -88395,10 +88566,10 @@ var WithSubquery = class extends Subquery {
   static [entityKind] = "WithSubquery";
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/version.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/version.js
 var version = "0.45.2";
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/tracing.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/tracing.js
 var otel;
 var rawTracer;
 var tracer = {
@@ -88433,10 +88604,10 @@ var tracer = {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/view-common.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/view-common.js
 var ViewBaseConfig = /* @__PURE__ */ Symbol.for("drizzle:ViewBaseConfig");
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/table.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/table.js
 var Schema = /* @__PURE__ */ Symbol.for("drizzle:Schema");
 var Columns = /* @__PURE__ */ Symbol.for("drizzle:Columns");
 var ExtraConfigColumns = /* @__PURE__ */ Symbol.for("drizzle:ExtraConfigColumns");
@@ -88501,7 +88672,7 @@ function getTableUniqueName(table) {
   return `${table[Schema] ?? "public"}.${table[TableName]}`;
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/sql/sql.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/sql/sql.js
 var FakePrimitiveParam = class {
   static [entityKind] = "FakePrimitiveParam";
 };
@@ -88898,7 +89069,7 @@ Subquery.prototype.getSQL = function() {
   return new SQL([this]);
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/alias.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/alias.js
 var ColumnAliasProxyHandler = class {
   constructor(table) {
     this.table = table;
@@ -88994,7 +89165,7 @@ function mapColumnsInSQLToAlias(query, alias) {
   }));
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/selection-proxy.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/selection-proxy.js
 var SelectionProxyHandler = class _SelectionProxyHandler {
   static [entityKind] = "SelectionProxyHandler";
   config;
@@ -89062,7 +89233,7 @@ var SelectionProxyHandler = class _SelectionProxyHandler {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/utils.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/utils.js
 function mapResultRow(columns, row, joinsNotNullableMap) {
   const nullifyMap = {};
   const result = columns.reduce(
@@ -89216,7 +89387,7 @@ function isConfig(data) {
 }
 var textDecoder = typeof TextDecoder === "undefined" ? null : new TextDecoder();
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/int.common.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/int.common.js
 var PgIntColumnBaseBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgIntColumnBaseBuilder";
   generatedAlwaysAsIdentity(sequence) {
@@ -89255,7 +89426,7 @@ var PgIntColumnBaseBuilder = class extends PgColumnBuilder {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/bigint.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/bigint.js
 var PgBigInt53Builder = class extends PgIntColumnBaseBuilder {
   static [entityKind] = "PgBigInt53Builder";
   constructor(name) {
@@ -89309,7 +89480,7 @@ function bigint(a, b) {
   return new PgBigInt64Builder(name);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/bigserial.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/bigserial.js
 var PgBigSerial53Builder = class extends PgColumnBuilder {
   static [entityKind] = "PgBigSerial53Builder";
   constructor(name) {
@@ -89369,7 +89540,7 @@ function bigserial(a, b) {
   return new PgBigSerial64Builder(name);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/boolean.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/boolean.js
 var PgBooleanBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgBooleanBuilder";
   constructor(name) {
@@ -89390,7 +89561,7 @@ function boolean(name) {
   return new PgBooleanBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/char.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/char.js
 var PgCharBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgCharBuilder";
   constructor(name, config2) {
@@ -89419,7 +89590,7 @@ function char(a, b = {}) {
   return new PgCharBuilder(name, config2);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/cidr.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/cidr.js
 var PgCidrBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgCidrBuilder";
   constructor(name) {
@@ -89440,7 +89611,7 @@ function cidr(name) {
   return new PgCidrBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/custom.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/custom.js
 var PgCustomColumnBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgCustomColumnBuilder";
   constructor(name, fieldConfig, customTypeParams) {
@@ -89484,7 +89655,7 @@ function customType(customTypeParams) {
   };
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/date.common.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/date.common.js
 var PgDateColumnBaseBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgDateColumnBaseBuilder";
   defaultNow() {
@@ -89492,7 +89663,7 @@ var PgDateColumnBaseBuilder = class extends PgColumnBuilder {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/date.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/date.js
 var PgDateBuilder = class extends PgDateColumnBaseBuilder {
   static [entityKind] = "PgDateBuilder";
   constructor(name) {
@@ -89547,7 +89718,7 @@ function date(a, b) {
   return new PgDateStringBuilder(name);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/double-precision.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/double-precision.js
 var PgDoublePrecisionBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgDoublePrecisionBuilder";
   constructor(name) {
@@ -89577,7 +89748,7 @@ function doublePrecision(name) {
   return new PgDoublePrecisionBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/inet.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/inet.js
 var PgInetBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgInetBuilder";
   constructor(name) {
@@ -89598,7 +89769,7 @@ function inet(name) {
   return new PgInetBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/integer.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/integer.js
 var PgIntegerBuilder = class extends PgIntColumnBaseBuilder {
   static [entityKind] = "PgIntegerBuilder";
   constructor(name) {
@@ -89625,7 +89796,7 @@ function integer(name) {
   return new PgIntegerBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/interval.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/interval.js
 var PgIntervalBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgIntervalBuilder";
   constructor(name, intervalConfig) {
@@ -89652,7 +89823,7 @@ function interval(a, b = {}) {
   return new PgIntervalBuilder(name, config2);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/json.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/json.js
 var PgJsonBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgJsonBuilder";
   constructor(name) {
@@ -89689,7 +89860,7 @@ function json(name) {
   return new PgJsonBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/jsonb.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/jsonb.js
 var PgJsonbBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgJsonbBuilder";
   constructor(name) {
@@ -89726,7 +89897,7 @@ function jsonb(name) {
   return new PgJsonbBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/line.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/line.js
 var PgLineBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgLineBuilder";
   constructor(name) {
@@ -89787,7 +89958,7 @@ function line(a, b) {
   return new PgLineABCBuilder(name);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/macaddr.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/macaddr.js
 var PgMacaddrBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgMacaddrBuilder";
   constructor(name) {
@@ -89808,7 +89979,7 @@ function macaddr(name) {
   return new PgMacaddrBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/macaddr8.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/macaddr8.js
 var PgMacaddr8Builder = class extends PgColumnBuilder {
   static [entityKind] = "PgMacaddr8Builder";
   constructor(name) {
@@ -89829,7 +90000,7 @@ function macaddr8(name) {
   return new PgMacaddr8Builder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/numeric.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/numeric.js
 var PgNumericBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgNumericBuilder";
   constructor(name, precision, scale) {
@@ -89946,7 +90117,7 @@ function numeric(a, b) {
   return mode === "number" ? new PgNumericNumberBuilder(name, config2?.precision, config2?.scale) : mode === "bigint" ? new PgNumericBigIntBuilder(name, config2?.precision, config2?.scale) : new PgNumericBuilder(name, config2?.precision, config2?.scale);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/point.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/point.js
 var PgPointTupleBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgPointTupleBuilder";
   constructor(name) {
@@ -90013,7 +90184,7 @@ function point(a, b) {
   return new PgPointObjectBuilder(name);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/postgis_extension/utils.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/postgis_extension/utils.js
 function hexToBytes(hex) {
   const bytes = [];
   for (let c = 0; c < hex.length; c += 2) {
@@ -90052,7 +90223,7 @@ function parseEWKB(hex) {
   throw new Error("Unsupported geometry type");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/postgis_extension/geometry.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/postgis_extension/geometry.js
 var PgGeometryBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgGeometryBuilder";
   constructor(name) {
@@ -90112,7 +90283,7 @@ function geometry(a, b) {
   return new PgGeometryObjectBuilder(name);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/real.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/real.js
 var PgRealBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgRealBuilder";
   constructor(name, length) {
@@ -90143,7 +90314,7 @@ function real(name) {
   return new PgRealBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/serial.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/serial.js
 var PgSerialBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgSerialBuilder";
   constructor(name) {
@@ -90166,7 +90337,7 @@ function serial(name) {
   return new PgSerialBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/smallint.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/smallint.js
 var PgSmallIntBuilder = class extends PgIntColumnBaseBuilder {
   static [entityKind] = "PgSmallIntBuilder";
   constructor(name) {
@@ -90193,7 +90364,7 @@ function smallint(name) {
   return new PgSmallIntBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/smallserial.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/smallserial.js
 var PgSmallSerialBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgSmallSerialBuilder";
   constructor(name) {
@@ -90219,7 +90390,7 @@ function smallserial(name) {
   return new PgSmallSerialBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/text.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/text.js
 var PgTextBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgTextBuilder";
   constructor(name, config2) {
@@ -90243,7 +90414,7 @@ function text(a, b = {}) {
   return new PgTextBuilder(name, config2);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/time.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/time.js
 var PgTimeBuilder = class extends PgDateColumnBaseBuilder {
   constructor(name, withTimezone, precision) {
     super(name, "string", "PgTime");
@@ -90277,7 +90448,7 @@ function time(a, b = {}) {
   return new PgTimeBuilder(name, config2.withTimezone ?? false, config2.precision);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/timestamp.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/timestamp.js
 var PgTimestampBuilder = class extends PgDateColumnBaseBuilder {
   static [entityKind] = "PgTimestampBuilder";
   constructor(name, withTimezone, precision) {
@@ -90358,7 +90529,7 @@ function timestamp(a, b = {}) {
   return new PgTimestampBuilder(name, config2?.withTimezone ?? false, config2?.precision);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/uuid.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/uuid.js
 var PgUUIDBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgUUIDBuilder";
   constructor(name) {
@@ -90385,7 +90556,7 @@ function uuid(name) {
   return new PgUUIDBuilder(name ?? "");
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/varchar.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/varchar.js
 var PgVarcharBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgVarcharBuilder";
   constructor(name, config2) {
@@ -90414,7 +90585,7 @@ function varchar(a, b = {}) {
   return new PgVarcharBuilder(name, config2);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/vector_extension/bit.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/vector_extension/bit.js
 var PgBinaryVectorBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgBinaryVectorBuilder";
   constructor(name, config2) {
@@ -90441,7 +90612,7 @@ function bit(a, b) {
   return new PgBinaryVectorBuilder(name, config2);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/vector_extension/halfvec.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/vector_extension/halfvec.js
 var PgHalfVectorBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgHalfVectorBuilder";
   constructor(name, config2) {
@@ -90474,7 +90645,7 @@ function halfvec(a, b) {
   return new PgHalfVectorBuilder(name, config2);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/vector_extension/sparsevec.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/vector_extension/sparsevec.js
 var PgSparseVectorBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgSparseVectorBuilder";
   constructor(name, config2) {
@@ -90501,7 +90672,7 @@ function sparsevec(a, b) {
   return new PgSparseVectorBuilder(name, config2);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/vector_extension/vector.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/vector_extension/vector.js
 var PgVectorBuilder = class extends PgColumnBuilder {
   static [entityKind] = "PgVectorBuilder";
   constructor(name, config2) {
@@ -90534,7 +90705,7 @@ function vector(a, b) {
   return new PgVectorBuilder(name, config2);
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/columns/all.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/columns/all.js
 function getPgColumnBuilders() {
   return {
     bigint,
@@ -90572,7 +90743,7 @@ function getPgColumnBuilders() {
   };
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/table.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/table.js
 var InlineForeignKeys = /* @__PURE__ */ Symbol.for("drizzle:PgInlineForeignKeys");
 var EnableRLS = /* @__PURE__ */ Symbol.for("drizzle:EnableRLS");
 var PgTable = class extends Table {
@@ -90628,7 +90799,7 @@ var pgTable = (name, columns, extraConfig) => {
   return pgTableWithSchema(name, columns, extraConfig, void 0);
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/primary-keys.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/primary-keys.js
 var PrimaryKeyBuilder = class {
   static [entityKind] = "PgPrimaryKeyBuilder";
   /** @internal */
@@ -90658,7 +90829,7 @@ var PrimaryKey = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/casing.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/casing.js
 function toSnakeCase(input) {
   const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
   return words.map((word) => word.toLowerCase()).join("_");
@@ -90710,7 +90881,7 @@ var CasingCache = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/errors.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/errors.js
 var DrizzleError = class extends Error {
   static [entityKind] = "DrizzleError";
   constructor({ message, cause }) {
@@ -90737,7 +90908,7 @@ var TransactionRollbackError = class extends DrizzleError {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/sql/expressions/conditions.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/sql/expressions/conditions.js
 function bindIfParam(value, column) {
   if (isDriverValueEncoder(column) && !isSQLWrapper(value) && !is(value, Param) && !is(value, Placeholder) && !is(value, Column) && !is(value, Table) && !is(value, View)) {
     return new Param(value, column);
@@ -90852,7 +91023,7 @@ function notIlike(column, value) {
   return sql`${column} not ilike ${value}`;
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/sql/expressions/select.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/sql/expressions/select.js
 function asc(column) {
   return sql`${column} asc`;
 }
@@ -90860,7 +91031,7 @@ function desc(column) {
   return sql`${column} desc`;
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/relations.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/relations.js
 var Relation = class {
   constructor(sourceTable, referencedTable, relationName) {
     this.sourceTable = sourceTable;
@@ -91121,12 +91292,12 @@ function mapRelationalRow(tablesConfig, tableConfig, row, buildQueryResultSelect
   return result;
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/view-base.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/view-base.js
 var PgViewBase = class extends View {
   static [entityKind] = "PgViewBase";
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/dialect.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/dialect.js
 var PgDialect = class {
   static [entityKind] = "PgDialect";
   /** @internal */
@@ -92231,7 +92402,7 @@ var PgDialect = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/query-builders/query-builder.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/query-builders/query-builder.js
 var TypedQueryBuilder = class {
   static [entityKind] = "TypedQueryBuilder";
   /** @internal */
@@ -92240,7 +92411,7 @@ var TypedQueryBuilder = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/select.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/select.js
 var PgSelectBuilder = class {
   static [entityKind] = "PgSelectBuilder";
   fields;
@@ -93056,7 +93227,7 @@ var intersectAll = createSetOperator("intersect", true);
 var except = createSetOperator("except", false);
 var exceptAll = createSetOperator("except", true);
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/query-builder.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/query-builder.js
 var QueryBuilder = class {
   static [entityKind] = "PgQueryBuilder";
   dialect;
@@ -93143,7 +93314,7 @@ var QueryBuilder = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/utils.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/utils.js
 function extractUsedTable(table) {
   if (is(table, PgTable)) {
     return [table[Schema] ? `${table[Schema]}.${table[Table.Symbol.BaseName]}` : table[Table.Symbol.BaseName]];
@@ -93157,7 +93328,7 @@ function extractUsedTable(table) {
   return [];
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/delete.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/delete.js
 var PgDeleteBase = class extends QueryPromise {
   constructor(table, session, dialect, withList) {
     super();
@@ -93253,7 +93424,7 @@ var PgDeleteBase = class extends QueryPromise {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/insert.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/insert.js
 var PgInsertBuilder = class {
   constructor(table, session, dialect, withList, overridingSystemValue_) {
     this.table = table;
@@ -93446,7 +93617,7 @@ var PgInsertBase = class extends QueryPromise {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/refresh-materialized-view.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/refresh-materialized-view.js
 var PgRefreshMaterializedView = class extends QueryPromise {
   constructor(view, session, dialect) {
     super();
@@ -93500,7 +93671,7 @@ var PgRefreshMaterializedView = class extends QueryPromise {
   };
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/update.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/update.js
 var PgUpdateBuilder = class {
   constructor(table, session, dialect, withList) {
     this.table = table;
@@ -93712,7 +93883,7 @@ var PgUpdateBase = class extends QueryPromise {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/count.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/count.js
 var PgCountBuilder = class _PgCountBuilder extends SQL {
   constructor(params) {
     super(_PgCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
@@ -93763,7 +93934,7 @@ var PgCountBuilder = class _PgCountBuilder extends SQL {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/query.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/query.js
 var RelationalQueryBuilder = class {
   constructor(fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session) {
     this.fullSchema = fullSchema;
@@ -93876,7 +94047,7 @@ var PgRelationalQuery = class extends QueryPromise {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/query-builders/raw.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/query-builders/raw.js
 var PgRaw = class extends QueryPromise {
   constructor(execute, sql2, query, mapBatchResult) {
     super();
@@ -93905,7 +94076,7 @@ var PgRaw = class extends QueryPromise {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/db.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/db.js
 var PgDatabase = class {
   constructor(dialect, session, schema) {
     this.dialect = dialect;
@@ -94184,7 +94355,7 @@ var PgDatabase = class {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/cache/core/cache.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/cache/core/cache.js
 var Cache = class {
   static [entityKind] = "Cache";
 };
@@ -94211,7 +94382,7 @@ async function hashQuery(sql2, params) {
   return hashHex;
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/pg-core/session.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/pg-core/session.js
 var PgPreparedQuery = class {
   constructor(query, cache, queryMetadata, cacheConfig) {
     this.query = query;
@@ -94371,7 +94542,7 @@ var PgTransaction = class extends PgDatabase {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/node-postgres/session.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/node-postgres/session.js
 var { Pool: Pool2, types: types2 } = esm_default;
 var NodePgPreparedQuery = class extends PgPreparedQuery {
   constructor(client, queryString, params, logger2, cache, queryMetadata, cacheConfig, fields, name, _isResponseInArrayMode, customResultMapper) {
@@ -94587,7 +94758,7 @@ var NodePgTransaction = class _NodePgTransaction extends PgTransaction {
   }
 };
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/node-postgres/driver.js
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@neondat_eb75babb28d04c9871b0074bace79bc6/node_modules/drizzle-orm/node-postgres/driver.js
 var NodePgDriver = class {
   constructor(client, dialect, options = {}) {
     this.client = client;
@@ -94668,6 +94839,7 @@ __export(schema_exports, {
   faturamentoMetaTable: () => faturamentoMetaTable,
   insertEntregaSchema: () => insertEntregaSchema,
   insertMotoristasSchema: () => insertMotoristasSchema,
+  lembretesTable: () => lembretesTable,
   motivosCancelamentoTable: () => motivosCancelamentoTable,
   motoristasTable: () => motoristasTable
 });
@@ -105811,7 +105983,7 @@ function date5(params) {
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v4/classic/external.js
 config(en_default2());
 
-// ../../node_modules/.pnpm/drizzle-zod@0.8.3_drizzle-o_9023862330606cbd2d7b4dbe0f6a6add/node_modules/drizzle-zod/index.mjs
+// ../../node_modules/.pnpm/drizzle-zod@0.8.3_drizzle-o_d6ec91869e91726d57557f945d67cd49/node_modules/drizzle-zod/index.mjs
 var CONSTANTS = {
   INT8_MIN: -128,
   INT8_MAX: 127,
@@ -106062,6 +106234,7 @@ var createInsertSchema = (entity, refine2) => {
 var entregasTable = pgTable("entregas", {
   id: serial("id").primaryKey(),
   date: date("date", { mode: "string" }).notNull(),
+  agendamento: boolean("agendamento").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   checked: text("checked").notNull().default("none"),
   cliente: text("cliente").notNull(),
@@ -106074,7 +106247,8 @@ var entregasTable = pgTable("entregas", {
   cg: text("cg").notNull().default("none"),
   v: text("v"),
   divergencias: text("divergencias"),
-  frete: text("frete")
+  frete: text("frete"),
+  statusManual: text("status_manual")
 });
 var insertEntregaSchema = createInsertSchema(entregasTable).omit({ id: true });
 
@@ -106118,6 +106292,14 @@ var faturamentoMetaTable = pgTable("faturamento_meta", {
   meta: numeric("meta", { precision: 15, scale: 2 }).notNull()
 });
 
+// ../../lib/db/src/schema/lembretes.ts
+var lembretesTable = pgTable("lembretes", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+}, (table) => [unique("lembretes_date_text_unique").on(table.date, table.text)]);
+
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
 if (!process.env.DATABASE_URL) {
@@ -106134,7 +106316,7 @@ router.get("/ping", (_req, res) => {
   res.json({ status: "ok" });
 });
 router.get("/healthz", (_req, res) => {
-  res.status(200).json({ status: "ok", db: "not_checked", release: "20260914105039" });
+  res.status(200).json({ status: "ok", db: "not_checked", release: "dev-4a7e92e" });
 });
 router.get("/readyz", async (_req, res) => {
   let db2 = "error";
@@ -106151,7 +106333,7 @@ router.get("/readyz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "20260914105039" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "dev-4a7e92e" });
 });
 var health_default = router;
 
@@ -106172,8 +106354,8 @@ router2.get("/entregas", async (req, res) => {
     res.status(400).json({ error: query.error.message });
     return;
   }
-  const date6 = query.data.date ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const rows = await db.select().from(entregasTable).where(eq(entregasTable.date, date6)).orderBy(asc(entregasTable.sortOrder), asc(entregasTable.id));
+  const dateFilter = query.data.date ? eq(entregasTable.date, query.data.date) : query.data.from && query.data.to ? and(gte(entregasTable.date, query.data.from), lte(entregasTable.date, query.data.to)) : eq(entregasTable.date, (/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
+  const rows = await db.select().from(entregasTable).where(dateFilter).orderBy(asc(entregasTable.sortOrder), asc(entregasTable.id));
   res.json(ListEntregasResponse.parse(rows));
 });
 router2.post("/entregas", async (req, res) => {
@@ -106943,15 +107125,79 @@ router6.put("/faturamento/meta", async (req, res) => {
 });
 var faturamento_default = router6;
 
-// src/routes/index.ts
+// src/routes/lembretes.ts
+var import_express7 = __toESM(require_express2(), 1);
 var router7 = (0, import_express7.Router)();
-router7.use(health_default);
-router7.use(entregas_default);
-router7.use(motoristas_default);
-router7.use(motivos_cancelamento_default);
-router7.use(clientes_cadastro_default);
-router7.use(faturamento_default);
-var routes_default = router7;
+router7.get("/lembretes", async (_req, res) => {
+  const rows = await db.select().from(lembretesTable).orderBy(asc(lembretesTable.date), asc(lembretesTable.id));
+  res.json(rows);
+});
+router7.post("/lembretes", async (req, res) => {
+  const date6 = typeof req.body?.date === "string" ? req.body.date : "";
+  const text2 = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  const parsedDate = /* @__PURE__ */ new Date(`${date6}T00:00:00.000Z`);
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date6) && !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === date6;
+  if (!validDate || !text2 || text2.length > 240) {
+    res.status(400).json({ error: "Data v\xE1lida e recado de at\xE9 240 caracteres s\xE3o obrigat\xF3rios" });
+    return;
+  }
+  const [created] = await db.insert(lembretesTable).values({ date: date6, text: text2 }).onConflictDoNothing().returning();
+  if (created) {
+    res.status(201).json(created);
+    return;
+  }
+  const [existing] = await db.select().from(lembretesTable).where(and(eq(lembretesTable.date, date6), eq(lembretesTable.text, text2))).limit(1);
+  res.json(existing);
+});
+router7.delete("/lembretes/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    res.status(400).json({ error: "ID inv\xE1lido" });
+    return;
+  }
+  const [deleted] = await db.delete(lembretesTable).where(eq(lembretesTable.id, id)).returning({ id: lembretesTable.id });
+  if (!deleted) {
+    res.status(404).json({ error: "Lembrete n\xE3o encontrado" });
+    return;
+  }
+  res.sendStatus(204);
+});
+var lembretes_default = router7;
+
+// src/routes/index.ts
+var router8 = (0, import_express8.Router)();
+router8.use(health_default);
+router8.use(entregas_default);
+router8.use(motoristas_default);
+router8.use(motivos_cancelamento_default);
+router8.use(clientes_cadastro_default);
+router8.use(faturamento_default);
+router8.use(lembretes_default);
+router8.get("/sync/snapshot", async (_req, res, next) => {
+  try {
+    const [entregas, motoristas, motivos, clientes, faturamentoDiario, faturamentoMeta, lembretes] = await Promise.all([
+      db.select().from(entregasTable),
+      db.select().from(motoristasTable),
+      db.select().from(motivosCancelamentoTable),
+      db.select().from(clientesCadastroTable),
+      db.select().from(faturamentoDiarioTable),
+      db.select().from(faturamentoMetaTable),
+      db.select().from(lembretesTable)
+    ]);
+    res.json({ version: 1, generatedAt: (/* @__PURE__ */ new Date()).toISOString(), entregas, motoristas, motivos, clientes, faturamentoDiario, faturamentoMeta, lembretes });
+  } catch (error40) {
+    next(error40);
+  }
+});
+router8.get("/sync/entregas", async (_req, res, next) => {
+  try {
+    const entregas = await db.select().from(entregasTable);
+    res.json({ version: 1, entregas });
+  } catch (error40) {
+    next(error40);
+  }
+});
+var routes_default = router8;
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -106980,7 +107226,7 @@ function errorHandler(err, _req, res, _next) {
 }
 
 // src/app.ts
-var app = (0, import_express8.default)();
+var app = (0, import_express9.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -107001,8 +107247,8 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express8.default.json());
-app.use(import_express8.default.urlencoded({ extended: true }));
+app.use(import_express9.default.json());
+app.use(import_express9.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 app.use(errorHandler);
 var app_default = app;
@@ -107017,11 +107263,21 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 async function assertSchema() {
-  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro", "faturamento_diario", "faturamento_meta"];
+  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro", "faturamento_diario", "faturamento_meta", "lembretes"];
   const client = await pool.connect();
   try {
     await client.query(`ALTER TABLE entregas ADD COLUMN IF NOT EXISTS frete text`);
+    await client.query(`ALTER TABLE entregas ADD COLUMN IF NOT EXISTS status_manual text`);
     await client.query(`ALTER TABLE motoristas ADD COLUMN IF NOT EXISTS frete text`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS lembretes (
+        id serial PRIMARY KEY,
+        date date NOT NULL,
+        text text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        CONSTRAINT lembretes_date_text_unique UNIQUE (date, text)
+      )
+    `);
     const result = await client.query(
       `SELECT table_name
          FROM information_schema.tables

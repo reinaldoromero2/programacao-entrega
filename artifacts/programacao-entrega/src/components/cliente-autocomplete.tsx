@@ -14,7 +14,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 
-interface DropdownPos { top: number; left: number; width: number; openUp: boolean; }
+interface DropdownPos { top: number; left: number; width: number; maxHeight: number; openUp: boolean; }
 
 interface ClienteAutocompleteProps {
   value: string;
@@ -95,7 +95,7 @@ export function ClienteAutocomplete({
   placeholder,
   ...rest
 }: ClienteAutocompleteProps) {
-  const { data: clientes = [] } = useClientesCadastro();
+  const { data: clientes = [], isError: isClientesError, isFetched: isClientesFetched } = useClientesCadastro();
   const [open, setOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<DropdownPos | null>(null);
   const [activeIdx, setActiveIdx] = useState(-1);
@@ -105,6 +105,7 @@ export function ClienteAutocomplete({
     () => new Set(clientes.map((c) => c.nome.toUpperCase())),
     [clientes]
   );
+  const canValidate = clientes.length > 0 || (isClientesFetched && !isClientesError);
 
   const segment = getCurrentSegment(value);
   const inParens = isInsideParens(segment);
@@ -122,6 +123,7 @@ export function ClienteAutocomplete({
 
   /** Current segment is non-empty but doesn't match any registered client */
   const isInvalid =
+    canValidate &&
     !inParens &&
     segment.trim().length > 0 &&
     !clienteNames.has(bareSegment(segment));
@@ -129,16 +131,21 @@ export function ClienteAutocomplete({
   const updatePos = useCallback(() => {
     if (!inputRef.current) return;
     const rect = inputRef.current.getBoundingClientRect();
-    const maxH = 220;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    const openUp = spaceBelow < maxH + 8 && spaceAbove > spaceBelow;
+    const maxHeight = 220;
+    const spaceAbove = Math.max(0, rect.top - 8);
+    const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - 8);
+    const openUp = spaceAbove >= 36 || (spaceAbove > 0 && spaceAbove >= spaceBelow);
+    const availableHeight = openUp ? spaceAbove : spaceBelow;
+    const dropdownHeight = Math.min(maxHeight, availableHeight);
+    const width = Math.min(Math.max(rect.width, 200), window.innerWidth - 16);
+    const left = Math.min(Math.max(rect.left, 8), window.innerWidth - width - 8);
     setDropdownPos({
       top: openUp
-        ? rect.top + window.scrollY - maxH - 2
-        : rect.bottom + window.scrollY + 2,
-      left: rect.left + window.scrollX,
-      width: Math.max(rect.width, 200),
+        ? rect.top - dropdownHeight - 2
+        : rect.bottom + 2,
+      left,
+      width,
+      maxHeight: dropdownHeight,
       openUp,
     });
   }, []);
@@ -163,6 +170,11 @@ export function ClienteAutocomplete({
   const handleBlur = () => {
     setTimeout(() => {
       setOpen(false);
+      if (!navigator.onLine || !canValidate) {
+        onChange(value);
+        onBlur(value);
+        return;
+      }
       const validated = validateValue(value, clienteNames);
       onChange(validated);
       onBlur(validated);
@@ -229,7 +241,7 @@ export function ClienteAutocomplete({
               top: dropdownPos.top,
               left: dropdownPos.left,
               width: dropdownPos.width,
-              maxHeight: 220,
+              maxHeight: dropdownPos.maxHeight,
             }}
             onMouseDown={(e) => e.preventDefault()}
           >

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Trash2, Pencil, Plus, Check, X, Ban } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -11,15 +12,29 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { getOfflineSnapshot } from "@/lib/offline-snapshot";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
+const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
 
 interface Motivo { id: number; motivo: string; }
+const MOTIVOS_CACHE_KEY = "motivos-cancelamento-cache";
 
 async function fetchMotivos(): Promise<Motivo[]> {
-  const res = await fetch(`${API_BASE}/api/motivos-cancelamento`);
-  if (!res.ok) throw new Error("Erro ao carregar motivos");
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE}/api/motivos-cancelamento`);
+    if (!res.ok) throw new Error("Erro ao carregar motivos");
+    const motivos = await res.json() as Motivo[];
+    localStorage.setItem(MOTIVOS_CACHE_KEY, JSON.stringify(motivos));
+    return motivos;
+  } catch (error) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(MOTIVOS_CACHE_KEY) || "null") as Motivo[] | null;
+      if (cached) return cached;
+    } catch {}
+    const snapshotMotivos = getOfflineSnapshot()?.motivos;
+    if (snapshotMotivos) return snapshotMotivos;
+    throw error;
+  }
 }
 
 interface MotivosCancelamentoModalProps {
@@ -28,6 +43,7 @@ interface MotivosCancelamentoModalProps {
 }
 
 export function MotivosCancelamentoModal({ open: controlledOpen, onOpenChange: controlledOnOpenChange }: MotivosCancelamentoModalProps = {}) {
+  const queryClient = useQueryClient();
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
@@ -37,7 +53,10 @@ export function MotivosCancelamentoModal({ open: controlledOpen, onOpenChange: c
   const [isAdding, setIsAdding] = useState(false);
   const [editing, setEditing] = useState<Motivo | null>(null);
 
-  const refresh = () => fetchMotivos().then(setMotivos).catch(() => {});
+  const refresh = () => fetchMotivos().then((nextMotivos) => {
+    setMotivos(nextMotivos);
+    queryClient.setQueryData(["motivos-cancelamento"], nextMotivos);
+  }).catch(() => {});
 
   useEffect(() => {
     if (open) refresh();

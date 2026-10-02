@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Download, Upload, Users, Ban, Settings, Loader2, Building2, Palette } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download, Upload, Users, Ban, Settings, Loader2, Building2, Palette, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,7 +23,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MotoristasModal } from "@/components/motoristas-modal";
 import { MotivosCancelamentoModal } from "@/components/motivos-cancelamento-modal";
 import { ClientesCadastroModal } from "@/components/clientes-cadastro-modal";
-import { ClientesAgendamentoModal } from "@/components/clientes-agendamento-modal";
 import { BgColorModal } from "@/components/bg-color-modal";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
@@ -56,7 +55,6 @@ export function OpcoesMenu() {
   const [motoOpen, setMotoOpen] = useState(false);
   const [motivosOpen, setMotivosOpen] = useState(false);
   const [clientesOpen, setClientesOpen] = useState(false);
-  const [agendamentoOpen, setAgendamentoOpen] = useState(false);
   const [bgColorOpen, setBgColorOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
 
@@ -134,14 +132,15 @@ export function OpcoesMenu() {
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            size="sm"
-            className="h-9 gap-2 text-slate-700 border-slate-300 hover:bg-slate-100"
+            size="icon"
+            className="h-10 w-10 border-slate-600 bg-slate-500 text-white hover:bg-slate-600 hover:text-white"
             disabled={isExporting || isImporting}
+            title="Opções"
+            aria-label="Opções"
           >
             {isExporting || isImporting
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <Settings className="w-4 h-4" />}
-            OPÇÕES
+              ? <Loader2 className="w-5 h-5 animate-spin" />
+              : <Settings className="w-5 h-5" />}
           </Button>
         </DropdownMenuTrigger>
 
@@ -205,14 +204,6 @@ export function OpcoesMenu() {
             Clientes Cadastro
           </DropdownMenuItem>
 
-          <DropdownMenuItem
-            onClick={() => setAgendamentoOpen(true)}
-            className="gap-2 cursor-pointer"
-          >
-            <Building2 className="w-4 h-4" />
-            Clientes c/ Agendamento
-          </DropdownMenuItem>
-
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
@@ -229,9 +220,7 @@ export function OpcoesMenu() {
       <MotoristasModal open={motoOpen} onOpenChange={setMotoOpen} />
       <MotivosCancelamentoModal open={motivosOpen} onOpenChange={setMotivosOpen} />
       <ClientesCadastroModal open={clientesOpen} onOpenChange={setClientesOpen} />
-      <ClientesAgendamentoModal open={agendamentoOpen} onOpenChange={setAgendamentoOpen} />
       <BgColorModal open={bgColorOpen} onOpenChange={setBgColorOpen} />
-
       {/* Import confirmation */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>

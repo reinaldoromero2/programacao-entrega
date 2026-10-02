@@ -19,6 +19,7 @@ interface DropdownPos {
   top: number;
   left: number;
   width: number;
+  maxHeight: number;
 }
 
 export function MotoristaCombobox({
@@ -48,10 +49,16 @@ export function MotoristaCombobox({
   const updatePos = useCallback(() => {
     if (!inputRef.current) return;
     const rect = inputRef.current.getBoundingClientRect();
+    const spaceAbove = Math.max(0, rect.top - 8);
+    const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - 8);
+    const openUp = spaceAbove >= 36 || (spaceAbove > 0 && spaceAbove >= spaceBelow);
+    const maxHeight = Math.min(220, openUp ? spaceAbove : spaceBelow);
+    const width = Math.min(Math.max(rect.width, 240), window.innerWidth - 16);
     setDropdownPos({
-      top: rect.bottom + window.scrollY + 2,
-      left: rect.left + window.scrollX,
-      width: Math.max(rect.width, 240),
+      top: openUp ? rect.top - maxHeight - 2 : rect.bottom + 2,
+      left: Math.min(Math.max(rect.left, 8), window.innerWidth - width - 8),
+      width,
+      maxHeight,
     });
   }, []);
 
@@ -133,13 +140,14 @@ export function MotoristaCombobox({
         createPortal(
           <div
             style={{
-              position: "absolute",
+              position: "fixed",
               top: dropdownPos.top,
               left: dropdownPos.left,
               width: dropdownPos.width,
               zIndex: 9999,
+              maxHeight: dropdownPos.maxHeight,
             }}
-            className="bg-white border border-slate-200 rounded-md shadow-lg overflow-hidden"
+            className="bg-white border border-slate-200 rounded-md shadow-lg overflow-y-auto"
           >
             {filtered.map((m) => (
               <button

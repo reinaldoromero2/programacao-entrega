@@ -11,8 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { getOfflineSnapshot } from "@/lib/offline-snapshot";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
+const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
 
 export interface ClienteCadastroItem { id: number; nome: string; }
 
@@ -21,13 +22,23 @@ export const CLIENTES_CADASTRO_KEY = ["clientes-cadastro"];
 async function fetchClientesCadastro(): Promise<ClienteCadastroItem[]> {
   const res = await fetch(`${API_BASE}/api/clientes-cadastro`);
   if (!res.ok) return [];
-  return res.json();
+  const clientes = await res.json() as ClienteCadastroItem[];
+  localStorage.setItem("clientes-cadastro-cache", JSON.stringify(clientes));
+  return clientes;
 }
 
 export function useClientesCadastro() {
+  let cachedClientes: ClienteCadastroItem[] = [];
+  try {
+    cachedClientes = JSON.parse(localStorage.getItem("clientes-cadastro-cache") || "[]") as ClienteCadastroItem[];
+  } catch {
+    cachedClientes = [];
+  }
+
   return useQuery({
     queryKey: CLIENTES_CADASTRO_KEY,
     queryFn: fetchClientesCadastro,
+    initialData: cachedClientes.length > 0 ? cachedClientes : getOfflineSnapshot()?.clientes,
     staleTime: 60_000,
   });
 }

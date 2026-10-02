@@ -8,6 +8,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { customFetch } from "@workspace/api-client-react";
+import { getOfflineSnapshot } from "@/lib/offline-snapshot";
 import {
   BarChart,
   Bar,
@@ -33,12 +35,179 @@ function extractMotivo(obs: string | null): string {
 }
 
 // ─── API helper ───────────────────────────────────────────────────────────────
-const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
-const apiFetch = <T = unknown>(path: string): Promise<T> =>
-  fetch(`${API_BASE}${path}`).then((r) => {
-    if (!r.ok) throw new Error(`Erro ${r.status}`);
-    return r.json() as Promise<T>;
-  });
+function isCancelled(delivery: Record<string, unknown>) {
+  const obs = String(delivery.obs ?? "").toUpperCase();
+  return obs.startsWith("CANCELADO") || obs.startsWith("CANCELADA") || delivery.nf === "x" || delivery.cg === "x";
+}
+
+function localReport<T>(path: string, snapshot: ReturnType<typeof getOfflineSnapshot>): T | undefined {
+  if (!snapshot) return undefined;
+  const url = new URL(path, window.location.origin);
+  const deliveries = snapshot.entregas as unknown as Array<Record<string, unknown>>;
+  const month = url.searchParams.get("mes");
+  const filtro = url.searchParams.get("filtro");
+  const valor = url.searchParams.get("valor");
+  const periodDeliveries = filtro === "dia" && valor
+    ? deliveries.filter((delivery) => delivery.date === valor)
+    : filtro === "ano" && valor
+      ? deliveries.filter((delivery) => String(delivery.date).startsWith(`${valor}-`))
+      : month
+        ? deliveries.filter((delivery) => String(delivery.date).startsWith(month))
+        : deliveries;
+  const monthDeliveries = month ? periodDeliveries : deliveries;
+  const notCancelled = (delivery: Record<string, unknown>) => !isCancelled(delivery);
+
+  if (path.startsWith("/api/entregas/motorista-datas")) {
+    const motorista = (url.searchParams.get("motorista") ?? "").toUpperCase();
+    return {
+      motorista,
+      filtro,
+      valor,
+      viagens: periodDeliveries
+        .filter((delivery) => String(delivery.motorista ?? "").toUpperCase() === motorista)
+        .map((delivery) => ({
+          date: delivery.date,
+          cliente: delivery.cliente ?? "",
+          frete: delivery.frete ?? "",
+          obs: delivery.obs ?? "",
+        })),
+    } as T;
+  }
+
+  if (path.startsWith("/api/entregas/cliente-datas")) {
+    const requested = (url.searchParams.get("cliente") ?? "").toUpperCase();
+    const aliases: Record<string, string> = { SOLV: "UNIPAR" };
+    const parseClients = (raw: string) => raw.replace(/\([^)]*\)/g, "").split("+").map((part) => {
+      const normalized = part.trim().replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").toUpperCase();
+      return aliases[normalized] ?? normalized;
+    }).filter(Boolean);
+    return {
+      cliente: requested,
+      filtro,
+      valor,
+      viagens: periodDeliveries
+        .filter((delivery) => notCancelled(delivery) && parseClients(String(delivery.cliente ?? "")).includes(requested))
+        .map((delivery) => ({
+          date: delivery.date,
+          motorista: delivery.motorista ?? "",
+          frete: delivery.frete ?? "",
+          obs: delivery.obs ?? "",
+        })),
+    } as T;
+  }
+
+  if (path === "/api/entregas/divergencias") {
+    return monthDeliveries
+      .filter((delivery) => String(delivery.divergencias ?? "") !== "")
+      .map((delivery) => ({
+        id: delivery.id,
+        date: delivery.date,
+        cliente: delivery.cliente,
+        motorista: delivery.motorista ?? null,
+        placa: delivery.placa ?? null,
+        divergencias: delivery.divergencias,
+      })) as T;
+  }
+
+  if (path.startsWith("/api/entregas/por-frete")) {
+    const frete = url.searchParams.get("frete");
+    return monthDeliveries
+      .filter((delivery) => frete === "CANCELADOS" ? isCancelled(delivery) :
+        frete === "DEVOLUÇÕES" ? String(delivery.obs ?? "").toUpperCase().startsWith("DEVOLUÇÃO") : delivery.frete === frete)
+      .map((delivery) => ({
+        id: delivery.id,
+        date: delivery.date,
+        cliente: delivery.cliente,
+        motorista: delivery.motorista ?? null,
+        placa: delivery.placa ?? null,
+        obs: delivery.obs ?? null,
+        frete: delivery.frete ?? null,
+        divergencias: delivery.divergencias ?? null,
+      })) as T;
+  }
+
+  if (path.startsWith("/api/entregas/frete-mensal")) {
+    const tipos = ["RIPACK", "TRANSPORTADORA", "3º", "COLETA"];
+    const resumo = tipos.map((frete) => ({ frete, total: monthDeliveries.filter((delivery) => delivery.frete === frete).length }));
+    const dias = new Map<string, Record<string, number>>();
+    const add = (date: string, key: string) => {
+      const counts = dias.get(date) ?? {};
+      counts[key] = (counts[key] ?? 0) + 1;
+      dias.set(date, counts);
+    };
+    monthDeliveries.forEach((delivery) => {
+      if (delivery.frete) add(String(delivery.date), String(delivery.frete));
+      if (isCancelled(delivery)) add(String(delivery.date), "CANCELADOS");
+      if (String(delivery.obs ?? "").toUpperCase().startsWith("DEVOLUÇÃO")) add(String(delivery.date), "DEVOLUÇÕES");
+    });
+    return {
+      mes: month,
+      resumo,
+      porDia: Array.from(dias, ([date, counts]) => ({ date, ...counts })).sort((a, b) => a.date.localeCompare(b.date)),
+      canceladosTotal: monthDeliveries.filter(isCancelled).length,
+      devolucoesTotal: monthDeliveries.filter((delivery) => String(delivery.obs ?? "").toUpperCase().startsWith("DEVOLUÇÃO")).length,
+    } as T;
+  }
+
+  if (path.startsWith("/api/entregas/resumo-mensal")) {
+    const freteRows = monthDeliveries.filter((delivery) => delivery.frete !== null && delivery.frete !== undefined);
+    const cancelRows = monthDeliveries.filter(isCancelled);
+    const canceladasRipack = cancelRows.filter((delivery) => delivery.frete === "RIPACK").length;
+    const canceladasTerceiros = cancelRows.filter((delivery) => delivery.frete === "TRANSPORTADORA" || delivery.frete === "3º").length;
+    const total = freteRows.length;
+    const ativasTotal = total - cancelRows.filter((delivery) => delivery.frete !== null && delivery.frete !== undefined).length;
+    const pct = (value: number, divisor: number) => divisor > 0 ? Math.round((value / divisor) * 1000) / 10 : 0;
+    const [year, monthNumber] = String(month).split("-").map(Number);
+    const daysInMonth = new Date(year, monthNumber, 0).getDate();
+    let workdays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const weekday = new Date(year, monthNumber - 1, day).getDay();
+      if (weekday !== 0 && weekday !== 6) workdays++;
+    }
+    const ripack = freteRows.filter((delivery) => delivery.frete === "RIPACK").length - canceladasRipack;
+    const terceiros = freteRows.filter((delivery) => delivery.frete === "TRANSPORTADORA" || delivery.frete === "3º").length - canceladasTerceiros;
+    const coleta = freteRows.filter((delivery) => delivery.frete === "COLETA").length;
+    return {
+      mes: month, total, ativasTotal,
+      ripack: { total: ripack, pct: pct(ripack, ativasTotal) },
+      terceiros: { total: terceiros, pct: pct(terceiros, ativasTotal) },
+      coleta: { total: coleta, pct: pct(coleta, ativasTotal) },
+      diasUteis: workdays, mediaPorDia: workdays > 0 ? Math.round((ativasTotal / workdays) * 10) / 10 : 0,
+      canceladas: { total: cancelRows.length, pct: pct(cancelRows.length, total) },
+      canceladasRipack, canceladasTerceiros,
+    } as T;
+  }
+
+  if (path.startsWith("/api/faturamento?mes=")) {
+    const dias = (snapshot.faturamentoDiario ?? []).filter((item) =>
+      typeof item === "object" && item !== null && "date" in item && String(item.date).startsWith(`${month}-`)
+    );
+    const meta = (snapshot.faturamentoMeta ?? []).find((item) =>
+      typeof item === "object" && item !== null && "mes" in item && item.mes === month
+    );
+    return {
+      meta: meta && typeof meta === "object" && "meta" in meta ? meta.meta : null,
+      dias,
+    } as T;
+  }
+
+  return undefined;
+}
+
+const apiFetch = async <T = unknown>(path: string): Promise<T> => {
+  if (!navigator.onLine) {
+    const fallback = localReport<T>(path, getOfflineSnapshot());
+    if (fallback !== undefined) return fallback;
+  }
+
+  try {
+    return await customFetch<T>(path, { method: "GET", responseType: "json" });
+  } catch (error) {
+    const fallback = localReport<T>(path, getOfflineSnapshot());
+    if (fallback !== undefined) return fallback;
+    throw error;
+  }
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -192,15 +361,16 @@ function ResumoMensalTab() {
       String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     const cell = (v: string | number, type: "String" | "Number" = "String") =>
       `<Cell><Data ss:Type="${type}">${esc(v)}</Data></Cell>`;
-    const row = (...cells: [string | number, "String" | "Number"?][]) =>
-      `<Row>${cells.map(([v, t]) => cell(v, t ?? (typeof v === "number" ? "Number" : "String"))).join("")}</Row>`;
+    const row = (...cells: Array<Array<string | number>>) =>
+      `<Row>${cells.flat().map((v) => cell(v, typeof v === "number" ? "Number" : "String")).join("")}</Row>`;
     const sep = `<Row><Cell ss:MergeAcross="2"><Data ss:Type="String"> </Data></Cell></Row>`;
 
     const rows = [
       row(["RESUMO MENSAL"], [mesLabel(mes)]),
       sep,
-      row(["TOTAL DE ENTREGAS NO MÊS", data.total], [""]),
-      row(["ENTREGAS REALIZADAS (não canceladas)", data.ativasTotal]),
+      row(["TOTAL DE CARGAS NO MÊS", data.total], [""]),
+      row(["TOTAL DE ENTREGAS NO MÊS", data.total - data.coleta.total], [""]),
+      row(["ENTREGAS REALIZADAS", data.total - data.coleta.total - data.canceladas.total]),
       sep,
       row(["RIPACK — Total", data.ripack.total], ["Percentual", data.ripack.pct + "%"]),
       row(["TRANSPORTADORA + 3º — Total", data.terceiros.total], ["Percentual", data.terceiros.pct + "%"]),
@@ -239,9 +409,18 @@ function ResumoMensalTab() {
           {/* Grid de cards */}
           <div className="grid grid-cols-2 gap-3">
 
-            {/* Total entregas */}
-            <Card accent="#2563eb" label="Total de Entregas no Mês" value={data.total} sub="incluindo cancelamentos" />
-            <Card accent="#16a34a" label="Entregas Realizadas" value={data.ativasTotal} sub="excluindo cancelamentos" />
+            {/* Total de cargas */}
+            <Card accent="#2563eb" label="TOTAL DE CARGAS NO MES" value={data.total} sub="incluindo cancelamentos" />
+            <Card accent="#16a34a" label="TOTAL DE ENTREGAS NO MES" value={data.total - data.coleta.total} sub="excluindo coletas" />
+
+            {/* Entregas realizadas */}
+            <Card accent="#16a34a" label="ENTREGAS REALIZADAS" value={data.total - data.coleta.total - data.canceladas.total} sub="excluindo coletas e cancelamentos">
+              <Pct
+                value={((data.total - data.coleta.total - data.canceladas.total) / (data.total - data.coleta.total || 1)) * 100}
+                color="#16a34a"
+                label="do total"
+              />
+            </Card>
 
             {/* Ripack */}
             <Card accent="#16a34a" label="RIPACK" value={data.ripack.total}>
@@ -250,7 +429,18 @@ function ResumoMensalTab() {
 
             {/* Transportadora + 3º */}
             <Card accent="#2563eb" label="TRANSPORTADORA + 3º" value={data.terceiros.total}>
-              <Pct value={data.terceiros.pct} color="#2563eb" />
+              <Pct
+                value={(data.terceiros.total / ((data.total - data.coleta.total) || 1)) * 100}
+                color="#2563eb"
+                label="do total"
+              />
+            </Card>
+            <Card accent="#2563eb" label="TRANSPORTADORA + 3º (cancelados)" value={data.terceiros.total - data.canceladasTerceiros} sub="sem cancelamentos">
+              <Pct
+                value={((data.terceiros.total - data.canceladasTerceiros) / ((data.total - data.coleta.total) || 1)) * 100}
+                color="#2563eb"
+                label="do total"
+              />
             </Card>
 
             {/* Coleta */}
@@ -308,12 +498,13 @@ function Card({
 }
 
 function Pct({ value, color, label = "das realizadas" }: { value: number; color: string; label?: string }) {
+  const displayValue = Number.isFinite(value) ? Number(value.toFixed(1)) : 0;
   return (
     <div className="flex items-center gap-2 mt-1">
       <div className="flex-1 bg-slate-100 rounded-full h-2">
-        <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(value, 100)}%`, background: color }} />
+        <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(displayValue, 100)}%`, background: color }} />
       </div>
-      <span className="text-xs font-semibold" style={{ color }}>{value}%</span>
+      <span className="text-xs font-semibold" style={{ color }}>{displayValue}%</span>
       <span className="text-xs text-slate-400">{label}</span>
     </div>
   );
@@ -1404,14 +1595,11 @@ function fmtDia(date: string) {
 }
 
 async function apiFetchPut<T = unknown>(path: string, body: unknown): Promise<T> {
-  const API_BASE = (import.meta.env.VITE_API_URL || "https://data-fill-tool.onrender.com").replace(/\/+$/, "");
-  const res = await fetch(`${API_BASE}${path}`, {
+  return customFetch<T>(path, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json() as Promise<T>;
 }
 
 type FatDia = { date: string; matriz: number | null; filial: number | null; aglotec: number | null; tatu: number | null; tatu_qtd: string | null };
@@ -1873,7 +2061,7 @@ export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="icon" className="h-10 w-10 text-slate-700 border-slate-300 hover:bg-slate-100" title="Relatórios">
+        <Button variant="outline" size="icon" className="h-10 w-10 border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white" title="Relatórios" aria-label="Relatórios">
           <FileText className="w-5 h-5" />
         </Button>
       </DialogTrigger>

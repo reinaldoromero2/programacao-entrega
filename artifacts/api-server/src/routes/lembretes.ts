@@ -44,6 +44,41 @@ router.post("/lembretes", async (req, res): Promise<void> => {
   res.json(existing);
 });
 
+router.put("/lembretes/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const date = typeof req.body?.date === "string" ? req.body.date : "";
+  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  const parsedDate = new Date(`${date}T00:00:00.000Z`);
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
+    && !Number.isNaN(parsedDate.getTime())
+    && parsedDate.toISOString().slice(0, 10) === date;
+
+  if (!Number.isSafeInteger(id) || id <= 0 || !validDate || !text || text.length > 240) {
+    res.status(400).json({ error: "ID, data válida e recado de até 240 caracteres são obrigatórios" });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(lembretesTable)
+      .set({ date, text })
+      .where(eq(lembretesTable.id, id))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Lembrete não encontrado" });
+      return;
+    }
+    res.json(updated);
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+      res.status(409).json({ error: "Já existe um recado igual para esse dia" });
+      return;
+    }
+    throw error;
+  }
+});
+
 router.delete("/lembretes/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isSafeInteger(id) || id <= 0) {

@@ -1,5 +1,6 @@
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
+  offlineReplay?: boolean;
 };
 
 export type ErrorType<T = unknown> = ApiError<T>;
@@ -10,6 +11,173 @@ export type AuthTokenGetter = () => Promise<string | null> | string | null;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
+const OFFLINE_DB_NAME = "programacao-entrega-offline";
+const OFFLINE_DB_VERSION = 1;
+const CACHE_STORE = "responses";
+const QUEUE_STORE = "requests";
+
+type CachedResponse = { key: string; value: unknown; savedAt: number };
+type QueuedRequest = {
+  id: number;
+  url: string;
+  method: string;
+  headers: [string, string][];
+  body?: string;
+};
+type OfflineSnapshot = {
+  version: number;
+  generatedAt: string;
+  entregas: Array<Record<string, unknown>>;
+  motoristas: unknown[];
+  motivos: unknown[];
+  clientes: unknown[];
+  faturamentoDiario: unknown[];
+  faturamentoMeta: unknown[];
+};
+
+function openOfflineDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CACHE_STORE)) db.createObjectStore(CACHE_STORE, { keyPath: "key" });
+      if (!db.objectStoreNames.contains(QUEUE_STORE)) db.createObjectStore(QUEUE_STORE, { keyPath: "id", autoIncrement: true });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readCached(key: string): Promise<unknown | undefined> {
+  const db = await openOfflineDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(CACHE_STORE, "readonly").objectStore(CACHE_STORE).get(key);
+    request.onsuccess = () => resolve((request.result as CachedResponse | undefined)?.value);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function writeCached(key: string, value: unknown): Promise<void> {
+  const db = await openOfflineDb();
+  await new Promise<void>((resolve, reject) => {
+    const request = db.transaction(CACHE_STORE, "readwrite").objectStore(CACHE_STORE).put({ key, value, savedAt: Date.now() } satisfies CachedResponse);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readSnapshot(): Promise<OfflineSnapshot | undefined> {
+  return readCached("__offline_snapshot__") as Promise<OfflineSnapshot | undefined>;
+}
+
+async function syncSnapshot(): Promise<void> {
+  if (!_baseUrl || typeof navigator !== "undefined" && !navigator.onLine) return;
+  try {
+    const response = await fetch(`${_baseUrl}/api/sync/snapshot`);
+    if (response.ok) await writeCached("__offline_snapshot__", await response.json());
+  } catch {
+    // A temporary connection failure must not affect the local application.
+  }
+}
+
+async function queueRequest(request: Omit<QueuedRequest, "id">): Promise<void> {
+  const db = await openOfflineDb();
+  await new Promise<void>((resolve, reject) => {
+    const operation = db.transaction(QUEUE_STORE, "readwrite").objectStore(QUEUE_STORE).add(request);
+    operation.onsuccess = () => resolve();
+    operation.onerror = () => reject(operation.error);
+  });
+}
+
+async function readQueuedRequests(): Promise<QueuedRequest[]> {
+  const db = await openOfflineDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(QUEUE_STORE, "readonly").objectStore(QUEUE_STORE).getAll();
+    request.onsuccess = () => resolve(request.result as QueuedRequest[]);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function removeQueuedRequest(id: number): Promise<void> {
+  const db = await openOfflineDb();
+  await new Promise<void>((resolve, reject) => {
+    const request = db.transaction(QUEUE_STORE, "readwrite").objectStore(QUEUE_STORE).delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function replayQueuedRequests(): Promise<void> {
+  if (!navigator.onLine) return;
+  for (const queued of await readQueuedRequests()) {
+    try {
+      const response = await fetch(queued.url, {
+        method: queued.method,
+        headers: Object.fromEntries(queued.headers),
+        body: queued.body,
+      });
+      if (!response.ok) break;
+      await removeQueuedRequest(queued.id);
+    } catch {
+      break;
+    }
+  }
+}
+
+async function invalidateCachedApiResponses(): Promise<void> {
+  const db = await openOfflineDb();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(CACHE_STORE, "readwrite");
+    const store = transaction.objectStore(CACHE_STORE);
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result as IDBCursorWithValue | null;
+      if (!cursor) return;
+      if (String(cursor.key).includes("/api/")) cursor.delete();
+      cursor.continue();
+    };
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+async function applyOfflineDeliveryMutation(url: string, method: string, body: string | undefined): Promise<void> {
+  if (!url.includes("/api/entregas")) return;
+  const payload = body ? JSON.parse(body) as Record<string, unknown> : {};
+  const idMatch = url.match(/\/api\/entregas\/(\d+)$/);
+  const id = idMatch ? Number(idMatch[1]) : undefined;
+  const db = await openOfflineDb();
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(CACHE_STORE, "readwrite");
+    const store = transaction.objectStore(CACHE_STORE);
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result as IDBCursorWithValue | null;
+      if (!cursor) return;
+      const cached = cursor.value as CachedResponse;
+      if (Array.isArray(cached.value)) {
+        let deliveries = cached.value as Array<Record<string, unknown>>;
+        if (method === "POST" && url.endsWith("/api/entregas")) {
+          const newDelivery: Record<string, unknown> = { ...payload, id: -Date.now(), sortOrder: payload.sortOrder ?? deliveries.length, checked: payload.checked ?? "none", nf: payload.nf ?? "none", cg: payload.cg ?? "none" };
+          const queryDate = new URL(cached.key).searchParams.get("date");
+          if (!queryDate || queryDate === newDelivery.date) deliveries = [...deliveries, newDelivery];
+        } else if (id !== undefined && method === "DELETE") {
+          deliveries = deliveries.filter((delivery) => delivery.id !== id);
+        } else if (id !== undefined && method === "PATCH") {
+          deliveries = deliveries.map((delivery) => delivery.id === id ? { ...delivery, ...payload } : delivery);
+        } else if (method === "POST" && url.endsWith("/reorder")) {
+          const order = payload.ids as number[] | undefined;
+          if (order) deliveries = deliveries.map((delivery) => ({ ...delivery, sortOrder: order.indexOf(Number(delivery.id)) }));
+        }
+        cursor.update({ ...cached, value: deliveries, savedAt: Date.now() });
+      }
+      cursor.continue();
+    };
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Module-level configuration
@@ -17,6 +185,13 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    void replayQueuedRequests().then(invalidateCachedApiResponses).then(syncSnapshot).catch(() => {});
+  });
+  void syncSnapshot();
+}
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -27,6 +202,7 @@ let _authTokenGetter: AuthTokenGetter | null = null;
  */
 export function setBaseUrl(url: string | null): void {
   _baseUrl = url ? url.replace(/\/+$/, "") : null;
+  if (_baseUrl && typeof window !== "undefined") void syncSnapshot();
 }
 
 /**
@@ -327,7 +503,7 @@ export async function customFetch<T = unknown>(
   options: CustomFetchOptions = {},
 ): Promise<T> {
   input = applyBaseUrl(input);
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+  const { responseType = "auto", headers: headersInit, offlineReplay = false, ...init } = options;
 
   const method = resolveMethod(input, init.method);
 
@@ -360,12 +536,62 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const isApiRequest = requestInfo.url.includes("/api/");
+  const isRead = method === "GET" || method === "HEAD";
+
+  if (isApiRequest && isRead && typeof navigator !== "undefined" && !navigator.onLine) {
+    const cached = await readCached(requestInfo.url).catch(() => undefined);
+    if (cached !== undefined) return cached as T;
+
+    const snapshot = await readSnapshot().catch(() => undefined);
+    if (snapshot) {
+      if (requestInfo.url.includes("/api/entregas")) {
+        const date = new URL(requestInfo.url).searchParams.get("date");
+        return snapshot.entregas.filter((item) => !date || item.date === date) as T;
+      }
+      if (requestInfo.url.endsWith("/api/motoristas")) return snapshot.motoristas as T;
+      if (requestInfo.url.endsWith("/api/motivos-cancelamento")) return snapshot.motivos as T;
+      if (requestInfo.url.endsWith("/api/clientes-cadastro")) return snapshot.clientes as T;
+      if (requestInfo.url.startsWith(`${_baseUrl}/api/faturamento`)) {
+        const mes = new URL(requestInfo.url).searchParams.get("mes");
+        const daily = snapshot.faturamentoDiario.filter((item) => !mes || String((item as Record<string, unknown>).date).startsWith(mes));
+        const meta = snapshot.faturamentoMeta.find((item) => (item as Record<string, unknown>).mes === mes);
+        return { mes, meta: meta ? Number((meta as Record<string, unknown>).meta) : null, dias: daily } as T;
+      }
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, method, headers });
+  } catch (error) {
+    if (!isApiRequest || isRead || offlineReplay || method === "HEAD") throw error;
+
+    await queueRequest({
+      url: requestInfo.url,
+      method,
+      headers: Array.from(headers.entries()),
+      body: typeof init.body === "string" ? init.body : undefined,
+    });
+    await applyOfflineDeliveryMutation(requestInfo.url, method, typeof init.body === "string" ? init.body : undefined).catch(() => {});
+
+    if (method === "DELETE") return null as T;
+    if (method === "POST" && requestInfo.url.endsWith("/api/entregas")) {
+      const body = typeof init.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : {};
+      return { ...body, id: -Date.now(), sortOrder: body.sortOrder ?? 0, checked: body.checked ?? "none", nf: body.nf ?? "none", cg: body.cg ?? "none" } as T;
+    }
+    return {} as T;
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  const data = (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  if (isApiRequest && isRead && responseType !== "blob") {
+    await writeCached(requestInfo.url, data).catch(() => {});
+    if (requestInfo.url.endsWith("/api/sync/snapshot")) await writeCached("__offline_snapshot__", data).catch(() => {});
+  }
+  return data;
 }

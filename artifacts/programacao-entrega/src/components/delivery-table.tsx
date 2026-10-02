@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { queueDelivery } from "@/lib/offline-deliveries";
 import { getOfflineSnapshot } from "@/lib/offline-snapshot";
 
@@ -37,10 +39,15 @@ function useMotivosCancelamento() {
     queryKey: ["motivos-cancelamento"],
     initialData: () => getOfflineSnapshot()?.motivos ?? [],
     queryFn: async (): Promise<MotivoItem[]> => {
-      const res = await fetch(`${MOTIVOS_API_BASE}/api/motivos-cancelamento`);
-      if (!res.ok) return [];
-      return res.json();
+      try {
+        const res = await fetch(`${MOTIVOS_API_BASE}/api/motivos-cancelamento`);
+        if (!res.ok) return getOfflineSnapshot()?.motivos ?? [];
+        return res.json();
+      } catch {
+        return getOfflineSnapshot()?.motivos ?? [];
+      }
     },
+    initialDataUpdatedAt: 0,
     staleTime: 60_000,
   });
 }
@@ -94,10 +101,11 @@ interface DeliveryTableProps {
   entregas: Entrega[];
   date: string;
   selectedIds: Set<number>;
+  selectionMode: boolean;
   onToggleSelection: (id: number) => void;
 }
 
-export function DeliveryTable({ entregas, date, selectedIds, onToggleSelection }: DeliveryTableProps) {
+export function DeliveryTable({ entregas, date, selectedIds, selectionMode, onToggleSelection }: DeliveryTableProps) {
   const queryClient = useQueryClient();
   const reorderEntregas = useReorderEntregas();
 
@@ -234,6 +242,7 @@ export function DeliveryTable({ entregas, date, selectedIds, onToggleSelection }
               isDragging={draggedId === entrega.id}
               isDragOver={dragOverId === entrega.id}
               isSelected={selectedIds.has(entrega.id)}
+              selectionMode={selectionMode}
               onToggleSelection={() => onToggleSelection(entrega.id)}
             />
           ))}
@@ -262,16 +271,19 @@ interface DeliveryRowProps {
   isDragging: boolean;
   isDragOver: boolean;
   isSelected: boolean;
+  selectionMode: boolean;
   onToggleSelection: () => void;
 }
 
-function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, onToggleSelection }: DeliveryRowProps) {
+function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, selectionMode, onToggleSelection }: DeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const updateEntrega = useUpdateEntrega();
   const deleteEntrega = useDeleteEntrega();
 
   const [isSaving, setIsSaving] = useState(false);
+  const [editingDivergencias, setEditingDivergencias] = useState(false);
+  const divergenciasEditingRef = useRef(false);
   const { data: motivos } = useMotivosCancelamento();
   const [localState, setLocalState] = useState({
     checked: entrega.checked,
@@ -290,6 +302,24 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const lastSavedRef = useRef(localState);
   const initRef = useRef<number | null>(null);
+
+  const syncAgendaCache = useCallback((field: keyof typeof localState, value: unknown) => {
+    const normalizedValue = value === "" ? null : value;
+    queryClient.setQueriesData({ queryKey: ["clientes-agendamento-mensal"] }, (oldData: unknown) => {
+      if (!Array.isArray(oldData)) return oldData;
+
+      return oldData.map((item) => {
+        if (!item || typeof item !== "object" || !("id" in item) || (item as { id: number }).id !== entrega.id) return item;
+
+        const nextItem = { ...item } as Record<string, unknown>;
+        if (field === "checked") nextItem.checked = normalizedValue as Entrega["checked"];
+        if (field === "obs") nextItem.obs = normalizedValue as string | null;
+        if (field === "cliente") nextItem.cliente = String(normalizedValue ?? "");
+        if (field === "hrs") nextItem.hrs = normalizedValue as string | null;
+        return nextItem;
+      });
+    });
+  }, [entrega.id, queryClient]);
 
   useEffect(() => {
     if (initRef.current !== entrega.id) {
@@ -323,6 +353,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         saveDeliveryCache(date, next);
         return next;
       });
+      syncAgendaCache(field, value);
       lastSavedRef.current = { ...lastSavedRef.current, [field]: value } as typeof localState;
       return;
     }
@@ -333,13 +364,17 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       { id: entrega.id, data: updateData },
       {
         onSuccess: () => {
+          syncAgendaCache(field, value);
           queryClient.invalidateQueries({ queryKey: getListEntregasQueryKey({ date }) });
+          queryClient.invalidateQueries({ queryKey: ["clientes-agendamento-mensal"] });
+          queryClient.refetchQueries({ queryKey: ["clientes-agendamento-mensal"], type: "active" });
+          queryClient.refetchQueries({ queryKey: getListEntregasQueryKey({ date }), type: "active" });
           lastSavedRef.current = { ...lastSavedRef.current, [field]: value } as typeof localState;
         },
         onSettled: () => setIsSaving(false),
       }
     );
-  }, [entrega.id, date, updateEntrega, queryClient]);
+  }, [entrega.id, date, updateEntrega, queryClient, syncAgendaCache]);
 
   const handleChange = (field: keyof typeof localState) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setLocalState(prev => ({ ...prev, [field]: e.target.value }));
@@ -347,6 +382,13 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const handleBlur = (field: keyof typeof localState) => () => {
     saveField(field, localState[field]);
+  };
+
+  const finishDivergenciasEdit = (value: string) => {
+    if (!divergenciasEditingRef.current) return;
+    divergenciasEditingRef.current = false;
+    setEditingDivergencias(false);
+    saveField("divergencias", value);
   };
 
   const handleNfcgCycle = (field: "nf" | "cg") => () => {
@@ -375,9 +417,16 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const handleDelete = () => {
     if (window.confirm("Deseja excluir esta entrega?")) {
+      const queryKey = getListEntregasQueryKey({ date });
+      const previous = queryClient.getQueryData<Entrega[]>(queryKey);
+      queryClient.setQueryData<Entrega[]>(queryKey, (old) =>
+        old?.filter((item) => item.id !== entrega.id) ?? []
+      );
+
       deleteEntrega.mutate({ id: entrega.id }, {
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: getListEntregasQueryKey({ date }) })
+        onError: () => queryClient.setQueryData(queryKey, previous),
       });
+      window.setTimeout(() => window.location.reload(), 1000);
     }
   };
 
@@ -637,28 +686,60 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       </div>
 
       {/* DIVERGENCIAS */}
-      <div className="p-1 border-r border-slate-200 flex items-center overflow-hidden">
-        <input
-          type="text"
-          value={localState.divergencias}
-          onChange={handleChange("divergencias")}
-          onBlur={handleBlur("divergencias")}
-          className="w-full px-2 py-1.5 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white"
+      <div className="p-1 border-r border-slate-200">
+        <button
+          type="button"
+          onClick={() => {
+            divergenciasEditingRef.current = true;
+            setEditingDivergencias(true);
+          }}
+          title={localState.divergencias}
+          className="w-full min-h-8 overflow-hidden px-2 py-1.5 text-left text-sm text-slate-700"
           data-testid={`input-divergencias-${entrega.id}`}
-        />
+        >
+          <span className="block truncate">{localState.divergencias}</span>
+        </button>
       </div>
+      <Dialog
+        open={editingDivergencias}
+        onOpenChange={(open) => {
+          if (!open) finishDivergenciasEdit(localState.divergencias);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Editar divergências</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            value={localState.divergencias}
+            onChange={(e) => setLocalState(prev => ({ ...prev, divergencias: e.target.value }))}
+            onBlur={(e) => finishDivergenciasEdit(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                finishDivergenciasEdit(e.currentTarget.value);
+              }
+            }}
+            className="min-h-40 resize-y text-sm text-slate-700 focus-visible:ring-2 focus-visible:ring-blue-500"
+            data-testid={`input-divergencias-${entrega.id}`}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Actions */}
       <div className="p-1 flex items-center justify-center gap-1 relative overflow-hidden">
-        <label className="absolute left-1 z-10 flex items-center justify-center w-6 h-6 cursor-pointer print:hidden" title="Selecionar carga">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={onToggleSelection}
-            className="w-4 h-4 accent-blue-600 cursor-pointer"
-            aria-label={`Selecionar carga ${entrega.cliente}`}
-          />
-        </label>
+        {selectionMode && (
+          <label className="absolute left-1 z-10 flex items-center justify-center w-6 h-6 cursor-pointer print:hidden" title="Selecionar carga">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={onToggleSelection}
+              className="w-4 h-4 accent-blue-600 cursor-pointer"
+              aria-label={`Selecionar carga ${entrega.cliente}`}
+            />
+          </label>
+        )}
         <div className="absolute right-0 inset-y-0 flex items-center justify-center gap-0.5 pl-7 pr-1 bg-white/90 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity print:hidden">
           <div
             onMouseDown={enableDrag}
@@ -707,6 +788,7 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
       const offlineEntrega: Entrega = {
         id: -Date.now(),
         date,
+        agendamento: false,
         cliente: value,
         sortOrder: index,
         checked: "none",
@@ -720,6 +802,7 @@ function NewDeliveryRow({ date, index }: NewDeliveryRowProps) {
         v: null,
         divergencias: null,
         frete: null,
+        statusManual: null,
       };
       queueDelivery({
         temporaryId: offlineEntrega.id,
