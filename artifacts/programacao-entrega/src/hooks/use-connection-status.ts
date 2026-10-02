@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type ConnectionStatus = "checking" | "ok" | "error";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
 const CHECK_INTERVAL = 30_000;
 
 async function checkUrl(url: string, signal: AbortSignal) {
@@ -23,10 +23,11 @@ export function useConnectionStatus() {
     const timeout = window.setTimeout(() => controller.abort(), 8_000);
 
     try {
-      await Promise.all([
-        checkUrl(window.location.href, controller.signal),
-        checkUrl(`${API_BASE}/api/ping`, controller.signal),
-      ]);
+      const checks = [checkUrl(`${API_BASE}/api/ping`, controller.signal)];
+      if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+        checks.push(checkUrl(window.location.origin, controller.signal));
+      }
+      await Promise.all(checks);
       setStatus("ok");
     } catch {
       setStatus("error");

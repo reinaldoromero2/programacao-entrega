@@ -118,6 +118,7 @@ export default function Home() {
   const { savePdf, status: pdfStatus } = useSavePdf();
   const { canInstall, install } = usePwaInstall();
   const connectionStatus = useConnectionStatus();
+  const isDesktopApp = window.location.protocol === "file:";
   const createEntrega = useCreateEntrega();
   const updateEntrega = useUpdateEntrega();
   const syncingRef = useRef(false);
@@ -479,16 +480,16 @@ export default function Home() {
             )}
             title={
               connectionStatus === "ok"
-                ? "Vercel e Render funcionando"
+                ? isDesktopApp ? "Render funcionando" : "Vercel e Render funcionando"
                 : connectionStatus === "error"
-                  ? "Falha no Vercel ou Render"
+                  ? isDesktopApp ? "Falha na API Render" : "Falha no Vercel ou Render"
                   : "Verificando Vercel e Render"
             }
             aria-label={
               connectionStatus === "ok"
-                ? "Vercel e Render funcionando"
+                ? isDesktopApp ? "Render funcionando" : "Vercel e Render funcionando"
                 : connectionStatus === "error"
-                  ? "Falha no Vercel ou Render"
+                  ? isDesktopApp ? "Falha na API Render" : "Falha no Vercel ou Render"
                   : "Verificando Vercel e Render"
             }
           />
