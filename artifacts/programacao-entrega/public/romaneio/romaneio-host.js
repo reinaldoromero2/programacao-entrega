@@ -234,6 +234,33 @@
     }
   };
 
+  // ---- ponte com o app (quando o Romaneio roda num iframe da Programação de Entrega) ----
+  // O app usa a mesma página para duas telas: o Romaneio e a grade da Programação (#prog-modal).
+  // { ripack: 'programacao', abrir: true|false } abre/fecha a grade; o "Sair" da grade, quando
+  // aberta pelo app, avisa { ripack: 'programacao-fechou' } para o app voltar à tela inicial.
+  if (window.parent !== window) {
+    var modoProgramacao = false;
+    window.addEventListener('message', function (ev) {
+      var m = ev.data;
+      if (!m || m.ripack !== 'programacao') return;
+      modoProgramacao = !!m.abrir;
+      var abrir = function () {
+        var modal = document.getElementById('prog-modal');
+        if (!modal) return setTimeout(abrir, 200);
+        if (m.abrir && modal.hidden) { var b = document.getElementById('prog-abrir-btn'); if (b) b.click(); }
+        if (!m.abrir && !modal.hidden) modal.hidden = true;
+      };
+      abrir();
+    });
+    document.addEventListener('click', function (ev) {
+      var alvo = ev.target && ev.target.closest && ev.target.closest('#prog-close');
+      if (alvo && modoProgramacao) {
+        modoProgramacao = false;
+        window.parent.postMessage({ ripack: 'programacao-fechou' }, '*');
+      }
+    }, true);
+  }
+
   window.claude = {
     use: function (nome) {
       if (nome === 'db') return Promise.resolve(db);

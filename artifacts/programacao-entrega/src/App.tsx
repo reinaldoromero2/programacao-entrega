@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import { applyAppZoom } from "@/components/opcoes-menu";
-import { ROMANEIO_ROTA, RomaneioFrame, RomaneioSync } from "@/components/romaneio-frame";
+import { RomaneioFrame, RomaneioSync, TelaProgramacao, rotaDaTelaInicial } from "@/components/romaneio-frame";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,14 +17,21 @@ const queryClient = new QueryClient({
 });
 
 function Router() {
+  const [location] = useLocation();
+  // a Programação continua montada com o Romaneio aberto, para o deslize entre as duas
+  const telaInicial = rotaDaTelaInicial(location);
+
   return (
     <>
-      <Switch>
-        <Route path="/" component={Home} />
-        {/* o Romaneio é desenhado pelo RomaneioFrame, por cima de tudo */}
-        <Route path={ROMANEIO_ROTA}>{null}</Route>
-        <Route component={NotFound} />
-      </Switch>
+      {telaInicial ? (
+        <TelaProgramacao>
+          <Home />
+        </TelaProgramacao>
+      ) : (
+        <Switch>
+          <Route component={NotFound} />
+        </Switch>
+      )}
       <RomaneioFrame />
       <RomaneioSync />
     </>
