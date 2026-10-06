@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -113,6 +114,42 @@ ipcMain.handle('print-window', async () => {
   fs.writeFileSync(pdfPath, pdf);
   await shell.openPath(pdfPath);
   return true;
+});
+
+const RQC008_SCRIPT = 'C:\\RIPack\\atualizar-rqc008.ps1';
+const RQC008_LOG = 'C:\\RIPack\\atualizar-rqc008.log';
+const RQC008_TIMEOUT = 12 * 60 * 1000;
+let rqc008Running = false;
+
+function readLogLines() {
+  try {
+    return fs.readFileSync(RQC008_LOG, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
+  } catch {
+    return [];
+  }
+}
+
+ipcMain.handle('atualizar-rqc008', async () => {
+  if (rqc008Running) return { ok: false, exitCode: null, lines: ['Já existe uma atualização em andamento.'] };
+  if (!fs.existsSync(RQC008_SCRIPT)) return { ok: false, exitCode: null, lines: [`Script não encontrado: ${RQC008_SCRIPT}`] };
+
+  rqc008Running = true;
+  const before = readLogLines().length;
+  try {
+    const exitCode = await new Promise((resolve) => {
+      const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', RQC008_SCRIPT], { windowsHide: true });
+      const timer = setTimeout(() => child.kill(), RQC008_TIMEOUT);
+      child.on('error', () => { clearTimeout(timer); resolve(-1); });
+      child.on('exit', (code) => { clearTimeout(timer); resolve(code ?? -1); });
+    });
+    const after = readLogLines();
+    // linhas desta execução; se o log foi truncado, mostra só o fim
+    const lines = after.length > before ? after.slice(before) : after.slice(-8);
+    const last = lines[lines.length - 1] || '';
+    return { ok: exitCode === 0 && last.includes('OK:'), exitCode, lines };
+  } finally {
+    rqc008Running = false;
+  }
 });
 
 function createWindow() {
