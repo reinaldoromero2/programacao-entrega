@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import { applyAppZoom } from "@/components/opcoes-menu";
+import { ROMANEIO_ROTA, RomaneioFrame, RomaneioSync } from "@/components/romaneio-frame";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,10 +18,16 @@ const queryClient = new QueryClient({
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <Switch>
+        <Route path="/" component={Home} />
+        {/* o Romaneio é desenhado pelo RomaneioFrame, por cima de tudo */}
+        <Route path={ROMANEIO_ROTA}>{null}</Route>
+        <Route component={NotFound} />
+      </Switch>
+      <RomaneioFrame />
+      <RomaneioSync />
+    </>
   );
 }
 

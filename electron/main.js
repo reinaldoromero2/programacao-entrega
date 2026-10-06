@@ -152,52 +152,21 @@ async function rodarRqc008() {
   }
 }
 
-// ── Romaneio ────────────────────────────────────────────────────────────────
-// Página própria (dist/romaneio), numa janela sem acesso ao Node: ela só fala com a API.
-let mainWin = null;
-let romaneioWin = null;
-
-function abrirRomaneio() {
-  if (romaneioWin && !romaneioWin.isDestroyed()) {
-    if (romaneioWin.isMinimized()) romaneioWin.restore();
-    romaneioWin.focus();
-    return;
-  }
-
-  romaneioWin = new BrowserWindow({
-    width: 1300,
-    height: 850,
-    autoHideMenuBar: true,
-    title: 'Romaneio Ripack',
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-    },
-  });
-
-  romaneioWin.webContents.setWindowOpenHandler(({ url }) => {
-    // botão "📗 Atualizar RQ C 008" do Romaneio: roda o script e o app envia a planilha em seguida
-    if (url.startsWith('ripack-atualizar:')) {
-      rodarRqc008().then((r) => {
-        if (r.ok && mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('rqc008-atualizada');
-      });
-      return { action: 'deny' };
-    }
-    if (/^https?:/.test(url)) shell.openExternal(url);
+// O Romaneio roda num iframe da janela principal (rota #/romaneio). Pedidos de nova janela
+// dele chegam aqui: o botão "📗 Atualizar RQ C 008" roda o script e o app envia a planilha.
+function tratarNovaJanela(win, { url }) {
+  if (url.startsWith('ripack-atualizar:')) {
+    rodarRqc008().then((r) => {
+      if (r.ok && !win.isDestroyed()) win.webContents.send('rqc008-atualizada');
+    });
     return { action: 'deny' };
-  });
-
-  romaneioWin.on('closed', () => { romaneioWin = null; });
-  romaneioWin.loadFile(path.join(__dirname, '../dist/romaneio/index.html')).catch((err) => {
-    console.error('Erro ao carregar o Romaneio:', err);
-  });
+  }
+  if (/^https?:/.test(url)) {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  }
+  return { action: 'allow' };
 }
-
-ipcMain.handle('abrir-romaneio', () => {
-  abrirRomaneio();
-  return true;
-});
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -209,12 +178,7 @@ function createWindow() {
       contextIsolation: false,
     },
   });
-  mainWin = win;
-  // fechar a janela principal fecha o app, inclusive o Romaneio se estiver aberto
-  win.on('closed', () => {
-    mainWin = null;
-    app.quit();
-  });
+  win.webContents.setWindowOpenHandler((details) => tratarNovaJanela(win, details));
 
   win.webContents.on('before-input-event', (event, input) => {
     const modifiers = input.modifiers || [];
