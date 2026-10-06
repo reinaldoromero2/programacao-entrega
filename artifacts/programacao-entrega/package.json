@@ -1,6 +1,6 @@
 {
   "name": "@workspace/programacao-entrega",
-  "version": "1.2.18",
+  "version": "1.2.19",
   "private": true,
   "type": "module",
   "scripts": {
@@ -78,6 +78,7 @@
   "dependencies": {
     "idb-keyval": "^6.2.5",
     "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8"
+    "jspdf-autotable": "^5.0.8",
+    "xlsx": "^0.18.5"
   }
 }

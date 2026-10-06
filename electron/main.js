@@ -129,7 +129,7 @@ function readLogLines() {
   }
 }
 
-ipcMain.handle('atualizar-rqc008', async () => {
+async function rodarRqc008() {
   if (rqc008Running) return { ok: false, exitCode: null, lines: ['Já existe uma atualização em andamento.'] };
   if (!fs.existsSync(RQC008_SCRIPT)) return { ok: false, exitCode: null, lines: [`Script não encontrado: ${RQC008_SCRIPT}`] };
 
@@ -150,6 +150,53 @@ ipcMain.handle('atualizar-rqc008', async () => {
   } finally {
     rqc008Running = false;
   }
+}
+
+// ── Romaneio ────────────────────────────────────────────────────────────────
+// Página própria (dist/romaneio), numa janela sem acesso ao Node: ela só fala com a API.
+let mainWin = null;
+let romaneioWin = null;
+
+function abrirRomaneio() {
+  if (romaneioWin && !romaneioWin.isDestroyed()) {
+    if (romaneioWin.isMinimized()) romaneioWin.restore();
+    romaneioWin.focus();
+    return;
+  }
+
+  romaneioWin = new BrowserWindow({
+    width: 1300,
+    height: 850,
+    autoHideMenuBar: true,
+    title: 'Romaneio Ripack',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+
+  romaneioWin.webContents.setWindowOpenHandler(({ url }) => {
+    // botão "📗 Atualizar RQ C 008" do Romaneio: roda o script e o app envia a planilha em seguida
+    if (url.startsWith('ripack-atualizar:')) {
+      rodarRqc008().then((r) => {
+        if (r.ok && mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('rqc008-atualizada');
+      });
+      return { action: 'deny' };
+    }
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  romaneioWin.on('closed', () => { romaneioWin = null; });
+  romaneioWin.loadFile(path.join(__dirname, '../dist/romaneio/index.html')).catch((err) => {
+    console.error('Erro ao carregar o Romaneio:', err);
+  });
+}
+
+ipcMain.handle('abrir-romaneio', () => {
+  abrirRomaneio();
+  return true;
 });
 
 function createWindow() {
@@ -161,6 +208,12 @@ function createWindow() {
       nodeIntegration: true,
       contextIsolation: false,
     },
+  });
+  mainWin = win;
+  // fechar a janela principal fecha o app, inclusive o Romaneio se estiver aberto
+  win.on('closed', () => {
+    mainWin = null;
+    app.quit();
   });
 
   win.webContents.on('before-input-event', (event, input) => {

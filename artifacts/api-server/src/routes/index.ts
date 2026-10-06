@@ -6,6 +6,7 @@ import motivosCancelamentoRouter from "./motivos-cancelamento";
 import clientesCadastroRouter from "./clientes-cadastro";
 import faturamentoRouter from "./faturamento";
 import lembretesRouter from "./lembretes";
+import romaneioRouter from "./romaneio";
 import { db, entregasTable, motoristasTable, motivosCancelamentoTable, clientesCadastroTable, faturamentoDiarioTable, faturamentoMetaTable, lembretesTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -17,6 +18,7 @@ router.use(motivosCancelamentoRouter);
 router.use(clientesCadastroRouter);
 router.use(faturamentoRouter);
 router.use(lembretesRouter);
+router.use(romaneioRouter);
 
 router.get("/sync/snapshot", async (_req, res, next): Promise<void> => {
 	try {

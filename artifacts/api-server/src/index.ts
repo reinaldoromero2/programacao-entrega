@@ -20,7 +20,7 @@ if (Number.isNaN(port) || port <= 0) {
  * mismatch would only surface later as 500 errors on every request.
  */
 async function assertSchema(): Promise<void> {
-  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro", "faturamento_diario", "faturamento_meta", "lembretes"];
+  const expectedTables = ["entregas", "motoristas", "motivos_cancelamento", "clientes_cadastro", "faturamento_diario", "faturamento_meta", "lembretes", "romaneio_docs"];
 
   const client = await pool.connect();
   try {
@@ -36,6 +36,19 @@ async function assertSchema(): Promise<void> {
         CONSTRAINT lembretes_date_text_unique UNIQUE (date, text)
       )
     `);
+    await client.query(`CREATE SEQUENCE IF NOT EXISTS romaneio_docs_seq_gen`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS romaneio_docs (
+        collection text NOT NULL,
+        id text NOT NULL,
+        data jsonb NOT NULL,
+        seq bigint NOT NULL,
+        deleted boolean NOT NULL DEFAULT false,
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (collection, id)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS romaneio_docs_seq_idx ON romaneio_docs (seq)`);
 
     const result = await client.query<{ table_name: string }>(
       `SELECT table_name

@@ -27,7 +27,8 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json());
+// romaneios guardam assinatura e desenho da carga como imagem; o padrão de 100kb não basta
+app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);

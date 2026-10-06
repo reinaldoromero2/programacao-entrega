@@ -1,0 +1,244 @@
+// Substitui o runtime do artefato do claude.ai (window.claude.use) para o Romaneio rodar no app.
+// - claude.use('db'): o mesmo jeito do Firestore que a página usa (collection/doc/where "=="/
+//   orderBy/limit/get/add/set/update/delete/onSnapshot), gravando no servidor do app
+//   (/api/romaneio). Mudanças de outros aparelhos chegam por long-poll em /api/romaneio/changes.
+// - claude.use('downloads'): save({ filename, data: Blob }) vira um download comum.
+(function () {
+  'use strict';
+
+  var API_PADRAO = 'https://programa-odeentrega.onrender.com';
+  var api = API_PADRAO;
+  try {
+    // para teste: ?api=http://127.0.0.1:8787 (fica guardado neste aparelho; ?api=padrao volta)
+    var pedido = new URLSearchParams(location.search).get('api');
+    if (pedido === 'padrao') localStorage.removeItem('ripack_romaneio_api');
+    else if (pedido) localStorage.setItem('ripack_romaneio_api', pedido);
+    api = localStorage.getItem('ripack_romaneio_api') || API_PADRAO;
+  } catch (e) {}
+  var BASE = api.replace(/\/+$/, '') + '/api/romaneio';
+
+  function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function copia(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+
+  function erroHttp(status, corpo) {
+    var e = new Error((corpo && corpo.error) || ('HTTP ' + status));
+    e.status = status;
+    e.code = status === 404 ? 'not-found' : status >= 500 ? 'unavailable' : 'invalid-argument';
+    return e;
+  }
+
+  function http(method, caminho, corpo) {
+    return fetch(BASE + caminho, {
+      method: method,
+      headers: corpo ? { 'Content-Type': 'application/json' } : undefined,
+      body: corpo ? JSON.stringify(corpo) : undefined,
+      cache: 'no-store'
+    }).then(function (r) {
+      if (r.status === 204) return null;
+      return r.json().catch(function () { return null; }).then(function (j) {
+        if (!r.ok) throw erroHttp(r.status, j);
+        return j;
+      });
+    });
+  }
+
+  // leitura: insiste enquanto o servidor estiver dormindo/fora (Render grátis demora ~1 min a acordar)
+  function lerComInsistencia(caminho) {
+    var tentativa = 0;
+    function vai() {
+      return http('GET', caminho).catch(function (e) {
+        if (e.status && e.status < 500) throw e;
+        tentativa++;
+        return esperar(Math.min(2000 * tentativa, 15000)).then(vai);
+      });
+    }
+    return vai();
+  }
+
+  // ---- snapshots no formato que a página lê ----
+  function docSnap(id, data, existe) {
+    return {
+      id: id,
+      exists: !!existe,
+      data: function () { return existe ? copia(data) : undefined; }
+    };
+  }
+  function querySnap(docs) {
+    var lista = docs.map(function (d) { return docSnap(d.id, d.data, true); });
+    return {
+      docs: lista,
+      empty: lista.length === 0,
+      size: lista.length,
+      forEach: function (fn) { lista.forEach(fn); }
+    };
+  }
+
+  // ---- ouvintes (onSnapshot) e acompanhamento de mudanças ----
+  var ouvintes = [];   // { col, docId?, rodar() }
+
+  function avisarColecao(col, ids) {
+    ouvintes.slice().forEach(function (o) {
+      if (o.col !== col) return;
+      if (o.docId && ids && ids.indexOf(o.docId) < 0) return;
+      o.rodar();
+    });
+  }
+
+  var cursor = null, acompanhando = false;
+  function acompanhar() {
+    if (acompanhando) return;
+    acompanhando = true;
+    (function laco() {
+      var caminho = cursor === null ? '/changes' : '/changes?since=' + cursor;
+      http('GET', caminho).then(function (r) {
+        var porColecao = {};
+        (r.changes || []).forEach(function (c) { (porColecao[c.collection] = porColecao[c.collection] || []).push(c.id); });
+        cursor = r.seq;
+        Object.keys(porColecao).forEach(function (col) { avisarColecao(col, porColecao[col]); });
+        laco();
+      }, function () {
+        esperar(3000).then(laco);
+      });
+    })();
+  }
+
+  function ouvir(col, docId, buscar, cb, errCb) {
+    var ativo = true, ultimo = null, rodando = false, deNovo = false;
+    var o = {
+      col: col,
+      docId: docId,
+      rodar: function () {
+        if (!ativo) return;
+        if (rodando) { deNovo = true; return; }
+        rodando = true;
+        buscar().then(function (resultado) {
+          var marca = JSON.stringify(resultado.raw);
+          if (ativo && marca !== ultimo) {
+            ultimo = marca;
+            try { cb(resultado.snap); } catch (e) { setTimeout(function () { throw e; }); }
+          }
+        }, function (e) {
+          if (ativo && errCb) { try { errCb(e); } catch (x) {} }
+        }).then(function () {
+          rodando = false;
+          if (deNovo) { deNovo = false; o.rodar(); }
+        });
+      }
+    };
+    ouvintes.push(o);
+    acompanhar();
+    setTimeout(o.rodar, 0);
+    return function () {
+      ativo = false;
+      var i = ouvintes.indexOf(o);
+      if (i >= 0) ouvintes.splice(i, 1);
+    };
+  }
+
+  // ---- referências ----
+  function DocRef(col, id) { this.col = col; this.id = id; }
+  DocRef.prototype._caminho = function () {
+    return '/docs/' + encodeURIComponent(this.col) + '/' + encodeURIComponent(this.id);
+  };
+  DocRef.prototype._ler = function () {
+    var self = this;
+    return lerComInsistencia(self._caminho()).then(function (r) {
+      return { snap: docSnap(self.id, r.data, true), raw: r.data };
+    }, function (e) {
+      if (e.status === 404) return { snap: docSnap(self.id, undefined, false), raw: null };
+      throw e;
+    });
+  };
+  DocRef.prototype.get = function () { return this._ler().then(function (r) { return r.snap; }); };
+  DocRef.prototype.set = function (data) {
+    var self = this;
+    return http('PUT', self._caminho(), { data: data }).then(function () { avisarColecao(self.col, [self.id]); });
+  };
+  DocRef.prototype.update = function (data) {
+    var self = this;
+    return http('PATCH', self._caminho(), { data: data }).then(function () { avisarColecao(self.col, [self.id]); });
+  };
+  DocRef.prototype['delete'] = function () {
+    var self = this;
+    return http('DELETE', self._caminho()).then(function () { avisarColecao(self.col, [self.id]); });
+  };
+  DocRef.prototype.onSnapshot = function (cb, errCb) {
+    var self = this;
+    return ouvir(self.col, self.id, function () { return self._ler(); }, cb, errCb);
+  };
+
+  function Query(col, filtro, ordem, limite) {
+    this.col = col; this._filtro = filtro || null; this._ordem = ordem || null; this._limite = limite || null;
+  }
+  Query.prototype.where = function (campo, op, valor) {
+    if (op !== '==') throw new Error('Romaneio: só o filtro "==" é suportado (pedido: ' + op + ')');
+    return new Query(this.col, { campo: campo, valor: valor }, this._ordem, this._limite);
+  };
+  Query.prototype.orderBy = function (campo, dir) {
+    return new Query(this.col, this._filtro, { campo: campo, dir: dir === 'desc' ? 'desc' : 'asc' }, this._limite);
+  };
+  Query.prototype.limit = function (n) { return new Query(this.col, this._filtro, this._ordem, n); };
+  Query.prototype._caminho = function () {
+    var p = [];
+    if (this._filtro) p.push('where=' + encodeURIComponent(this._filtro.campo), 'eq=' + encodeURIComponent(JSON.stringify(this._filtro.valor)));
+    if (this._ordem) p.push('orderBy=' + encodeURIComponent(this._ordem.campo), 'dir=' + this._ordem.dir);
+    if (this._limite) p.push('limit=' + this._limite);
+    return '/docs/' + encodeURIComponent(this.col) + (p.length ? '?' + p.join('&') : '');
+  };
+  Query.prototype._ler = function () {
+    return lerComInsistencia(this._caminho()).then(function (r) {
+      var docs = (r && r.docs) || [];
+      return { snap: querySnap(docs), raw: docs };
+    });
+  };
+  Query.prototype.get = function () { return this._ler().then(function (r) { return r.snap; }); };
+  Query.prototype.onSnapshot = function (cb, errCb) {
+    var self = this;
+    return ouvir(self.col, null, function () { return self._ler(); }, cb, errCb);
+  };
+
+  function Collection(nome) { Query.call(this, nome); }
+  Collection.prototype = Object.create(Query.prototype);
+  Collection.prototype.doc = function (id) {
+    if (!id) throw new Error('Romaneio: doc() precisa de id');
+    return new DocRef(this.col, String(id));
+  };
+  Collection.prototype.add = function (data) {
+    var col = this.col;
+    return http('POST', '/docs/' + encodeURIComponent(col), { data: data }).then(function (r) {
+      avisarColecao(col, [r.id]);
+      return new DocRef(col, r.id);
+    });
+  };
+
+  var db = { collection: function (nome) { return new Collection(nome); } };
+
+  // ---- downloads ----
+  var downloads = {
+    save: function (opts) {
+      try {
+        var url = URL.createObjectURL(opts.data);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = opts.filename || 'arquivo';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        return Promise.resolve({ status: 'saved' });
+      } catch (e) {
+        var err = new Error('Não foi possível salvar o arquivo');
+        err.code = 'unavailable';
+        return Promise.reject(err);
+      }
+    }
+  };
+
+  window.claude = {
+    use: function (nome) {
+      if (nome === 'db') return Promise.resolve(db);
+      if (nome === 'downloads') return Promise.resolve(downloads);
+      return Promise.reject(new Error('Recurso não disponível: ' + nome));
+    }
+  };
+})();
