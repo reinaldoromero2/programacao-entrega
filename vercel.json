@@ -1,5 +1,17 @@
 {
   "buildCommand": "pnpm install --no-frozen-lockfile && BASE_PATH=/ pnpm --filter @workspace/programacao-entrega run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/romaneio",
+      "destination": "/romaneio/",
+      "permanent": false
+    }
+  ]
 }

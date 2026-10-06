@@ -27,6 +27,10 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "icon-192.svg", "icon-512.svg"],
+      workbox: {
+        // o Romaneio é outra página (public/romaneio): não pode cair na tela da Programação
+        navigateFallbackDenylist: [/^\/romaneio/],
+      },
       manifest: {
         name: "Programação de Entrega",
         short_name: "Prog. Entrega",
