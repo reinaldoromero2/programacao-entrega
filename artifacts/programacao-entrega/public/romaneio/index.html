@@ -18723,8 +18723,8 @@ var SIGNATURES = {
     return res;
   }
 
-  // clientes Siemens (nome com "SIEM", ex.: 1081 SIEM HP, 1105 SIEM CALADIS):
-  // só aparecem com a caixa "Siemens" marcada (escolha lembrada no aparelho)
+  // clientes Siemens (nome com "SIEM", ex.: 1081 SIEM HP, 1105 SIEM CALADIS): a caixa "Siemens"
+  // marcada mostra só eles; desmarcada, só os outros (escolha lembrada no aparelho)
   function ehSiemens(n){ return /\bSIEM/i.test(String(n || '')); }
   function filtrados(){
     var fc = txt($('prog-filtro-cli').value).toLowerCase(), fr = txt($('prog-filtro-rp').value).toLowerCase();
@@ -18733,7 +18733,8 @@ var SIGNATURES = {
     var soPed = $('prog-so-pedido').checked, comSiemens = $('prog-siemens').checked;
     return prog.itens.map(function(it, idx){ return { it: it, idx: idx }; }).filter(function(x){
       var it = x.it;
-      if (!comSiemens && ehSiemens(it.cliente)) return false;
+      // caixa "Siemens": marcada mostra só as Siemens; desmarcada esconde as Siemens
+      if (comSiemens !== ehSiemens(it.cliente)) return false;
       if (fcs.length && !fcs.some(function(f){ return it.cliente.toLowerCase().indexOf(f) !== -1; })) return false;
       if (fr && it.rp.toLowerCase().indexOf(fr) === -1) return false;
       if (soPed && !it.q.some(function(v, c){ return qEf(x.idx, c) > 0; }) && !it.prox) return false;
@@ -19053,6 +19054,7 @@ var SIGNATURES = {
   // tabela pelo código, depois um palpite pelo nome; sem palpite, a pessoa escolhe uma vez.
   var MAPA_PADRAO = {
     '0119': 'ZF ECO', '0131': 'INGREDION MOGI', '0143': 'CRISTÁLIA', '0465': 'MAXION SP', '0530': '3M SUMARÉ',
+    '0443': 'SOLV', // 0443 UNIPAR INDUPA é o SOLV da Programação (pedido de Romero)
     '0553': 'OURO FINO', '0580': '3M RIBEIRÃO', '0581': '3M ITAPETININGA', '0621': 'INGREDION BALSA NOVA',
     '0629': 'PRADA SP', '0651': 'MBB-SBC', '0657': 'PRADA-MG', '0765': 'CSN VOLTA REDONDA', '0790': 'BOEHRINGER',
     '0817': 'CSN PORTO REAL', '0989': 'SUOMINEN', '0996': 'CJ DO BRASIL', '1024': 'FITESA COSMOPOLIS',
@@ -19127,8 +19129,8 @@ var SIGNATURES = {
         lista.forEach(function(n){ if (achados.indexOf(n) === -1) achados.push(n); });
       });
       if (!achados.length) return;
-      // clientes Siemens só aparecem com a caixa "Siemens" marcada
-      if (achados.some(ehSiemens)) $('prog-siemens').checked = true;
+      // a caixa "Siemens" separa os dois grupos: marca para cliente Siemens, desmarca para os outros
+      $('prog-siemens').checked = achados.some(ehSiemens);
       $('prog-filtro-cli').value = achados.join(' | ');
       $('prog-filtro-rp').value = '';
       renderGrade();

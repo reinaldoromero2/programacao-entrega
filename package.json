@@ -1,6 +1,6 @@
 {
   "name": "workspace",
-  "version": "1.2.23",
+  "version": "1.2.24",
   "license": "MIT",
   "main": "electron/main.js",
   "scripts": {
