@@ -151,6 +151,24 @@ export function RomaneioFrame() {
       if (ev.source !== iframeRef.current?.contentWindow) return;
       if (ev.data?.ripack === "programacao-fechou") ir("/");
       if (ev.data?.ripack === "entregas-mudaram") queryClient.invalidateQueries();
+      // "Copiar imagem" do Romaneio: o navegador recusou, então o app copia direto (Electron)
+      if (ev.data?.ripack === "copiar-imagem") {
+        const responder = (ok: boolean, erro?: string) =>
+          iframeRef.current?.contentWindow?.postMessage({ ripack: "copiar-imagem-resultado", id: ev.data.id, ok, erro }, "*");
+        const electron = (window as any)?.require?.("electron");
+        if (!electron?.clipboard || !electron?.nativeImage) {
+          responder(false, "Só o app do computador copia direto.");
+          return;
+        }
+        try {
+          const imagem = electron.nativeImage.createFromDataURL(String(ev.data.dataUrl));
+          if (imagem.isEmpty()) throw new Error("imagem vazia");
+          electron.clipboard.writeImage(imagem);
+          responder(true);
+        } catch (err) {
+          responder(false, err instanceof Error ? err.message : "falha ao copiar");
+        }
+      }
       // botão "📗 Atualizar RQ C 008" da página: o app roda o script, envia a planilha e
       // responde quando acabar de verdade (sem contagem fixa)
       if (ev.data?.ripack === "rqc008-rodar") {

@@ -15465,20 +15465,18 @@ var SIGNATURES = {
     }
     romPdfStatus.textContent = 'Copiando...';
     romPdfStatus.style.color = '';
-    lastCanvas.toBlob(function(blob){
-      if (!blob){
-        romPdfStatus.textContent = 'Falha ao gerar a imagem.';
-        romPdfStatus.style.color = 'var(--critical)';
-        return;
-      }
-      navigator.clipboard.write([ new ClipboardItem({ 'image/png': blob }) ]).then(function(){
-        romPdfStatus.textContent = 'Imagem copiada — agora é só colar (Ctrl+V) no WhatsApp.';
-        romPdfStatus.style.color = 'var(--good)';
-      }).catch(function(){
-        romPdfStatus.textContent = 'Não foi possível copiar a imagem. Seu navegador pode ter bloqueado o acesso à área de transferência.';
-        romPdfStatus.style.color = 'var(--critical)';
-      });
-    }, 'image/png');
+    // a cópia é pedida já no clique e a imagem entra quando ficar pronta: gerar antes e copiar
+    // depois perde o vínculo com o clique, e o navegador (Safari, iframe do app) recusa
+    var imagem = new Promise(function(resolve, reject){
+      lastCanvas.toBlob(function(blob){ if (blob) resolve(blob); else reject(new Error('Falha ao gerar a imagem.')); }, 'image/png');
+    });
+    navigator.clipboard.write([ new ClipboardItem({ 'image/png': imagem }) ]).then(function(){
+      romPdfStatus.textContent = 'Imagem copiada — agora é só colar (Ctrl+V) no WhatsApp.';
+      romPdfStatus.style.color = 'var(--good)';
+    }).catch(function(){
+      romPdfStatus.textContent = 'Não foi possível copiar a imagem. Use "Salvar imagem" e envie o arquivo pelo WhatsApp.';
+      romPdfStatus.style.color = 'var(--critical)';
+    });
   });
 
   function doSaveImg(){

@@ -265,6 +265,46 @@
     }, true);
   }
 
+  // ---- copiar imagem (romaneio, TATU, Nathan, carga) dentro do app ----
+  // No iframe do app o Chromium costuma recusar navigator.clipboard.write com imagem. Se recusar,
+  // a página pede ao app (Electron), que põe a imagem na área de transferência direto.
+  if (window.parent !== window && navigator.clipboard && navigator.clipboard.write) {
+    var escreverOriginal = navigator.clipboard.write.bind(navigator.clipboard);
+    var pedidosCopia = {}, proximoPedido = 1;
+    window.addEventListener('message', function (ev) {
+      var m = ev.data;
+      if (!m || m.ripack !== 'copiar-imagem-resultado' || !pedidosCopia[m.id]) return;
+      var p = pedidosCopia[m.id]; delete pedidosCopia[m.id];
+      if (m.ok) p.resolve(); else p.reject(new Error(m.erro || 'O app não conseguiu copiar'));
+    });
+    var copiarPeloApp = function (itens) {
+      var item = itens && itens[0];
+      var tipo = item && item.types.filter(function (t) { return /^image\//.test(t); })[0];
+      if (!tipo) return Promise.reject(new Error('sem imagem'));
+      return item.getType(tipo).then(function (blob) {
+        return new Promise(function (resolve, reject) {
+          var r = new FileReader();
+          r.onload = function () { resolve(r.result); };
+          r.onerror = function () { reject(r.error); };
+          r.readAsDataURL(blob);
+        });
+      }).then(function (dataUrl) {
+        return new Promise(function (resolve, reject) {
+          var id = proximoPedido++;
+          pedidosCopia[id] = { resolve: resolve, reject: reject };
+          window.parent.postMessage({ ripack: 'copiar-imagem', id: id, dataUrl: dataUrl }, '*');
+          // fora do app (navegador) ninguém responde
+          setTimeout(function () { if (pedidosCopia[id]) { delete pedidosCopia[id]; reject(new Error('sem resposta do app')); } }, 4000);
+        });
+      });
+    };
+    navigator.clipboard.write = function (itens) {
+      return escreverOriginal(itens).catch(function (erro) {
+        return copiarPeloApp(itens).catch(function () { throw erro; });
+      });
+    };
+  }
+
   // ---- zoom próprio: um para o Romaneio, outro para a grade da Programação (RQ C 008) ----
   // A página é a mesma; quando a grade (#prog-modal) abre ou fecha, troca para o zoom dela.
   // Ctrl + / Ctrl - / Ctrl 0 e Ctrl + roda do mouse aqui dentro; no app, os atalhos de
