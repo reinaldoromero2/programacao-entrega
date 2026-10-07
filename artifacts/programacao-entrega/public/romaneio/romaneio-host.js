@@ -263,6 +263,18 @@
         window.parent.postMessage({ ripack: 'programacao-fechou' }, '*');
       }
     }, true);
+    // a grade fechou por outro caminho (ex.: "Mandar para a calculadora de carga" leva ao
+    // romaneio): o app passa a tratar como tela do Romaneio, com a seta › para as outras telas
+    (function vigiarGrade() {
+      var modal = document.getElementById('prog-modal');
+      if (!modal) return setTimeout(vigiarGrade, 300);
+      new MutationObserver(function () {
+        if (modal.hidden && modoProgramacao) {
+          modoProgramacao = false;
+          window.parent.postMessage({ ripack: 'grade-virou-romaneio' }, '*');
+        }
+      }).observe(modal, { attributes: true, attributeFilter: ['hidden'] });
+    })();
   }
 
   // ---- copiar imagem (romaneio, TATU, Nathan, carga) dentro do app ----

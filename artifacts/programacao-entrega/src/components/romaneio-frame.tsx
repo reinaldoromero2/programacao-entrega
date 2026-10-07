@@ -129,6 +129,12 @@ export function RomaneioFrame() {
     setMontado(true);
     avisarPagina(tela);
     const novoLado = tela === "romaneio" ? "esquerda" : "direita";
+    // já na tela e só trocando entre grade e Romaneio (ex.: calculadora de carga):
+    // o painel fica parado, muda só o lado e as setas
+    if (naTela && novoLado !== lado) {
+      setLado(novoLado);
+      return;
+    }
     // trocar de lado é um salto sem animação; depois o painel desliza para dentro
     if (novoLado !== lado) {
       setSemTransicao(true);
@@ -150,6 +156,10 @@ export function RomaneioFrame() {
     const aoMensagem = (ev: MessageEvent) => {
       if (ev.source !== iframeRef.current?.contentWindow) return;
       if (ev.data?.ripack === "programacao-fechou") ir("/");
+      // a grade fechou indo para o romaneio (ex.: calculadora de carga): vira a tela do Romaneio
+      if (ev.data?.ripack === "grade-virou-romaneio" && window.location.hash.replace(/^#/, "") === PROGRAMACAO_ROTA) {
+        ir(ROMANEIO_ROTA);
+      }
       if (ev.data?.ripack === "entregas-mudaram") queryClient.invalidateQueries();
       // "Copiar imagem" do Romaneio: o navegador recusou, então o app copia direto (Electron)
       if (ev.data?.ripack === "copiar-imagem") {
