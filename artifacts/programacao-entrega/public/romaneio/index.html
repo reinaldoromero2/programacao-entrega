@@ -18454,8 +18454,14 @@ var SIGNATURES = {
   .prog-filtro-limpar{ position:absolute; right:5px; top:50%; transform:translateY(-50%); width:20px; height:20px; padding:0; border:none; border-radius:50%; background:#dc2626; color:#fff; font:700 14px/20px Arial, sans-serif; text-align:center; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.3); }
   .prog-filtro-limpar:hover{ background:#b91c1c; }
   .prog-filtro-limpar[hidden]{ display:none; }
-  .prog-btn-ins-enviar{ background:#5b21b6 !important; color:#fff !important; border:1px solid #4c1d95 !important; border-style:solid !important; font-weight:800 !important; letter-spacing:.3px; }
+  .prog-btn-ins-enviar{ background:#FFC400 !important; color:#1a1a1a !important; border:1px solid #D9A400 !important; border-style:solid !important; font-weight:800 !important; letter-spacing:.3px; box-shadow:0 1px 3px rgba(0,0,0,0.25); }
+  .prog-btn-ins-enviar:hover{ background:#FFB300 !important; }
+  .prog-btn-ins-enviar:disabled{ opacity:.55; }
   table.pg tr.ins-linha > td:not(.d):not(.c-prox), table.pg td.d.ins-l{ background:#ede9fe !important; color:#4c1d95 !important; }
+  /* seleção de faixa como no Excel: sombreado cinza por cima da cor da célula; ativa com borda verde */
+  table.pg tbody td.xl-sel{ box-shadow:inset 0 0 0 999px rgba(15,23,42,.16); }
+  table.pg tbody td.xl-ativa{ outline:2px solid #217346; outline-offset:-2px; }
+  table.pg tbody td{ user-select:none; }
   table.pg td.d.ins{ position:relative; }
   table.pg td.d .ins-rm{ position:absolute; top:1px; left:1px; width:15px; height:15px; padding:0; border:none; border-radius:50%; background:#dc2626; color:#fff; font:700 11px/15px Arial, sans-serif; text-align:center; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.3); }
   table.pg td.d .ins-rm:hover{ background:#b91c1c; }
@@ -18549,6 +18555,38 @@ var SIGNATURES = {
   var CHAVE = 'ripack_programacao_v4';
   var prog = null, sel = {}, selCli = null, escolhaCli = {}, recCache = {};
   var modoIns = false, selIns = {}; // "Inserir programação": células marcadas (k -> quantas vezes o cliente entra)
+  // Seleção de faixa como no Excel (só visual, para não se perder nas linhas):
+  // a = célula onde começou, f = célula ativa; posições na grade como está desenhada.
+  var xlSel = null;
+  function posicaoCelula(td){
+    var tr = td.parentElement;
+    return { r: Array.prototype.indexOf.call(tr.parentElement.children, tr), c: Array.prototype.indexOf.call(tr.children, td) };
+  }
+  function limitesSelecao(){
+    return { r0: Math.min(xlSel.a.r, xlSel.f.r), r1: Math.max(xlSel.a.r, xlSel.f.r), c0: Math.min(xlSel.a.c, xlSel.f.c), c1: Math.max(xlSel.a.c, xlSel.f.c) };
+  }
+  function dentroDaSelecao(p){
+    if (!xlSel) return false;
+    var l = limitesSelecao();
+    return p.r >= l.r0 && p.r <= l.r1 && p.c >= l.c0 && p.c <= l.c1;
+  }
+  function aplicarSelecao(rolar){
+    var g = document.getElementById('prog-grade');
+    if (!g) return;
+    Array.prototype.forEach.call(g.querySelectorAll('td.xl-sel, td.xl-ativa'), function(td){ td.classList.remove('xl-sel', 'xl-ativa'); });
+    if (!xlSel) return;
+    var linhas = g.querySelectorAll('tbody tr'), l = limitesSelecao();
+    for (var r = l.r0; r <= l.r1; r++){
+      var tr = linhas[r];
+      if (!tr) continue;
+      for (var c = l.c0; c <= l.c1; c++){ if (tr.children[c]) tr.children[c].classList.add('xl-sel'); }
+    }
+    var ativa = linhas[xlSel.f.r] && linhas[xlSel.f.r].children[xlSel.f.c];
+    if (ativa){
+      ativa.classList.add('xl-ativa');
+      if (rolar) ativa.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }
   // "Conjugar carga": clientes da RQ C 008 ligados vão numa linha só ("INGREDION MOGI + SUOMINEN")
   var conjGrupo = {}, conjOrdem = {}, proxGrupo = 1, conjOrigem = null, ultimoIns = null;
   function letraGrupo(g){
@@ -18813,6 +18851,7 @@ var SIGNATURES = {
     $('prog-grade').innerHTML = h;
     // o modal pode estar abrindo agora: mede depois que ele aparece
     if (somenteVer) setTimeout(caberNaTela, 0);
+    aplicarSelecao(); // a grade é redesenhada a cada marcação: a faixa volta no mesmo lugar
   }
 
   function linhasSel(){
@@ -19022,6 +19061,16 @@ var SIGNATURES = {
       desmarcarIns(rm.getAttribute('data-rm-ins'));
       return;
     }
+    // terminou um arraste de seleção: o clique de soltar não marca nem desfaz a faixa
+    if (arrastou){ arrastou = false; return; }
+    // seleção de faixa, como no Excel (só visual): clique começa, Shift+clique estende.
+    // No modo inserir, clicar numa quantidade DENTRO da faixa marca e mantém a faixa.
+    var cel = ev.target.closest ? ev.target.closest('tbody td') : null;
+    if (!cel){ xlSel = null; aplicarSelecao(); return; }
+    var pos = posicaoCelula(cel);
+    if (ev.shiftKey && xlSel){ xlSel.f = pos; aplicarSelecao(); return; }
+    if (!(modoIns && cel.classList.contains('q') && dentroDaSelecao(pos))) xlSel = { a: pos, f: pos };
+    aplicarSelecao();
     var td = ev.target.closest ? ev.target.closest('td.q') : null;
     if (!td) return;
     var k = td.getAttribute('data-k'), it = prog.itens[+k.split('|')[0]];
@@ -19175,8 +19224,8 @@ var SIGNATURES = {
     b.hidden = !modoIns;
     b.disabled = !n;
     b.textContent = n ? 'ENVIAR (' + n + ')' : 'ENVIAR';
-    cj.hidden = !modoIns;
-    cj.disabled = !n && !conjOrigem;
+    // "Conjugar carga" só aparece depois de marcar uma quantidade
+    cj.hidden = !modoIns || (!n && !conjOrigem);
     // contorno azul na grade enquanto o modo inserir está ligado
     modal.classList.toggle('modo-ins', modoIns);
   }
@@ -19325,7 +19374,47 @@ var SIGNATURES = {
     });
   }
 
-  ['prog-filtro-cli', 'prog-filtro-rp'].forEach(function(id){ $(id).addEventListener('input', renderGrade); });
+  ['prog-filtro-cli', 'prog-filtro-rp'].forEach(function(id){ $(id).addEventListener('input', function(){ xlSel = null; renderGrade(); }); });
+  // arrastar com o botão esquerdo seleciona a faixa (como no Excel); soltar não conta como clique
+  var arrasteInicio = null, arrastou = false;
+  $('prog-grade').addEventListener('mousedown', function(ev){
+    if (somenteVer || ev.button !== 0 || ev.shiftKey) return;
+    if (ev.target.closest && ev.target.closest('[data-rm-ins]')) return;
+    var cel = ev.target.closest ? ev.target.closest('tbody td') : null;
+    arrasteInicio = cel ? posicaoCelula(cel) : null;
+    arrastou = false;
+  });
+  $('prog-grade').addEventListener('mouseover', function(ev){
+    if (!arrasteInicio || !(ev.buttons & 1)) return;
+    var cel = ev.target.closest ? ev.target.closest('tbody td') : null;
+    if (!cel) return;
+    var p = posicaoCelula(cel);
+    if (!arrastou && p.r === arrasteInicio.r && p.c === arrasteInicio.c) return;
+    if (!arrastou){ arrastou = true; xlSel = { a: arrasteInicio, f: p }; }
+    else xlSel.f = p;
+    aplicarSelecao();
+  });
+  document.addEventListener('mouseup', function(){ arrasteInicio = null; });
+  // clique na área vazia da grade (fora da tabela) apaga a faixa
+  $('prog-grade-wrap').addEventListener('click', function(ev){
+    if (!(ev.target.closest && ev.target.closest('table.pg')) && xlSel){ xlSel = null; aplicarSelecao(); }
+  });
+  // setas andam com a célula ativa; Shift + setas estendem a faixa (como no Excel)
+  document.addEventListener('keydown', function(ev){
+    if (modal.hidden || somenteVer || !xlSel) return;
+    var alvo = ev.target, tag = alvo && alvo.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (alvo && alvo.isContentEditable)) return;
+    if (document.querySelector('.prog-ins-modal')) return;
+    var passos = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[ev.key];
+    if (!passos) return;
+    ev.preventDefault();
+    var linhas = $('prog-grade').querySelectorAll('tbody tr');
+    if (!linhas.length) return;
+    var maxC = linhas[0].children.length - 1;
+    var p = { r: Math.max(0, Math.min(linhas.length - 1, xlSel.f.r + passos[0])), c: Math.max(0, Math.min(maxC, xlSel.f.c + passos[1])) };
+    if (ev.shiftKey) xlSel.f = p; else xlSel = { a: p, f: p };
+    aplicarSelecao(true);
+  });
   // X vermelho do campo de busca: aparece enquanto houver texto (inclusive o filtro do botão direito)
   $('prog-filtro-limpar').addEventListener('click', function(){ $('prog-filtro-cli').value = ''; renderGrade(); $('prog-filtro-cli').focus(); tirarAvisoFiltro(); });
   // o aviso do filtro do botão direito sai quando a pessoa muda a busca
