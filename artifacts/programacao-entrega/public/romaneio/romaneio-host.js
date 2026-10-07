@@ -44,14 +44,22 @@
     });
   }
 
+  // espera crescente entre tentativas (2 s, 4 s, 8 s… até 1 min). No 429 ("pedidos demais", o
+  // Cloudflare na frente do Render bloqueando a rede) espera no mínimo 20 s, para não piorar.
+  function esperaDaTentativa(tentativa, erro) {
+    var ms = Math.min(2000 * Math.pow(2, Math.max(0, tentativa - 1)), 60000);
+    if (erro && erro.status === 429) ms = Math.max(ms, 20000);
+    return ms * (0.8 + Math.random() * 0.4); // espalha os aparelhos para não tentarem juntos
+  }
+
   // leitura: insiste enquanto o servidor estiver dormindo/fora (Render grátis demora ~1 min a acordar)
   function lerComInsistencia(caminho) {
     var tentativa = 0;
     function vai() {
       return http('GET', caminho).catch(function (e) {
-        if (e.status && e.status < 500) throw e;
+        if (e.status && e.status < 500 && e.status !== 429) throw e;
         tentativa++;
-        return esperar(Math.min(2000 * tentativa, 15000)).then(vai);
+        return esperar(esperaDaTentativa(tentativa, e)).then(vai);
       });
     }
     return vai();
@@ -76,49 +84,142 @@
   }
 
   // ---- ouvintes (onSnapshot) e acompanhamento de mudanças ----
-  var ouvintes = [];   // { col, docId?, rodar() }
+  // Quando um documento muda, a tela busca SÓ ele (uma vez, para todos os ouvintes) e cada lista
+  // se ajusta ali mesmo, com o mesmo filtro/ordem/limite do servidor. Baixar a lista inteira a
+  // cada mudança (romaneios com assinatura e desenho = vários MB) derrubava o servidor grátis.
+  var ouvintes = [];   // { col, docId?, rodar(), aplicar(mudados) }
+  var MAX_INCREMENTAL = 25;
 
-  function avisarColecao(col, ids) {
-    ouvintes.slice().forEach(function (o) {
-      if (o.col !== col) return;
-      if (o.docId && ids && ids.indexOf(o.docId) < 0) return;
-      o.rodar();
+  var lendoDoc = {};
+  function lerDoc(col, id) {
+    var chave = col + '|' + id;
+    if (lendoDoc[chave]) return lendoDoc[chave];
+    var p = lerComInsistencia('/docs/' + encodeURIComponent(col) + '/' + encodeURIComponent(id)).then(function (r) {
+      return { id: id, data: r.data };
+    }, function (e) {
+      if (e.status === 404) return { id: id, data: null };
+      throw e;
+    });
+    lendoDoc[chave] = p;
+    p.then(function () { delete lendoDoc[chave]; }, function () { delete lendoDoc[chave]; });
+    return p;
+  }
+
+  // ids: os que mudaram; apagados: ids que já se sabe que sumiram (não precisa buscar)
+  function avisarColecao(col, ids, apagados) {
+    var alvo = ouvintes.filter(function (o) {
+      return o.col === col && (!o.docId || !ids || ids.indexOf(o.docId) >= 0);
+    });
+    if (!alvo.length) return;
+    if (!ids || ids.length > MAX_INCREMENTAL) { alvo.forEach(function (o) { o.rodar(); }); return; }
+    apagados = apagados || [];
+    Promise.all(ids.map(function (id) {
+      return apagados.indexOf(id) >= 0 ? { id: id, data: null } : lerDoc(col, id);
+    })).then(function (mudados) {
+      alvo.forEach(function (o) { o.aplicar(mudados); });
+    }, function () {
+      alvo.forEach(function (o) { o.rodar(); });
     });
   }
 
-  var cursor = null, acompanhando = false;
+  // regras do servidor (/api/romaneio/docs) repetidas aqui para ajustar a lista sem buscar tudo
+  function textoOrdem(v) { return v === null || v === undefined ? null : typeof v === 'string' ? v : JSON.stringify(v); }
+  function comparar(q) {
+    var campo = q._ordem.campo, desc = q._ordem.dir === 'desc';
+    return function (a, b) {
+      var x = textoOrdem(a.data[campo]), y = textoOrdem(b.data[campo]);
+      if (x !== y) {
+        if (x === null) return desc ? 1 : -1;     // asc: nulos primeiro; desc: nulos por último
+        if (y === null) return desc ? -1 : 1;
+        if (x < y) return desc ? 1 : -1;
+        if (x > y) return desc ? -1 : 1;
+      }
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    };
+  }
+  function entraNaBusca(q, data) {
+    if (!data) return false;
+    if (q._filtro && (!(q._filtro.campo in data) || JSON.stringify(data[q._filtro.campo]) !== JSON.stringify(q._filtro.valor))) return false;
+    if (q._ordem && !(q._ordem.campo in data)) return false;
+    return true;
+  }
+  // devolve a lista ajustada, ou null quando só buscando de novo dá para garantir o resultado
+  function ajustarLista(q, lista, mudados) {
+    var nova = lista.slice(), noLimite = q._limite && lista.length >= q._limite;
+    for (var i = 0; i < mudados.length; i++) {
+      var d = mudados[i], pos = -1;
+      for (var j = 0; j < nova.length; j++) { if (nova[j].id === d.id) { pos = j; break; } }
+      var entra = entraNaBusca(q, d.data);
+      if (pos >= 0) {
+        // saiu de uma lista cheia, ou mudou de posição nela: o próximo de fora pode ter que entrar
+        if (noLimite && (!entra || (q._ordem && textoOrdem(nova[pos].data[q._ordem.campo]) !== textoOrdem(d.data[q._ordem.campo])))) return null;
+        if (entra) nova[pos] = { id: d.id, data: d.data }; else nova.splice(pos, 1);
+      } else if (entra) {
+        nova.push({ id: d.id, data: d.data });
+      }
+    }
+    if (q._ordem) nova.sort(comparar(q));
+    if (q._limite && nova.length > q._limite) nova = nova.slice(0, q._limite);
+    return nova;
+  }
+
+  var cursor = null, acompanhando = false, falhasSeguidas = 0;
   function acompanhar() {
     if (acompanhando) return;
     acompanhando = true;
     (function laco() {
       var caminho = cursor === null ? '/changes' : '/changes?since=' + cursor;
       http('GET', caminho).then(function (r) {
-        var porColecao = {};
-        (r.changes || []).forEach(function (c) { (porColecao[c.collection] = porColecao[c.collection] || []).push(c.id); });
+        falhasSeguidas = 0;
+        var porColecao = {}, apagados = {};
+        (r.changes || []).forEach(function (c) {
+          (porColecao[c.collection] = porColecao[c.collection] || []).push(c.id);
+          if (c.deleted) (apagados[c.collection] = apagados[c.collection] || []).push(c.id);
+        });
         cursor = r.seq;
-        Object.keys(porColecao).forEach(function (col) { avisarColecao(col, porColecao[col]); });
+        Object.keys(porColecao).forEach(function (col) { avisarColecao(col, porColecao[col], apagados[col]); });
         laco();
-      }, function () {
-        esperar(3000).then(laco);
+      }, function (e) {
+        falhasSeguidas++;
+        esperar(esperaDaTentativa(falhasSeguidas, e)).then(laco);
       });
     })();
   }
 
-  function ouvir(col, docId, buscar, cb, errCb) {
-    var ativo = true, ultimo = null, rodando = false, deNovo = false;
+  // q: a Query (para ajustar a lista sem buscar tudo); null para ouvinte de um documento só
+  function ouvir(col, docId, buscar, cb, errCb, q) {
+    var ativo = true, ultimo = null, rodando = false, deNovo = false, atual = null;
+    function entregar(raw, snap) {
+      var marca = JSON.stringify(raw);
+      if (ativo && marca !== ultimo) {
+        ultimo = marca;
+        try { cb(snap); } catch (e) { setTimeout(function () { throw e; }); }
+      }
+    }
     var o = {
       col: col,
       docId: docId,
+      aplicar: function (mudados) {
+        if (!ativo) return;
+        // ainda carregando, ou no meio de uma busca completa: busca de novo depois
+        if (rodando || (q && atual === null)) return o.rodar();
+        if (docId) {
+          var d = mudados.filter(function (m) { return m.id === docId; })[0];
+          if (!d) return;
+          return entregar(d.data, docSnap(docId, d.data, !!d.data));
+        }
+        var nova = ajustarLista(q, atual, mudados);
+        if (!nova) return o.rodar();
+        atual = nova;
+        entregar(nova, querySnap(nova));
+      },
       rodar: function () {
         if (!ativo) return;
         if (rodando) { deNovo = true; return; }
         rodando = true;
         buscar().then(function (resultado) {
-          var marca = JSON.stringify(resultado.raw);
-          if (ativo && marca !== ultimo) {
-            ultimo = marca;
-            try { cb(resultado.snap); } catch (e) { setTimeout(function () { throw e; }); }
-          }
+          if (q) atual = resultado.raw;
+          entregar(resultado.raw, resultado.snap);
         }, function (e) {
           if (ativo && errCb) { try { errCb(e); } catch (x) {} }
         }).then(function () {
@@ -162,7 +263,7 @@
   };
   DocRef.prototype['delete'] = function () {
     var self = this;
-    return http('DELETE', self._caminho()).then(function () { avisarColecao(self.col, [self.id]); });
+    return http('DELETE', self._caminho()).then(function () { avisarColecao(self.col, [self.id], [self.id]); });
   };
   DocRef.prototype.onSnapshot = function (cb, errCb) {
     var self = this;
@@ -196,7 +297,7 @@
   Query.prototype.get = function () { return this._ler().then(function (r) { return r.snap; }); };
   Query.prototype.onSnapshot = function (cb, errCb) {
     var self = this;
-    return ouvir(self.col, null, function () { return self._ler(); }, cb, errCb);
+    return ouvir(self.col, null, function () { return self._ler(); }, cb, errCb, self);
   };
 
   function Collection(nome) { Query.call(this, nome); }

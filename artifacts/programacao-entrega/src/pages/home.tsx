@@ -25,7 +25,9 @@ import { saveOfflineSnapshot, type OfflineSnapshot } from "@/lib/offline-snapsho
 import { getReminders, parseReminders, saveReminders, type Reminder } from "@/lib/reminders";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
-const FULL_SYNC_KEY = "entregas-full-sync-date";
+// cópia geral do banco para o modo offline: no máximo a cada 10 min
+const SNAPSHOT_EM_KEY = "sync-snapshot-em";
+const SNAPSHOT_INTERVALO_MS = 10 * 60 * 1000;
 const REMINDERS_MIGRATION_KEY = "programacao-entrega-reminders-shared-migrated";
 const REMINDER_SYNC_ERROR = "Sem conexão com o servidor de recados. O conteúdo exibido é deste dispositivo e ainda não está compartilhado.";
 
@@ -48,60 +50,6 @@ function saveDeliveryCache(date: string, deliveries: Entrega[]) {
   try { localStorage.setItem(`entregas-cache-${date}`, JSON.stringify(deliveries)); } catch {}
 }
 
-function dateRangeFromFirstDay() {
-  const dates: string[] = [];
-  const cursor = new Date("2020-01-01T12:00:00");
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  while (cursor <= today) {
-    dates.push(format(cursor, "yyyy-MM-dd"));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return dates;
-}
-
-async function fetchAllDeliveriesByDate() {
-  const dates = dateRangeFromFirstDay();
-  const pending = getPendingDeliveries();
-  const batches: string[][] = [];
-  for (let index = 0; index < dates.length; index += 10) batches.push(dates.slice(index, index + 10));
-
-  for (const batch of batches) {
-    const results = await Promise.all(batch.map(async (date) => {
-      try {
-        const response = await fetch(`${API_BASE}/api/entregas?date=${date}`, { cache: "no-store" });
-        return response.ok ? { date, deliveries: await response.json() as Entrega[] } : null;
-      } catch {
-        return null;
-      }
-    }));
-    results.forEach((result) => {
-      if (result) {
-        const localPending = pending
-          .filter((item) => item.data.date === result.date)
-          .map((item) => ({
-            ...item.data,
-            id: item.temporaryId,
-            sortOrder: item.data.sortOrder ?? 0,
-            checked: item.data.checked ?? "none",
-            cliente: item.data.cliente,
-            hrs: item.data.hrs ?? null,
-            obs: item.data.obs ?? null,
-            motorista: item.data.motorista ?? null,
-            placa: item.data.placa ?? null,
-            unidade: item.data.unidade,
-            nf: item.data.nf ?? "none",
-            cg: item.data.cg ?? "none",
-            v: item.data.v ?? null,
-            divergencias: item.data.divergencias ?? null,
-            frete: item.data.frete ?? null,
-          } as Entrega));
-        saveDeliveryCache(result.date, [...result.deliveries, ...localPending]);
-      }
-    });
-  }
-  localStorage.setItem(FULL_SYNC_KEY, new Date().toISOString().slice(0, 10));
-}
 export default function Home() {
   const queryClient = useQueryClient();
   const [date, setDate] = useState<Date>(new Date());
@@ -235,6 +183,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!isOnline) return;
+    // a cópia geral para o modo offline é pesada: no máximo a cada 10 min (não a cada troca de dia)
+    const ultima = Number(localStorage.getItem(SNAPSHOT_EM_KEY) || 0);
+    if (Date.now() - ultima < SNAPSHOT_INTERVALO_MS) return;
+    localStorage.setItem(SNAPSHOT_EM_KEY, String(Date.now()));
 
     void fetch(`${API_BASE}/api/sync/snapshot`, { cache: "no-store" })
       .then((response) => response.ok ? response.json() as Promise<OfflineSnapshot> : Promise.reject(new Error("snapshot unavailable")))
@@ -272,13 +224,9 @@ export default function Home() {
           queryClient.setQueryData(getListEntregasQueryKey({ date }), next);
         });
       })
-      .catch(async () => {
-        if (localStorage.getItem(FULL_SYNC_KEY) === new Date().toISOString().slice(0, 10)) return;
-        await fetchAllDeliveriesByDate();
-        queryClient.setQueryData(
-          getListEntregasQueryKey({ date: dateStr }),
-          getDeliveryCache(dateStr) ?? []
-        );
+      .catch(() => {
+        // sem a cópia geral, fica com o que já está guardado no aparelho. (Antes havia um plano B
+        // que pedia dia por dia desde 2020 — ~2.500 pedidos — e fazia o Cloudflare bloquear a rede.)
       });
   }, [isOnline, queryClient, dateStr]);
 
