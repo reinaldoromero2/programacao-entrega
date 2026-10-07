@@ -19353,8 +19353,37 @@ var SIGNATURES = {
     }
   }
   function voltar(){ fase = 'pronto'; btn.disabled = false; btn.textContent = ROTULO; }
+
+  // Dentro do app (iframe da Programação de Entrega): o app roda o script, envia a planilha
+  // e avisa quando terminou de verdade; o botão só conta o tempo, sem espera fixa.
+  var noApp = window.parent !== window, inicioApp = 0;
+  window.addEventListener('message', function(ev){
+    var m = ev.data;
+    if (!m || m.ripack !== 'rqc008-resultado' || fase !== 'esperando') return;
+    clearInterval(timer);
+    var seg = Math.round((Date.now() - inicioApp) / 1000);
+    btn.disabled = false;
+    btn.textContent = m.ok ? '✓ Atualizado (' + seg + 's)' : '⚠ Não atualizou';
+    if (!m.ok) aviso(m.texto || 'A atualização da RQ C 008 não terminou certo.');
+    fase = 'resultado';
+    setTimeout(function(){ if (fase === 'resultado') voltar(); }, m.ok ? 4000 : 8000);
+  });
+  function rodarPeloApp(){
+    fase = 'esperando'; btn.disabled = true; inicioApp = Date.now();
+    btn.textContent = '⏳ Atualizando... 0s';
+    clearInterval(timer);
+    timer = setInterval(function(){
+      var seg = Math.round((Date.now() - inicioApp) / 1000);
+      btn.textContent = '⏳ Atualizando... ' + seg + 's';
+      // o script desiste sozinho em 12 min; aqui é só para o botão não ficar preso
+      if (seg > 13 * 60){ clearInterval(timer); voltar(); }
+    }, 1000);
+    window.parent.postMessage({ ripack: 'rqc008-rodar' }, '*');
+  }
+
   btn.addEventListener('click', function(){
     if (fase === 'esperando') return;
+    if (noApp){ rodarPeloApp(); return; }
     if (fase === 'carregar'){
       voltar();
       var arq = document.getElementById('prog-arquivo');

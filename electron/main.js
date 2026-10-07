@@ -152,6 +152,9 @@ async function rodarRqc008() {
   }
 }
 
+// botão "📗 Atualizar RQ C 008" dentro do app: roda o script e devolve o resultado
+ipcMain.handle('rodar-rqc008', () => rodarRqc008());
+
 // O Romaneio roda num iframe da janela principal (rota #/romaneio). Pedidos de nova janela
 // dele chegam aqui: o botão "📗 Atualizar RQ C 008" roda o script e o app envia a planilha.
 function tratarNovaJanela(win, { url }) {

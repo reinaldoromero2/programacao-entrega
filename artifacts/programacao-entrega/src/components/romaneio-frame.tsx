@@ -151,6 +151,27 @@ export function RomaneioFrame() {
       if (ev.source !== iframeRef.current?.contentWindow) return;
       if (ev.data?.ripack === "programacao-fechou") ir("/");
       if (ev.data?.ripack === "entregas-mudaram") queryClient.invalidateQueries();
+      // botão "📗 Atualizar RQ C 008" da página: o app roda o script, envia a planilha e
+      // responde quando acabar de verdade (sem contagem fixa)
+      if (ev.data?.ripack === "rqc008-rodar") {
+        const responder = (ok: boolean, texto: string) =>
+          iframeRef.current?.contentWindow?.postMessage({ ripack: "rqc008-resultado", ok, texto }, "*");
+        const electron = (window as any)?.require?.("electron");
+        if (!electron) {
+          responder(false, "Só funciona no app do computador da expedição.");
+          return;
+        }
+        electron.ipcRenderer.invoke("rodar-rqc008")
+          .then(async (r: { ok: boolean; lines: string[] }) => {
+            if (!r.ok) {
+              responder(false, r.lines[r.lines.length - 1] || "O script não terminou certo.");
+              return;
+            }
+            await sincronizarRqc008(true);
+            responder(true, "Planilha atualizada e enviada.");
+          })
+          .catch((err: unknown) => responder(false, err instanceof Error ? err.message : "Falha ao rodar o script."));
+      }
     };
     window.addEventListener("message", aoMensagem);
     return () => window.removeEventListener("message", aoMensagem);
