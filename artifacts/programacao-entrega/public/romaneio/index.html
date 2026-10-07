@@ -18459,6 +18459,14 @@ var SIGNATURES = {
   .prog-filtro input{ background:#fff; color:#111; border:1px solid #888; border-radius:3px; padding:5px 7px; font-size:13px; width:260px; max-width:60vw; }
   .prog-chk{ font-size:12px; display:flex; align-items:center; gap:4px; }
   .prog-grade-wrap{ flex:1 1 auto; min-height:120px; overflow:auto; margin:8px 14px 0; border:1px solid #9a9a9a; background:#fff; }
+  /* celular: a grade vira uma "imagem" só para ver — nada grudado (o sticky desalinha no
+     iPhone), nada clicável, tabela inteira cabendo na largura; pinça para ampliar */
+  #prog-modal.prog-so-ver .prog-grade-wrap{ margin:6px 8px 0; -webkit-overflow-scrolling:touch; }
+  #prog-modal.prog-so-ver .pg th, #prog-modal.prog-so-ver .pg td{ position:static !important; }
+  #prog-modal.prog-so-ver .pg td{ cursor:default; -webkit-tap-highlight-color:transparent; }
+  #prog-modal.prog-so-ver #prog-ins-btn, #prog-modal.prog-so-ver #prog-ins-enviar,
+  #prog-modal.prog-so-ver #rqc008-atualizar-btn, #prog-modal.prog-so-ver .prog-btn-atualizar,
+  #prog-modal.prog-so-ver .prog-carga{ display:none !important; }
   .pg{ border-collapse:separate; border-spacing:0; font-family:Arial, Helvetica, sans-serif; font-size:13px; color:#111; background:#fff; }
   .pg th, .pg td{ border-right:1px solid #b9b9b9; border-bottom:1px solid #b9b9b9; padding:2px 5px; white-space:nowrap; height:22px; }
   .pg thead th{ position:sticky; z-index:3; background:#e6e6e6; font-weight:700; text-align:center; font-size:12px; }
@@ -18513,6 +18521,62 @@ var SIGNATURES = {
   var CHAVE = 'ripack_programacao_v4';
   var prog = null, sel = {}, selCli = null, escolhaCli = {}, recCache = {};
   var modoIns = false, selIns = {}; // "Inserir programação": células marcadas para a Programação de Entrega
+  // celular (toque + tela estreita): grade só para ver, encolhida para caber como uma imagem
+  var somenteVer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) && window.innerWidth < 900;
+  if (somenteVer) modal.classList.add('prog-so-ver');
+  // escala que faz a tabela inteira caber na largura; a pinça e o toque duplo ampliam a partir dela
+  var escalaFit = 1, escalaAtual = 1;
+  function tabelaGrade(){ var w = $('prog-grade-wrap'); return w && w.querySelector('table.pg'); }
+  function definirZoomGrade(z, cx, cy){
+    var wrap = $('prog-grade-wrap'), t = tabelaGrade();
+    if (!t) return;
+    z = Math.max(escalaFit, Math.min(1.5, z));
+    // mantém o ponto sob os dedos no mesmo lugar
+    var fx = (wrap.scrollLeft + (cx || 0)) / escalaAtual, fy = (wrap.scrollTop + (cy || 0)) / escalaAtual;
+    escalaAtual = z;
+    t.style.zoom = String(Math.round(z * 1000) / 1000);
+    wrap.scrollLeft = fx * z - (cx || 0);
+    wrap.scrollTop = fy * z - (cy || 0);
+  }
+  function caberNaTela(){
+    if (!somenteVer) return;
+    var wrap = $('prog-grade-wrap'), t = tabelaGrade();
+    if (!t) return;
+    t.style.zoom = '1';
+    var larg = wrap.clientWidth - 2, z = Math.min(1, larg / t.scrollWidth);
+    t.style.zoom = String(z);
+    // segunda passada: o navegador arredonda bordas e fontes na escala
+    var real = t.getBoundingClientRect().width;
+    if (real > larg) z = z * larg / real;
+    escalaFit = Math.round(z * 1000) / 1000;
+    escalaAtual = escalaFit;
+    t.style.zoom = String(escalaFit);
+  }
+  window.addEventListener('resize', function(){ if (!modal.hidden) caberNaTela(); });
+  if (somenteVer) (function(){
+    var wrap = $('prog-grade-wrap'), pinca = null, ultimoToque = 0;
+    wrap.style.touchAction = 'pan-x pan-y'; // a pinça é tratada aqui, não pela página
+    function dist(a, b){ return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }
+    function centro(a, b){ var r = wrap.getBoundingClientRect(); return { x: (a.clientX + b.clientX) / 2 - r.left, y: (a.clientY + b.clientY) / 2 - r.top }; }
+    wrap.addEventListener('touchstart', function(ev){
+      if (ev.touches.length === 2){ pinca = { d: dist(ev.touches[0], ev.touches[1]), z: escalaAtual }; return; }
+      if (ev.touches.length !== 1) return;
+      var agora = Date.now();
+      if (agora - ultimoToque < 300){
+        ev.preventDefault();
+        var r = wrap.getBoundingClientRect(), t0 = ev.touches[0];
+        definirZoomGrade(escalaAtual > escalaFit + 0.01 ? escalaFit : 1, t0.clientX - r.left, t0.clientY - r.top);
+        ultimoToque = 0;
+      } else ultimoToque = agora;
+    }, { passive: false });
+    wrap.addEventListener('touchmove', function(ev){
+      if (!pinca || ev.touches.length !== 2) return;
+      ev.preventDefault();
+      var c = centro(ev.touches[0], ev.touches[1]);
+      definirZoomGrade(pinca.z * dist(ev.touches[0], ev.touches[1]) / pinca.d, c.x, c.y);
+    }, { passive: false });
+    wrap.addEventListener('touchend', function(ev){ if (ev.touches.length < 2) pinca = null; });
+  })();
   function ponte(){ return window.__ripackPonte || null; }
   // transferência interna para a Filial: sempre fora da lista (só o saldo conta)
   function ignorarCliente(n){ return false; } // 0005 RIPACK FILIAL voltou a aparecer (pedido de Romero)
@@ -18661,6 +18725,8 @@ var SIGNATURES = {
     h += '</tbody></table>';
     if (!lista.length) h += '<p class="foot-note" style="padding:10px;">Nenhuma linha com esse filtro.</p>';
     $('prog-grade').innerHTML = h;
+    // o modal pode estar abrindo agora: mede depois que ele aparece
+    if (somenteVer) setTimeout(caberNaTela, 0);
   }
 
   function linhasSel(){
@@ -18863,6 +18929,7 @@ var SIGNATURES = {
   }
 
   $('prog-grade').addEventListener('click', function(ev){
+    if (somenteVer) return; // no celular a grade é só para ver
     var td = ev.target.closest ? ev.target.closest('td.q') : null;
     if (!td) return;
     var k = td.getAttribute('data-k'), it = prog.itens[+k.split('|')[0]];

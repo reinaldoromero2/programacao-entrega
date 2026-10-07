@@ -47,17 +47,16 @@ export function enviarZoomAoRomaneio(acao: AcaoZoom): boolean {
   return true;
 }
 
-// O zoom da Programação é aplicado na página inteira (applyAppZoom); o painel do Romaneio
-// desfaz esse zoom para usar só o dele.
-function useZoomDoApp() {
-  const ler = () => Number(localStorage.getItem("programacao-entrega-zoom")) || 1;
-  const [z, setZ] = useState(ler);
-  useEffect(() => {
-    const aoMudar = (ev: Event) => setZ(Number((ev as CustomEvent<number>).detail) || 1);
-    window.addEventListener("app-zoom-change", aoMudar);
-    return () => window.removeEventListener("app-zoom-change", aoMudar);
-  }, []);
-  return z;
+// O zoom da Programação é aplicado na página inteira (applyAppZoom). Fora dela (Romaneio e
+// grade RQ C 008) a página volta a 100%, para o painel usar só o zoom dele. Não dá para
+// compensar com um zoom inverso no painel: o Safari do iPhone encolhe o painel inteiro.
+export function zoomDaTelaInicialAtivo() {
+  const hash = window.location.hash.replace(/^#/, "");
+  return hash !== ROMANEIO_ROTA && hash !== PROGRAMACAO_ROTA;
+}
+function aplicarZoomDaTela(tela: Tela) {
+  const salvo = Number(localStorage.getItem("programacao-entrega-zoom")) || 1;
+  document.documentElement.style.zoom = String(tela === "inicio" ? salvo : 1);
 }
 
 const setaClasse =
@@ -105,7 +104,8 @@ export function TelaProgramacao({ children }: { children: ReactNode }) {
 export function RomaneioFrame() {
   const { tela, ir } = useTela();
   const queryClient = useQueryClient();
-  const zoomDoApp = useZoomDoApp();
+
+  useEffect(() => aplicarZoomDaTela(tela), [tela]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [montado, setMontado] = useState(tela !== "inicio");
   // de que lado o painel está estacionado e se ele está na tela
@@ -186,7 +186,6 @@ export function RomaneioFrame() {
       <div
         className="fixed inset-0 z-40 bg-white"
         style={{
-          zoom: 1 / zoomDoApp,
           transform: naTela ? "translateX(0)" : fora,
           // ao sair, só some de vez quando o deslize termina
           visibility: naTela ? "visible" : "hidden",

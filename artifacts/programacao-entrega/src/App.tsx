@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import { applyAppZoom } from "@/components/opcoes-menu";
-import { RomaneioFrame, RomaneioSync, TelaProgramacao, enviarZoomAoRomaneio, rotaDaTelaInicial, type AcaoZoom } from "@/components/romaneio-frame";
+import { RomaneioFrame, RomaneioSync, TelaProgramacao, enviarZoomAoRomaneio, rotaDaTelaInicial, zoomDaTelaInicialAtivo, type AcaoZoom } from "@/components/romaneio-frame";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,7 +41,8 @@ function Router() {
 function App() {
   useEffect(() => {
     const savedZoom = Number(localStorage.getItem("programacao-entrega-zoom"));
-    if (Number.isFinite(savedZoom)) applyAppZoom(savedZoom);
+    // abrindo direto no Romaneio ou na grade, o zoom da Programação fica para quando voltar
+    if (Number.isFinite(savedZoom) && zoomDaTelaInicialAtivo()) applyAppZoom(savedZoom);
 
     // cada tela tem o seu zoom: na Programação é o do app; no Romaneio e na grade RQ C 008
     // o pedido vai para a página do Romaneio, que guarda o zoom de cada uma
