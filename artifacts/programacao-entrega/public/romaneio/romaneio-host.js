@@ -15,7 +15,9 @@
     else if (pedido) localStorage.setItem('ripack_romaneio_api', pedido);
     api = localStorage.getItem('ripack_romaneio_api') || API_PADRAO;
   } catch (e) {}
-  var BASE = api.replace(/\/+$/, '') + '/api/romaneio';
+  // raiz da API do app, também usada pela página (ex.: "Inserir programação" -> /api/entregas)
+  window.__ripackApiBase = api.replace(/\/+$/, '');
+  var BASE = window.__ripackApiBase + '/api/romaneio';
 
   function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function copia(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }

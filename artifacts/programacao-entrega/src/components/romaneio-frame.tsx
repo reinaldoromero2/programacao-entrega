@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { rqc008Disponivel, sincronizarRqc008 } from "@/lib/rqc008-sync";
 
@@ -68,6 +69,7 @@ export function TelaProgramacao({ children }: { children: ReactNode }) {
 // O iframe é criado na primeira visita e depois fica guardado fora da tela, para não recarregar.
 export function RomaneioFrame() {
   const { tela, ir } = useTela();
+  const queryClient = useQueryClient();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [montado, setMontado] = useState(tela !== "inicio");
   // de que lado o painel está estacionado e se ele está na tela
@@ -103,10 +105,13 @@ export function RomaneioFrame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tela]);
 
-  // "Sair" da grade da Programação volta para a tela inicial
+  // "Sair" da grade da Programação volta para a tela inicial; "Inserir programação" criou
+  // entregas: a lista da tela inicial recarrega
   useEffect(() => {
     const aoMensagem = (ev: MessageEvent) => {
-      if (ev.source === iframeRef.current?.contentWindow && ev.data?.ripack === "programacao-fechou") ir("/");
+      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (ev.data?.ripack === "programacao-fechou") ir("/");
+      if (ev.data?.ripack === "entregas-mudaram") queryClient.invalidateQueries();
     };
     window.addEventListener("message", aoMensagem);
     return () => window.removeEventListener("message", aoMensagem);
