@@ -187,8 +187,9 @@ export function RomaneioFrame() {
         className="fixed inset-0 z-40 bg-white"
         style={{
           transform: naTela ? "translateX(0)" : fora,
-          // ao sair, só some de vez quando o deslize termina
+          // ao sair, só some de vez quando o deslize termina — mas para de pegar cliques na hora
           visibility: naTela ? "visible" : "hidden",
+          pointerEvents: naTela ? "auto" : "none",
           transition: semTransicao ? "none" : naTela ? DESLIZE : `${DESLIZE}, visibility 0s linear ${DESLIZE_MS}ms`,
         }}
         aria-hidden={!naTela}

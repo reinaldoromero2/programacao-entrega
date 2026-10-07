@@ -523,6 +523,10 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       {/* CLIENTE — botão direito abre a grade RQ C 008 filtrada por este cliente */}
       <div
         className="p-1 border-r border-slate-200 flex flex-col justify-center overflow-hidden"
+        // botão direito não entra no campo (nem abre as sugestões): só o esquerdo edita
+        onMouseDownCapture={(event) => {
+          if (event.button === 2 && localState.cliente.trim()) event.preventDefault();
+        }}
         onContextMenu={(event) => {
           if (!localState.cliente.trim()) return;
           event.preventDefault();
