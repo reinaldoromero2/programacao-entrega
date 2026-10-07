@@ -1850,7 +1850,7 @@
           <button type="button" class="add-btn prog-btn-ins-enviar" id="prog-ins-enviar" hidden style="margin:0;">ENVIAR</button>
           <div class="prog-filtro">
             <span>Cliente</span>
-            <span class="prog-filtro-campo"><input type="search" id="prog-filtro-cli" placeholder="(Tudo) — cliente, código ou RP" autocomplete="off"><button type="button" class="prog-filtro-limpar" id="prog-filtro-limpar" hidden title="Limpar a busca" aria-label="Limpar a busca">×</button></span>
+            <span class="prog-filtro-campo"><input type="search" id="prog-filtro-cli" placeholder="(Tudo) — cliente, código ou RP" autocomplete="off"><button type="button" class="prog-filtro-limpar" id="prog-filtro-limpar" hidden title="Limpar a busca" aria-label="Limpar a busca">×</button><div class="prog-filtro-lista" id="prog-filtro-lista" role="listbox" hidden></div></span>
             <datalist id="prog-cli-list"></datalist>
           </div>
           <!-- o campo Cliente também busca RP; este fica escondido só para quem ainda o usa por código -->
@@ -18452,6 +18452,13 @@ var SIGNATURES = {
   .prog-filtro-campo{ position:relative; display:inline-flex; align-items:center; }
   .prog-filtro-campo input{ padding-right:30px; }
   .prog-filtro-limpar{ position:absolute; right:5px; top:50%; transform:translateY(-50%); width:20px; height:20px; padding:0; border:none; border-radius:50%; background:#dc2626; color:#fff; font:700 14px/20px Arial, sans-serif; text-align:center; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .prog-filtro-lista{ position:absolute; top:calc(100% + 2px); left:0; z-index:700; min-width:100%; width:340px; max-height:280px; overflow:auto; background:#fff; color:#111; border:1px solid #9ca3af; border-radius:4px; box-shadow:0 6px 20px rgba(0,0,0,.22); padding:4px 0; font:400 12.5px Arial, Helvetica, sans-serif; text-align:left; }
+  .prog-filtro-lista[hidden]{ display:none; }
+  .prog-filtro-lista label{ display:flex !important; justify-content:flex-start !important; align-items:center; gap:6px; width:auto !important; margin:0 !important; padding:3px 10px; cursor:pointer; white-space:nowrap; text-align:left !important; font-size:12.5px; font-weight:400; color:#111; }
+  .prog-filtro-lista label input{ flex:none !important; width:auto !important; height:auto; margin:0 !important; }
+  .prog-filtro-lista label:hover{ background:#e8f0fb; }
+  .prog-filtro-lista label.todos{ border-bottom:1px solid #e5e7eb; margin-bottom:2px; font-weight:600; }
+  .prog-filtro-lista .vazio{ padding:6px 10px; color:#6b7280; }
   .prog-filtro-limpar:hover{ background:#b91c1c; }
   .prog-filtro-limpar[hidden]{ display:none; }
   .prog-btn-ins-enviar{ background:#FFC400 !important; color:#1a1a1a !important; border:1px solid #D9A400 !important; border-style:solid !important; font-weight:800 !important; letter-spacing:.3px; box-shadow:0 1px 3px rgba(0,0,0,0.25); }
@@ -18555,6 +18562,7 @@ var SIGNATURES = {
   var CHAVE = 'ripack_programacao_v4';
   var prog = null, sel = {}, selCli = null, escolhaCli = {}, recCache = {};
   var modoIns = false, selIns = {}; // "Inserir programação": células marcadas (k -> quantas vezes o cliente entra)
+  var escolhaClientes = null; // lista com caixinhas do campo Cliente: null = todos os encontrados
   // Seleção de faixa como no Excel (só visual, para não se perder nas linhas):
   // a = célula onde começou, f = célula ativa; posições na grade como está desenhada.
   var xlSel = null;
@@ -18803,6 +18811,8 @@ var SIGNATURES = {
       if (comSiemens !== ehSiemens(it.cliente)) return false;
       // um campo só: cada termo acha pelo cliente (nome/código) ou pelo RP, com ou sem "-" e "/"
       if (fcs.length && !fcs.some(function(f){ return bateBusca(it, f); })) return false;
+      // lista com caixinhas (como o filtro do Excel): só os clientes marcados
+      if (escolhaClientes && !escolhaClientes[it.cliente]) return false;
       if (fr && it.rp.toLowerCase().indexOf(fr) === -1) return false;
       if (soPed && !it.q.some(function(v, c){ return qEf(x.idx, c) > 0; }) && !it.prox) return false;
       return true;
@@ -19212,6 +19222,7 @@ var SIGNATURES = {
       // a caixa "Siemens" separa os dois grupos: marca para cliente Siemens, desmarca para os outros
       $('prog-siemens').checked = achados.some(ehSiemens);
       $('prog-filtro-cli').value = achados.join(' | ');
+      escolhaClientes = null;
       $('prog-filtro-rp').value = '';
       renderGrade();
       setStatus('Filtrado pelo cliente da Programação: ' + nomeProg + ' (limpe o campo Cliente para ver todos).');
@@ -19374,7 +19385,54 @@ var SIGNATURES = {
     });
   }
 
-  ['prog-filtro-cli', 'prog-filtro-rp'].forEach(function(id){ $(id).addEventListener('input', function(){ xlSel = null; renderGrade(); }); });
+  ['prog-filtro-cli', 'prog-filtro-rp'].forEach(function(id){ $(id).addEventListener('input', function(){ xlSel = null; escolhaClientes = null; renderGrade(); }); });
+
+  // ---- lista com caixinhas embaixo do campo Cliente (como o filtro do Excel) ----
+  // Digitar abre a lista dos clientes encontrados, todos marcados; desmarcar tira da grade.
+  function clientesEncontrados(){
+    if (!prog) return [];
+    var fcs = txt($('prog-filtro-cli').value).toLowerCase().split('|').map(function(f){ return f.trim(); }).filter(Boolean);
+    var comSiemens = $('prog-siemens').checked, vistos = {};
+    prog.itens.forEach(function(it){
+      if (comSiemens !== ehSiemens(it.cliente)) return;
+      if (fcs.length && !fcs.some(function(f){ return bateBusca(it, f); })) return;
+      vistos[it.cliente] = true;
+    });
+    return Object.keys(vistos).sort();
+  }
+  function montarLista(){
+    var nomes = clientesEncontrados(), lista = $('prog-filtro-lista');
+    if (!nomes.length){ lista.innerHTML = '<div class="vazio">Nenhum cliente encontrado.</div>'; return; }
+    var marcado = function(n){ return !escolhaClientes || !!escolhaClientes[n]; };
+    var todos = nomes.every(marcado);
+    lista.innerHTML = '<label class="todos"><input type="checkbox" data-todos="1"' + (todos ? ' checked' : '') + '> (Selecionar todos os resultados)</label>' +
+      nomes.map(function(n){ return '<label title="' + esc(n) + '"><input type="checkbox" data-cli="' + esc(n) + '"' + (marcado(n) ? ' checked' : '') + '> ' + esc(n) + '</label>'; }).join('');
+    var cxTodos = lista.querySelector('[data-todos]');
+    if (cxTodos) cxTodos.indeterminate = !todos && nomes.some(marcado);
+  }
+  function abrirLista(){ if (!txt($('prog-filtro-cli').value)) return fecharLista(); montarLista(); $('prog-filtro-lista').hidden = false; }
+  function fecharLista(){ $('prog-filtro-lista').hidden = true; }
+  $('prog-filtro-cli').addEventListener('input', abrirLista);
+  $('prog-filtro-cli').addEventListener('click', function(){ if ($('prog-filtro-lista').hidden) abrirLista(); });
+  $('prog-filtro-cli').addEventListener('keydown', function(ev){ if (ev.key === 'Escape' || ev.key === 'Enter') fecharLista(); });
+  $('prog-filtro-lista').addEventListener('change', function(ev){
+    var cx = ev.target, nomes = clientesEncontrados();
+    if (cx.getAttribute('data-todos')){
+      escolhaClientes = cx.checked ? null : {};
+    } else {
+      var n = cx.getAttribute('data-cli');
+      if (!escolhaClientes){ escolhaClientes = {}; nomes.forEach(function(x){ escolhaClientes[x] = true; }); }
+      if (cx.checked) escolhaClientes[n] = true; else delete escolhaClientes[n];
+      // todos marcados de novo: volta a não restringir
+      if (nomes.every(function(x){ return escolhaClientes[x]; })) escolhaClientes = null;
+    }
+    xlSel = null;
+    montarLista();
+    renderGrade();
+  });
+  document.addEventListener('mousedown', function(ev){
+    if (!$('prog-filtro-lista').hidden && !(ev.target.closest && ev.target.closest('.prog-filtro-campo'))) fecharLista();
+  });
   // arrastar com o botão esquerdo seleciona a faixa (como no Excel); soltar não conta como clique
   var arrasteInicio = null, arrastou = false;
   $('prog-grade').addEventListener('mousedown', function(ev){
@@ -19439,7 +19497,7 @@ var SIGNATURES = {
     aplicarSelecao(true);
   });
   // X vermelho do campo de busca: aparece enquanto houver texto (inclusive o filtro do botão direito)
-  $('prog-filtro-limpar').addEventListener('click', function(){ $('prog-filtro-cli').value = ''; renderGrade(); $('prog-filtro-cli').focus(); tirarAvisoFiltro(); });
+  $('prog-filtro-limpar').addEventListener('click', function(){ $('prog-filtro-cli').value = ''; escolhaClientes = null; fecharLista(); renderGrade(); $('prog-filtro-cli').focus(); tirarAvisoFiltro(); });
   // o aviso do filtro do botão direito sai quando a pessoa muda a busca
   function tirarAvisoFiltro(){ if (/^Filtrado pelo cliente/.test($('prog-status').textContent)) setStatus(''); }
   $('prog-filtro-cli').addEventListener('input', tirarAvisoFiltro);
