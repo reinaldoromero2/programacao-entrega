@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, addDays, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Printer, WifiOff, RefreshCw, FolderDown, Download, BellRing } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Printer, WifiOff, RefreshCw, FolderDown, Download, BellRing, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useListEntregas, useCreateEntrega, useUpdateEntrega, getListEntregasQueryKey, type Entrega } from "@workspace/api-client-react";
+import { useListEntregas, useCreateEntrega, useUpdateEntrega, useDeleteEntrega, getListEntregasQueryKey, type Entrega } from "@workspace/api-client-react";
 import { DeliveryTable } from "@/components/delivery-table";
 import { PrintView } from "@/components/print-view";
 import { useOnlineStatus } from "@/hooks/use-online-status";
@@ -122,6 +122,7 @@ export default function Home() {
   const isDesktopApp = window.location.protocol === "file:";
   const createEntrega = useCreateEntrega();
   const updateEntrega = useUpdateEntrega();
+  const deleteEntrega = useDeleteEntrega();
   const syncingRef = useRef(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [selectionMode, setSelectionMode] = useState(false);
@@ -342,6 +343,33 @@ export default function Home() {
       const message = error instanceof Error ? error.message : "Erro desconhecido";
       window.alert(`Não foi possível alterar o dia das cargas selecionadas.\n\n${message}`);
     } finally {
+      setMovingDeliveries(false);
+    }
+  };
+
+  const deleteSelectedDeliveries = async () => {
+    if (!isOnline || selectedIds.size === 0 || movingDeliveries) return;
+
+    const nomes = (entregas ?? []).filter((e) => selectedIds.has(e.id)).map((e) => `• ${e.cliente || "(sem cliente)"}`);
+    const qtd = selectedIds.size;
+    if (!window.confirm(`Excluir ${qtd} carga${qtd !== 1 ? "s" : ""} de ${format(date, "dd/MM/yyyy")}?\n\n${nomes.join("\n")}\n\nIsso não pode ser desfeito.`)) return;
+
+    setMovingDeliveries(true);
+    // uma de cada vez: se uma falhar, só as que faltam continuam selecionadas para tentar de novo
+    const faltam = new Set(selectedIds);
+    try {
+      for (const id of selectedIds) {
+        await deleteEntrega.mutateAsync({ id });
+        faltam.delete(id);
+      }
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
+      setSelectedIds(faltam);
+      window.alert(`Não foi possível excluir ${faltam.size} das ${qtd} cargas (as que faltam continuam selecionadas).\n\n${message}`);
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: getListEntregasQueryKey({ date: dateStr }) });
       setMovingDeliveries(false);
     }
   };
@@ -569,6 +597,19 @@ export default function Home() {
                   toYear={2035}
                   defaultMonth={date}
                 />
+                <div className="p-3 border-t border-slate-100">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!isOnline || movingDeliveries}
+                    onClick={() => void deleteSelectedDeliveries()}
+                    className="w-full gap-2 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    data-testid="button-delete-selected"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir {selectedIds.size} selecionada{selectedIds.size !== 1 ? "s" : ""}
+                  </Button>
+                </div>
               </PopoverContent>
             </Popover>
           ) : (
