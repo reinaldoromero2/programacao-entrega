@@ -4,6 +4,7 @@ import { Loader2, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MotoristaCombobox } from "@/components/motorista-combobox";
 import { ClienteAutocomplete } from "@/components/cliente-autocomplete";
+import { abrirGradeComCliente } from "@/components/romaneio-frame";
 import {
   Entrega,
   EntregaUnidade,
@@ -519,8 +520,16 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         <span className="text-xs font-bold text-slate-400 select-none">{rowIndex}</span>
       </div>
 
-      {/* CLIENTE */}
-      <div className="p-1 border-r border-slate-200 flex flex-col justify-center overflow-hidden">
+      {/* CLIENTE — botão direito abre a grade RQ C 008 filtrada por este cliente */}
+      <div
+        className="p-1 border-r border-slate-200 flex flex-col justify-center overflow-hidden"
+        onContextMenu={(event) => {
+          if (!localState.cliente.trim()) return;
+          event.preventDefault();
+          abrirGradeComCliente(localState.cliente);
+        }}
+        title={localState.cliente ? "Botão direito: ver este cliente na RQ C 008" : undefined}
+      >
         <ClienteAutocomplete
           value={localState.cliente}
           onChange={(val) => setLocalState((s) => ({ ...s, cliente: val }))}

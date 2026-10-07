@@ -251,6 +251,8 @@
         if (!modal) return setTimeout(abrir, 200);
         if (m.abrir && modal.hidden) { var b = document.getElementById('prog-abrir-btn'); if (b) b.click(); }
         if (!m.abrir && !modal.hidden) modal.hidden = true;
+        // botão direito no cliente da Programação: a grade abre filtrada por ele
+        if (m.abrir && m.filtroCliente) window.dispatchEvent(new CustomEvent('ripack-filtro-cliente', { detail: m.filtroCliente }));
       };
       abrir();
     });

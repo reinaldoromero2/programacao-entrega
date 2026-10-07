@@ -25,6 +25,15 @@ export function rotaDaTelaInicial(location: string) {
   return location === "/" || location === ROMANEIO_ROTA || location === PROGRAMACAO_ROTA;
 }
 
+// Botão direito no cliente da Programação: vai para a grade RQ C 008 filtrada por ele.
+// O nome fica guardado até a página do Romaneio estar pronta para receber.
+let filtroPendente: string | null = null;
+export function abrirGradeComCliente(cliente: string) {
+  if (!cliente.trim()) return;
+  filtroPendente = cliente.trim();
+  window.location.hash = PROGRAMACAO_ROTA;
+}
+
 export type AcaoZoom = "+" | "-" | "0";
 const ROMANEIO_IFRAME = 'iframe[title="Romaneio Ripack"]';
 
@@ -104,9 +113,12 @@ export function RomaneioFrame() {
   const [naTela, setNaTela] = useState(false);
   const [semTransicao, setSemTransicao] = useState(false);
 
+  const carregado = useRef(false);
   const avisarPagina = (t: Tela) => {
-    if (t === "inicio") return;
-    iframeRef.current?.contentWindow?.postMessage({ ripack: "programacao", abrir: t === "programacao" }, "*");
+    if (t === "inicio" || !carregado.current) return;
+    const filtroCliente = t === "programacao" ? filtroPendente : null;
+    iframeRef.current?.contentWindow?.postMessage({ ripack: "programacao", abrir: t === "programacao", filtroCliente }, "*");
+    filtroPendente = null;
   };
 
   useEffect(() => {
@@ -167,7 +179,10 @@ export function RomaneioFrame() {
           title="Romaneio Ripack"
           className="h-full w-full border-0"
           allow="clipboard-read; clipboard-write"
-          onLoad={() => avisarPagina(tela)}
+          onLoad={() => {
+            carregado.current = true;
+            avisarPagina(tela);
+          }}
         />
       </div>
       <Seta lado="direita" visivel={tela === "romaneio"} onClick={() => ir("/")} rotulo="Programação de Entrega" testid="seta-voltar-do-romaneio" />

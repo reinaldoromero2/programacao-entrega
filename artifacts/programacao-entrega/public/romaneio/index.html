@@ -18613,11 +18613,13 @@ var SIGNATURES = {
   function ehSiemens(n){ return /\bSIEM/i.test(String(n || '')); }
   function filtrados(){
     var fc = txt($('prog-filtro-cli').value).toLowerCase(), fr = txt($('prog-filtro-rp').value).toLowerCase();
+    // vários clientes no filtro, separados por " | " (ex.: as duas Bosch que viram Bosch Osasco)
+    var fcs = fc.split('|').map(function(f){ return f.trim(); }).filter(Boolean);
     var soPed = $('prog-so-pedido').checked, comSiemens = $('prog-siemens').checked;
     return prog.itens.map(function(it, idx){ return { it: it, idx: idx }; }).filter(function(x){
       var it = x.it;
       if (!comSiemens && ehSiemens(it.cliente)) return false;
-      if (fc && it.cliente.toLowerCase().indexOf(fc) === -1) return false;
+      if (fcs.length && !fcs.some(function(f){ return it.cliente.toLowerCase().indexOf(f) !== -1; })) return false;
       if (fr && it.rp.toLowerCase().indexOf(fr) === -1) return false;
       if (soPed && !it.q.some(function(v, c){ return qEf(x.idx, c) > 0; }) && !it.prox) return false;
       return true;
@@ -18967,6 +18969,38 @@ var SIGNATURES = {
       if (db) return db.collection(COL_MAPA).doc(chave).set({ nomeRq: nomeRq, destino: destino, em: new Date().toISOString() });
     }).catch(function(){});
   }
+
+  // Botão direito no cliente da Programação de Entrega: a grade abre filtrada pelos clientes
+  // da RQ C 008 que viram aquele nome (o caminho de volta do "Inserir programação").
+  // "MAXION SP + BOSCH OSASCO" e "INGREDION MOGI (015)" também servem.
+  function filtrarPorClienteProg(nomeProg, tentativa){
+    if (!prog){
+      // a programação ainda está chegando neste aparelho
+      if ((tentativa || 0) < 20) setTimeout(function(){ filtrarPorClienteProg(nomeProg, (tentativa || 0) + 1); }, 500);
+      return;
+    }
+    carregarMapa().catch(function(){}).then(function(){
+      if (!cadastroProg) cadastroProg = [];
+      var nomesRq = {}; prog.itens.forEach(function(it){ nomesRq[it.cliente] = true; });
+      var todos = Object.keys(nomesRq), achados = [];
+      String(nomeProg).split('+').forEach(function(parte){
+        var np = norm(parte);
+        if (!np) return;
+        var porMapa = todos.filter(function(n){ var d = destinoDe(n).destino; return d && norm(d) === np; });
+        var porNome = porMapa.length ? [] : todos.filter(function(n){ var nn = norm(semCodigo(n)); return nn && (nn.indexOf(np) === 0 || np.indexOf(nn) === 0); });
+        var lista = porMapa.length ? porMapa : porNome.length ? porNome : [parte.replace(/\([^)]*\)/g, ' ').trim()];
+        lista.forEach(function(n){ if (achados.indexOf(n) === -1) achados.push(n); });
+      });
+      if (!achados.length) return;
+      // clientes Siemens só aparecem com a caixa "Siemens" marcada
+      if (achados.some(ehSiemens)) $('prog-siemens').checked = true;
+      $('prog-filtro-cli').value = achados.join(' | ');
+      $('prog-filtro-rp').value = '';
+      renderGrade();
+      setStatus('Filtrado pelo cliente da Programação: ' + nomeProg + ' (limpe o campo Cliente para ver todos).');
+    });
+  }
+  window.addEventListener('ripack-filtro-cliente', function(ev){ filtrarPorClienteProg(ev.detail); });
 
   function atualizarBotaoEnviar(){
     var n = Object.keys(selIns).length, b = $('prog-ins-enviar');
