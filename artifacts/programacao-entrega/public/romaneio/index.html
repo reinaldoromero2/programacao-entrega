@@ -1843,6 +1843,7 @@
           <label class="add-btn prog-btn-atualizar" style="cursor:pointer; margin:0;">🔄 Atualizar<input type="file" id="prog-arquivo" accept=".xlsm,.xlsx,.xls" style="display:none;"></label>
           <button type="button" class="add-btn prog-btn-rqc008" id="rqc008-atualizar-btn" title="Roda a atualização da RQ C 008 neste computador" style="margin:0;">📗 Atualizar RQ C 008</button>
           <button type="button" class="add-btn prog-btn-ins" id="prog-ins-btn" aria-pressed="false" title="Marcar pedidos para lançar na Programação de Entrega" style="margin:0;">📋 Inserir programação</button>
+          <button type="button" class="add-btn prog-btn-ins" id="prog-ins-conj" hidden aria-pressed="false" title="Juntar dois ou mais clientes numa mesma linha da Programação" style="margin:0;">🔗 Conjugar carga</button>
           <button type="button" class="add-btn prog-btn-ins-enviar" id="prog-ins-enviar" hidden style="margin:0;">ENVIAR</button>
           <div class="prog-filtro">
             <span>Cliente</span>
@@ -18437,6 +18438,10 @@ var SIGNATURES = {
   .prog-btn-ins-enviar{ background:#5b21b6 !important; color:#fff !important; border:1px solid #4c1d95 !important; border-style:solid !important; font-weight:800 !important; letter-spacing:.3px; }
   table.pg tr.ins-linha > td:not(.d):not(.c-prox), table.pg td.d.ins-l{ background:#ede9fe !important; color:#4c1d95 !important; }
   table.pg td.d.ins{ position:relative; }
+  table.pg td.d .ins-rm{ position:absolute; top:1px; left:1px; width:15px; height:15px; padding:0; border:none; border-radius:50%; background:#dc2626; color:#fff; font:700 11px/15px Arial, sans-serif; text-align:center; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  table.pg td.d .ins-rm:hover{ background:#b91c1c; }
+  table.pg td.d .ins-cj{ position:absolute; bottom:1px; left:2px; font-size:9px; line-height:1; padding:1px 3px; border-radius:6px; background:#0e7490; color:#fff; font-weight:800; pointer-events:none; }
+  table.pg td.d.ins.cj-alvo{ cursor:copy; }
   table.pg td.d .ins-x{ position:absolute; top:1px; right:2px; font-size:9px; line-height:1; padding:1px 3px; border-radius:6px; background:#5b21b6; color:#fff; font-weight:800; pointer-events:none; }
   table.pg td.d.ins{ background:#ddd6fe !important; color:#4c1d95 !important; font-weight:700; outline:2px solid #7c3aed; outline-offset:-2px; }
   /* a janela é criada no body, fora do .app-root onde ficam as cores do tema: cores próprias.
@@ -18524,7 +18529,51 @@ var SIGNATURES = {
   function $(id){ return document.getElementById(id); }
   var CHAVE = 'ripack_programacao_v4';
   var prog = null, sel = {}, selCli = null, escolhaCli = {}, recCache = {};
-  var modoIns = false, selIns = {}; // "Inserir programação": células marcadas para a Programação de Entrega
+  var modoIns = false, selIns = {}; // "Inserir programação": células marcadas (k -> quantas vezes o cliente entra)
+  // "Conjugar carga": clientes da RQ C 008 ligados vão numa linha só ("INGREDION MOGI + SUOMINEN")
+  var conjGrupo = {}, conjOrdem = {}, proxGrupo = 1, conjOrigem = null, ultimoIns = null;
+  function letraGrupo(g){
+    var ids = Object.keys(conjOrdem).map(Number).sort(function(a, b){ return a - b; });
+    var i = ids.indexOf(g);
+    return String.fromCharCode(65 + (i < 0 ? 0 : i % 26));
+  }
+  function ligarClientes(a, b){
+    var ga = conjGrupo[a], gb = conjGrupo[b];
+    if (ga && gb && ga === gb) return;
+    if (ga && gb){
+      // junta os dois grupos no primeiro
+      conjOrdem[gb].forEach(function(n){ conjGrupo[n] = ga; if (conjOrdem[ga].indexOf(n) === -1) conjOrdem[ga].push(n); });
+      delete conjOrdem[gb];
+      return;
+    }
+    var g = ga || gb || proxGrupo++;
+    if (!conjOrdem[g]) conjOrdem[g] = [];
+    [a, b].forEach(function(n){ conjGrupo[n] = g; if (conjOrdem[g].indexOf(n) === -1) conjOrdem[g].push(n); });
+  }
+  function soltarCliente(n){
+    var g = conjGrupo[n];
+    if (!g) return;
+    delete conjGrupo[n];
+    conjOrdem[g] = conjOrdem[g].filter(function(x){ return x !== n; });
+    // grupo de um cliente só deixa de ser conjugado
+    if (conjOrdem[g].length < 2){ conjOrdem[g].forEach(function(x){ delete conjGrupo[x]; }); delete conjOrdem[g]; }
+  }
+  function desmarcarIns(k){
+    var it = prog.itens[+k.split('|')[0]];
+    delete selIns[k];
+    if (ultimoIns === k) ultimoIns = null;
+    // cliente sem nenhuma quantidade marcada sai da conjugação
+    var resta = Object.keys(selIns).some(function(x){ var o = prog.itens[+x.split('|')[0]]; return o && o.cliente === it.cliente; });
+    if (!resta) soltarCliente(it.cliente);
+    if (conjOrigem === it.cliente && !resta) sairConjugar();
+    atualizarBotaoEnviar();
+    renderGrade();
+  }
+  function sairConjugar(){
+    conjOrigem = null;
+    var b = $('prog-ins-conj');
+    if (b){ b.setAttribute('aria-pressed', 'false'); b.textContent = '🔗 Conjugar carga'; }
+  }
   // celular (toque + tela estreita): grade só para ver, encolhida para caber como uma imagem
   var somenteVer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) && window.innerWidth < 900;
   if (somenteVer) modal.classList.add('prog-so-ver');
@@ -18718,7 +18767,10 @@ var SIGNATURES = {
       var tds = it.q.map(function(v0, c){
         var v = qEf(i, c);
         var k = i + '|' + c, s = sel[k];
-        return '<td class="d' + (c === 0 ? ' atr' : '') + (v > 0 ? ' q' : '') + (s ? ' sel' : '') + (selIns[k] ? ' ins' : c <= ate ? ' ins-l' : '') + '"' + (v > 0 ? ' data-k="' + k + '" title="' + (modoIns ? 'Tocar para marcar para a Programação de Entrega (tocar de novo: 2x)' : 'Tocar para levar na carga') + '"' : '') + '>' + (v > 0 ? fmtN(v) : '') + (selIns[k] === 2 ? '<span class="ins-x">2x</span>' : '') + '</td>';
+        return '<td class="d' + (c === 0 ? ' atr' : '') + (v > 0 ? ' q' : '') + (s ? ' sel' : '') + (selIns[k] ? ' ins' : c <= ate ? ' ins-l' : '') + '"' + (v > 0 ? ' data-k="' + k + '" title="' + (modoIns ? 'Tocar para marcar para a Programação de Entrega (cada toque soma mais uma vez)' : 'Tocar para levar na carga') + '"' : '') + '>' + (v > 0 ? fmtN(v) : '') +
+          (selIns[k] ? '<button type="button" class="ins-rm" data-rm-ins="' + k + '" title="Desmarcar" aria-label="Desmarcar">×</button>' : '') +
+          (selIns[k] > 1 ? '<span class="ins-x">' + selIns[k] + 'x</span>' : '') +
+          (selIns[k] && conjGrupo[it.cliente] ? '<span class="ins-cj">🔗' + letraGrupo(conjGrupo[it.cliente]) + '</span>' : '') + '</td>';
       }).join('');
       return '<tr' + (ate >= 0 ? ' class="ins-linha"' : '') + '><td class="c-cli" title="' + esc(it.cliente) + '">' + esc(it.cliente) + '</td><td class="c-prod">' + esc(it.rp) + '</td><td class="n">' + esc(it.un) + '</td>' +
         '<td class="c-desc" title="' + esc(it.desc) + '">' + esc(it.desc) + '</td><td class="n">' + esc(it.base) + '</td>' +
@@ -18934,15 +18986,29 @@ var SIGNATURES = {
 
   $('prog-grade').addEventListener('click', function(ev){
     if (somenteVer) return; // no celular a grade é só para ver
+    // ✕ vermelho da quantidade marcada: desmarca
+    var rm = ev.target.closest ? ev.target.closest('[data-rm-ins]') : null;
+    if (rm && modoIns){
+      desmarcarIns(rm.getAttribute('data-rm-ins'));
+      return;
+    }
     var td = ev.target.closest ? ev.target.closest('td.q') : null;
     if (!td) return;
     var k = td.getAttribute('data-k'), it = prog.itens[+k.split('|')[0]];
-    // modo "Inserir programação": só marca/desmarca, sem abrir a carga
+    // modo "Inserir programação": só marca, sem abrir a carga
     if (modoIns){
-      // 1º toque marca (1x), 2º toque marca 2x (o cliente entra duas vezes), 3º desmarca
-      if (!selIns[k]) selIns[k] = 1;
-      else if (selIns[k] === 1) selIns[k] = 2;
-      else delete selIns[k];
+      if (conjOrigem){
+        // "Conjugar carga": o toque escolhe o cliente que vai junto
+        if (it.cliente === conjOrigem){ setStatus('Toque na quantidade de OUTRO cliente para conjugar com ' + conjOrigem + '.'); return; }
+        if (!selIns[k]) selIns[k] = 1;
+        ligarClientes(conjOrigem, it.cliente);
+        setStatus('🔗 ' + conjOrigem + ' + ' + it.cliente + ' vão numa linha só na Programação.');
+        sairConjugar();
+      } else {
+        // cada toque soma mais uma vez (o cliente entra N vezes na Programação)
+        selIns[k] = (selIns[k] || 0) + 1;
+        ultimoIns = k;
+      }
       atualizarBotaoEnviar();
       renderGrade();
       return;
@@ -19074,14 +19140,27 @@ var SIGNATURES = {
   window.addEventListener('ripack-filtro-cliente', function(ev){ filtrarPorClienteProg(ev.detail); });
 
   function atualizarBotaoEnviar(){
-    var n = Object.keys(selIns).length, b = $('prog-ins-enviar');
+    var n = Object.keys(selIns).length, b = $('prog-ins-enviar'), cj = $('prog-ins-conj');
     b.hidden = !modoIns;
     b.disabled = !n;
     b.textContent = n ? 'ENVIAR (' + n + ')' : 'ENVIAR';
+    cj.hidden = !modoIns;
+    cj.disabled = !n && !conjOrigem;
   }
+  // "Conjugar carga": parte do último cliente marcado; o próximo toque escolhe quem vai junto
+  $('prog-ins-conj').addEventListener('click', function(){
+    if (conjOrigem){ sairConjugar(); setStatus(''); return; }
+    var k = ultimoIns && selIns[ultimoIns] ? ultimoIns : Object.keys(selIns).pop();
+    var it = k && prog.itens[+k.split('|')[0]];
+    if (!it){ setStatus('Marque primeiro a quantidade de um cliente.'); return; }
+    conjOrigem = it.cliente;
+    this.setAttribute('aria-pressed', 'true');
+    this.textContent = '✕ Cancelar conjugar';
+    setStatus('🔗 Conjugar com ' + conjOrigem + ': toque na quantidade do cliente que vai junto na mesma carga.');
+  });
   $('prog-ins-btn').addEventListener('click', function(){
     modoIns = !modoIns;
-    if (!modoIns) selIns = {};
+    if (!modoIns){ selIns = {}; conjGrupo = {}; conjOrdem = {}; ultimoIns = null; sairConjugar(); }
     this.setAttribute('aria-pressed', modoIns ? 'true' : 'false');
     setStatus(modoIns ? 'Toque nas quantidades dos pedidos que vão para a Programação de Entrega e depois em ENVIAR.' : '');
     atualizarBotaoEnviar();
@@ -19094,12 +19173,17 @@ var SIGNATURES = {
     Object.keys(selIns).forEach(function(k){
       var it = prog.itens[+k.split('|')[0]];
       if (!it) return;
-      var g = por[it.cliente] || (por[it.cliente] = { nomeRq: it.cliente, bases: {}, vezes: 1 });
+      var g = por[it.cliente] || (por[it.cliente] = { nomeRq: it.cliente, bases: {}, vezes: 1, conj: conjGrupo[it.cliente] || 0 });
       g.bases[String(it.base || '').toUpperCase()] = true;
-      // quantas linhas o cliente ganha na Programação: a maior marcação dele (1x ou 2x)
+      // quantas linhas o cliente ganha na Programação: a maior marcação dele
       g.vezes = Math.max(g.vezes, selIns[k]);
     });
-    return Object.keys(por).sort().map(function(n){ return por[n]; });
+    // conjugados aparecem juntos, na ordem em que foram ligados
+    return Object.keys(por).map(function(n){ return por[n]; }).sort(function(a, b){
+      var ka = a.conj ? '0' + letraGrupo(a.conj) + String(conjOrdem[a.conj].indexOf(a.nomeRq)).padStart(3, '0') : '1' + a.nomeRq;
+      var kb = b.conj ? '0' + letraGrupo(b.conj) + String(conjOrdem[b.conj].indexOf(b.nomeRq)).padStart(3, '0') : '1' + b.nomeRq;
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
   }
   function unidadeDe(bases){
     if (bases.M && bases.F) return 'MATRIZ + FILIAL';
@@ -19127,7 +19211,8 @@ var SIGNATURES = {
     var opcoes = cadastroProg.map(function(c){ return '<option>' + esc(c) + '</option>'; }).join('');
     var linhas = grupos.map(function(g, i){
       var d = destinoDe(g.nomeRq);
-      return '<tr class="' + (d.destino ? '' : 'falta') + '" data-i="' + i + '"><td><strong>' + esc(g.nomeRq) + '</strong>' + (g.vezes > 1 ? ' <span class="prog-tag" style="background:#5b21b6; color:#fff;">' + g.vezes + 'x</span>' : '') + '<div class="foot-note" style="margin:0;">' + unidadeDe(g.bases) + '</div></td>' +
+      return '<tr class="' + (d.destino ? '' : 'falta') + '" data-i="' + i + '"><td><strong>' + esc(g.nomeRq) + '</strong>' + (g.vezes > 1 ? ' <span class="prog-tag" style="background:#5b21b6; color:#fff;">' + g.vezes + 'x</span>' : '') +
+        (g.conj ? ' <span class="prog-tag" style="background:#0e7490; color:#fff;" title="Vai na mesma linha dos outros 🔗' + letraGrupo(g.conj) + '">🔗' + letraGrupo(g.conj) + '</span>' : '') + '<div class="foot-note" style="margin:0;">' + unidadeDe(g.bases) + '</div></td>' +
         '<td>→</td><td><select data-dest="' + i + '"><option value="">escolher...</option><option>' + NAO_ENVIAR + '</option>' + opcoes + '</select>' +
         (d.destino && !d.certo ? '<div class="foot-note" style="margin:0;">palpite pelo nome; confira</div>' : '') + '</td></tr>';
     }).join('');
@@ -19161,15 +19246,18 @@ var SIGNATURES = {
         var chave = codigoCli(e.g.nomeRq) || norm(e.g.nomeRq), d = destinoDe(e.g.nomeRq);
         if (!d.certo || d.destino !== e.destino) salvarMapa(chave, e.g.nomeRq, e.destino);
       });
-      // vários clientes da RQ C 008 podem virar o mesmo da Programação (ex.: Bosch Osasco)
+      // vários clientes da RQ C 008 podem virar o mesmo da Programação (ex.: Bosch Osasco);
+      // conjugados viram uma linha só, com os nomes juntos por " + "
       var porDestino = {};
       escolhas.forEach(function(e){
         if (e.destino === NAO_ENVIAR) return;
-        var x = porDestino[e.destino] || (porDestino[e.destino] = { cliente: e.destino, bases: {}, vezes: 1 });
+        var chave = e.g.conj ? 'conj:' + e.g.conj : e.destino;
+        var x = porDestino[chave] || (porDestino[chave] = { nomes: [], bases: {}, vezes: 1 });
+        if (x.nomes.indexOf(e.destino) === -1) x.nomes.push(e.destino);
         Object.keys(e.g.bases).forEach(function(b){ x.bases[b] = true; });
         x.vezes = Math.max(x.vezes, e.g.vezes);
       });
-      var novos = Object.keys(porDestino).map(function(k){ return porDestino[k]; });
+      var novos = Object.keys(porDestino).map(function(k){ var x = porDestino[k]; x.cliente = x.nomes.join(' + '); return x; });
       if (!novos.length){ msg.textContent = 'Nenhum cliente para inserir.'; return; }
       var btn = this; btn.disabled = true; msg.textContent = 'Inserindo...';
       fetch(apiBase() + '/api/entregas?date=' + data, { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(existentes){
@@ -19190,7 +19278,7 @@ var SIGNATURES = {
         }, Promise.resolve()).then(function(){ return { criar: criar, pular: pular }; });
       }).then(function(r){
         fechar();
-        selIns = {}; modoIns = false;
+        selIns = {}; modoIns = false; conjGrupo = {}; conjOrdem = {}; ultimoIns = null; sairConjugar();
         $('prog-ins-btn').setAttribute('aria-pressed', 'false');
         atualizarBotaoEnviar(); renderGrade();
         var dd = data.split('-');
