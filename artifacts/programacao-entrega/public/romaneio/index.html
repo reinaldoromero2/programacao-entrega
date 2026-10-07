@@ -1840,14 +1840,14 @@
           <button class="rom-modal-close" id="prog-close" type="button" aria-label="Fechar">Sair</button>
         </div>
         <div class="prog-topo">
-          <label class="add-btn prog-btn-atualizar" style="cursor:pointer; margin:0;">🔄 Atualizar<input type="file" id="prog-arquivo" accept=".xlsm,.xlsx,.xls" style="display:none;"></label>
-          <button type="button" class="add-btn prog-btn-rqc008" id="rqc008-atualizar-btn" title="Roda a atualização da RQ C 008 neste computador" style="margin:0;">📗 Atualizar RQ C 008</button>
+          <label class="add-btn prog-btn-atualizar" style="cursor:pointer; margin:0;" title="Escolher o arquivo da RQ C 008 e carregar a programação">🔄 INSERIR<input type="file" id="prog-arquivo" accept=".xlsm,.xlsx,.xls" style="display:none;"></label>
+          <button type="button" class="add-btn prog-btn-rqc008" id="rqc008-atualizar-btn" title="Roda a atualização da RQ C 008 neste computador" style="margin:0;">📗 ATUALIZAR</button>
           <button type="button" class="add-btn prog-btn-ins" id="prog-ins-btn" aria-pressed="false" title="Marcar pedidos para lançar na Programação de Entrega" style="margin:0;">📋 Inserir programação</button>
-          <button type="button" class="add-btn prog-btn-ins" id="prog-ins-conj" hidden aria-pressed="false" title="Juntar dois ou mais clientes numa mesma linha da Programação" style="margin:0;">🔗 Conjugar carga</button>
+          <button type="button" class="add-btn prog-btn-conj" id="prog-ins-conj" hidden aria-pressed="false" title="Juntar dois ou mais clientes numa mesma linha da Programação" style="margin:0;">🔗 Conjugar carga</button>
           <button type="button" class="add-btn prog-btn-ins-enviar" id="prog-ins-enviar" hidden style="margin:0;">ENVIAR</button>
           <div class="prog-filtro">
             <span>Cliente</span>
-            <input type="search" id="prog-filtro-cli" placeholder="(Tudo) — cliente, código ou RP" autocomplete="off">
+            <span class="prog-filtro-campo"><input type="search" id="prog-filtro-cli" placeholder="(Tudo) — cliente, código ou RP" autocomplete="off"><button type="button" class="prog-filtro-limpar" id="prog-filtro-limpar" hidden title="Limpar a busca" aria-label="Limpar a busca">×</button></span>
             <datalist id="prog-cli-list"></datalist>
           </div>
           <!-- o campo Cliente também busca RP; este fica escondido só para quem ainda o usa por código -->
@@ -1855,7 +1855,6 @@
             <span>Produto</span>
             <input type="search" id="prog-filtro-rp" placeholder="RP" autocomplete="off" style="width:110px;">
           </div>
-          <label class="prog-chk"><input type="checkbox" id="prog-so-pedido" checked> só com pedido</label>
           <label class="prog-chk"><input type="checkbox" id="prog-siemens"> Siemens</label>
           <button type="button" class="add-btn" id="prog-restaurar" hidden style="width:auto; padding:6px 12px; font-size:12.5px; margin:0;">↩ Restaurar saldos usados (todos)</button>
           <span class="foot-note" id="prog-info" style="margin:0;"></span>
@@ -18432,8 +18431,20 @@ var SIGNATURES = {
   .prog-btn-atualizar:hover{ background:#FFB300 !important; }
   .prog-btn-rqc008{ background:#2e9e4a !important; color:#fff !important; border:1px solid #237a39 !important; border-style:solid !important; font-weight:700 !important; box-shadow:0 1px 3px rgba(0,0,0,0.25); }
   .prog-btn-rqc008:hover{ background:#237a39 !important; }
-  .prog-btn-ins{ background:#fff !important; color:#5b21b6 !important; border:1px solid #7c3aed !important; border-style:solid !important; font-weight:700 !important; }
-  .prog-btn-ins[aria-pressed="true"]{ background:#7c3aed !important; color:#fff !important; }
+  .prog-btn-ins{ background:#2a78d6 !important; color:#fff !important; border:1px solid #1d5fae !important; border-style:solid !important; font-weight:700 !important; box-shadow:0 1px 3px rgba(0,0,0,0.25); }
+  .prog-btn-ins:hover{ background:#1d5fae !important; }
+  .prog-btn-ins[aria-pressed="true"]{ background:#1748a0 !important; box-shadow:0 0 0 3px rgba(42,120,214,.35) !important; }
+  #prog-modal.modo-ins .prog-grade-wrap{ border:3px solid #2a78d6; box-shadow:0 0 0 3px rgba(42,120,214,.18); }
+  .prog-btn-conj{ background:#db2777 !important; color:#fff !important; border:1px solid #be185d !important; border-style:solid !important; font-weight:700 !important; box-shadow:0 1px 3px rgba(0,0,0,0.25); }
+  .prog-btn-conj:hover{ background:#be185d !important; }
+  .prog-btn-conj[aria-pressed="true"]{ background:#9d174d !important; box-shadow:0 0 0 3px rgba(219,39,119,.3) !important; }
+  /* 3. o X de limpar o campo de busca: maior e vermelho */
+  #prog-filtro-cli::-webkit-search-cancel-button{ display:none; }
+  .prog-filtro-campo{ position:relative; display:inline-flex; align-items:center; }
+  .prog-filtro-campo input{ padding-right:30px; }
+  .prog-filtro-limpar{ position:absolute; right:5px; top:50%; transform:translateY(-50%); width:20px; height:20px; padding:0; border:none; border-radius:50%; background:#dc2626; color:#fff; font:700 14px/20px Arial, sans-serif; text-align:center; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .prog-filtro-limpar:hover{ background:#b91c1c; }
+  .prog-filtro-limpar[hidden]{ display:none; }
   .prog-btn-ins-enviar{ background:#5b21b6 !important; color:#fff !important; border:1px solid #4c1d95 !important; border-style:solid !important; font-weight:800 !important; letter-spacing:.3px; }
   table.pg tr.ins-linha > td:not(.d):not(.c-prox), table.pg td.d.ins-l{ background:#ede9fe !important; color:#4c1d95 !important; }
   table.pg td.d.ins{ position:relative; }
@@ -18737,7 +18748,8 @@ var SIGNATURES = {
     var fc = txt($('prog-filtro-cli').value).toLowerCase(), fr = txt($('prog-filtro-rp').value).toLowerCase();
     // vários clientes no filtro, separados por " | " (ex.: as duas Bosch que viram Bosch Osasco)
     var fcs = fc.split('|').map(function(f){ return f.trim(); }).filter(Boolean);
-    var soPed = $('prog-so-pedido').checked, comSiemens = $('prog-siemens').checked;
+    // sem o filtro "só com pedido": a grade mostra exatamente o que veio da planilha
+    var soPed = false, comSiemens = $('prog-siemens').checked;
     return prog.itens.map(function(it, idx){ return { it: it, idx: idx }; }).filter(function(x){
       var it = x.it;
       // caixa "Siemens": marcada mostra só as Siemens; desmarcada esconde as Siemens
@@ -18751,6 +18763,8 @@ var SIGNATURES = {
   }
 
   function renderGrade(){
+    var limpar = $('prog-filtro-limpar');
+    if (limpar) limpar.hidden = !$('prog-filtro-cli').value;
     if (!prog){ $('prog-grade').innerHTML = '<p class="foot-note" style="padding:14px;">Toque em "Atualizar" e escolha o arquivo RQ C 008.</p>'; return; }
     var lista = filtrados();
     var d = prog.dias;
@@ -18962,7 +18976,7 @@ var SIGNATURES = {
     var p = ponte(), grupos = gruposPorCliente(gs);
     var cab = '<div class="pc-cab"><strong>🚚 Carga · ' + (grupos.length === 1 ? esc(grupos[0].cliente) : grupos.length + ' clientes') + '</strong>';
     if (grupos.length === 1) cab += tagCadastro(grupos[0].cliente);
-    cab += '<span style="flex:1 1 auto;"></span><button type="button" class="add-btn" id="prog-limpar">Limpar</button></div>';
+    cab += '</div>';
     function linhaItem(g){
       var it = g.it;
       var tags = (p && p.temFardo(it.rp) ? '' : '<span class="prog-tag mau">sem fardo cadastrado</span>') +
@@ -18977,7 +18991,7 @@ var SIGNATURES = {
       return sub + gr.gs.map(linhaItem).join('');
     }).join('');
     el.innerHTML = cab + '<table><thead><tr><th>Produto</th><th>Pedido</th><th>Qtd na carga</th><th></th><th></th></tr></thead><tbody>' + corpo + '</tbody></table>' +
-      '<div style="display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; margin-top:8px;"><button type="button" class="add-btn btn-destaque-verde" id="prog-enviar" style="width:auto;">🧮 Mandar ' + gs.length + ' item(ns)' + (grupos.length > 1 ? ' de ' + grupos.length + ' clientes' : '') + ' para a calculadora de carga</button><span class="foot-note" id="prog-enviar-status" style="margin:0; flex-basis:100%; text-align:center;"></span></div>';
+      '<div style="display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; margin-top:8px;"><button type="button" class="add-btn btn-destaque-verde" id="prog-enviar" style="width:auto;">🧮 Mandar ' + gs.length + ' item(ns)' + (grupos.length > 1 ? ' de ' + grupos.length + ' clientes' : '') + ' para a calculadora de carga</button><button type="button" class="add-btn btn-destaque-vermelho" id="prog-limpar" style="width:auto;">CANCELAR</button><span class="foot-note" id="prog-enviar-status" style="margin:0; flex-basis:100%; text-align:center;"></span></div>';
   }
 
   function render(){
@@ -19154,6 +19168,8 @@ var SIGNATURES = {
     b.textContent = n ? 'ENVIAR (' + n + ')' : 'ENVIAR';
     cj.hidden = !modoIns;
     cj.disabled = !n && !conjOrigem;
+    // contorno azul na grade enquanto o modo inserir está ligado
+    modal.classList.toggle('modo-ins', modoIns);
   }
   // "Conjugar carga": parte do último cliente marcado; o próximo toque escolhe quem vai junto
   $('prog-ins-conj').addEventListener('click', function(){
@@ -19301,7 +19317,11 @@ var SIGNATURES = {
   }
 
   ['prog-filtro-cli', 'prog-filtro-rp'].forEach(function(id){ $(id).addEventListener('input', renderGrade); });
-  $('prog-so-pedido').addEventListener('change', renderGrade);
+  // X vermelho do campo de busca: aparece enquanto houver texto (inclusive o filtro do botão direito)
+  $('prog-filtro-limpar').addEventListener('click', function(){ $('prog-filtro-cli').value = ''; renderGrade(); $('prog-filtro-cli').focus(); tirarAvisoFiltro(); });
+  // o aviso do filtro do botão direito sai quando a pessoa muda a busca
+  function tirarAvisoFiltro(){ if (/^Filtrado pelo cliente/.test($('prog-status').textContent)) setStatus(''); }
+  $('prog-filtro-cli').addEventListener('input', tirarAvisoFiltro);
   $('prog-restaurar').addEventListener('click', function(){
     // restaura para todos: apaga os registros desta programação no banco
     var ids = consDocs.map(function(d){ return d.id; });
