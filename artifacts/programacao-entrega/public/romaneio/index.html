@@ -1847,10 +1847,11 @@
           <button type="button" class="add-btn prog-btn-ins-enviar" id="prog-ins-enviar" hidden style="margin:0;">ENVIAR</button>
           <div class="prog-filtro">
             <span>Cliente</span>
-            <input type="search" id="prog-filtro-cli" placeholder="(Tudo) — digite nome ou código" autocomplete="off">
+            <input type="search" id="prog-filtro-cli" placeholder="(Tudo) — cliente, código ou RP" autocomplete="off">
             <datalist id="prog-cli-list"></datalist>
           </div>
-          <div class="prog-filtro">
+          <!-- o campo Cliente também busca RP; este fica escondido só para quem ainda o usa por código -->
+          <div class="prog-filtro" hidden>
             <span>Produto</span>
             <input type="search" id="prog-filtro-rp" placeholder="RP" autocomplete="off" style="width:110px;">
           </div>
@@ -18726,6 +18727,12 @@ var SIGNATURES = {
   // clientes Siemens (nome com "SIEM", ex.: 1081 SIEM HP, 1105 SIEM CALADIS): a caixa "Siemens"
   // marcada mostra só eles; desmarcada, só os outros (escolha lembrada no aparelho)
   function ehSiemens(n){ return /\bSIEM/i.test(String(n || '')); }
+  function soDigitos(t){ return String(t || '').replace(/\D/g, ''); }
+  function bateBusca(it, f){
+    if (it.cliente.toLowerCase().indexOf(f) !== -1 || it.rp.toLowerCase().indexOf(f) !== -1) return true;
+    var d = soDigitos(f);
+    return d.length >= 3 && d === f.replace(/[\s\-\/.]/g, '') && soDigitos(it.rp).indexOf(d) !== -1;
+  }
   function filtrados(){
     var fc = txt($('prog-filtro-cli').value).toLowerCase(), fr = txt($('prog-filtro-rp').value).toLowerCase();
     // vários clientes no filtro, separados por " | " (ex.: as duas Bosch que viram Bosch Osasco)
@@ -18735,7 +18742,8 @@ var SIGNATURES = {
       var it = x.it;
       // caixa "Siemens": marcada mostra só as Siemens; desmarcada esconde as Siemens
       if (comSiemens !== ehSiemens(it.cliente)) return false;
-      if (fcs.length && !fcs.some(function(f){ return it.cliente.toLowerCase().indexOf(f) !== -1; })) return false;
+      // um campo só: cada termo acha pelo cliente (nome/código) ou pelo RP, com ou sem "-" e "/"
+      if (fcs.length && !fcs.some(function(f){ return bateBusca(it, f); })) return false;
       if (fr && it.rp.toLowerCase().indexOf(fr) === -1) return false;
       if (soPed && !it.q.some(function(v, c){ return qEf(x.idx, c) > 0; }) && !it.prox) return false;
       return true;
