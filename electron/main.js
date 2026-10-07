@@ -168,6 +168,19 @@ function tratarNovaJanela(win, { url }) {
     shell.openExternal(url);
     return { action: 'deny' };
   }
+  // "⧉ Abrir em outra tela" da grade RQ C 008: janela própria (para outro monitor), sem Node
+  if (/\/romaneio\/index\.html\?grade=1/.test(url)) {
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        width: 1400,
+        height: 900,
+        autoHideMenuBar: true,
+        title: 'RQ C 008 — Programação de Entrega',
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+      },
+    };
+  }
   return { action: 'allow' };
 }
 
@@ -182,6 +195,10 @@ function createWindow() {
     },
   });
   win.webContents.setWindowOpenHandler((details) => tratarNovaJanela(win, details));
+  // janelas abertas a partir do app (ex.: grade em outra tela) seguem as mesmas regras
+  win.webContents.on('did-create-window', (child) => {
+    child.webContents.setWindowOpenHandler((details) => tratarNovaJanela(win, details));
+  });
   // o zoom antigo era da janela inteira; agora cada tela guarda o seu
   win.webContents.on('did-finish-load', () => win.webContents.setZoomFactor(1));
 

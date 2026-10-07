@@ -1837,7 +1837,10 @@
       <div class="rom-modal-card prog-card">
         <div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
           <h3>📄 Programação de Entrega</h3>
-          <button class="rom-modal-close" id="prog-close" type="button" aria-label="Fechar">Sair</button>
+          <div class="prog-head-acoes">
+            <button class="rom-modal-close" id="prog-close" type="button" aria-label="Fechar">Sair</button>
+            <button class="add-btn prog-btn-janela" id="prog-outra-tela" type="button" title="Abre esta grade numa janela separada, para levar a outro monitor">⧉ Abrir em outra tela</button>
+          </div>
         </div>
         <div class="prog-topo">
           <label class="add-btn prog-btn-atualizar" style="cursor:pointer; margin:0;" title="Escolher o arquivo da RQ C 008 e carregar a programação">🔄 INSERIR<input type="file" id="prog-arquivo" accept=".xlsm,.xlsx,.xls" style="display:none;"></label>
@@ -18435,6 +18438,12 @@ var SIGNATURES = {
   .prog-btn-ins:hover{ background:#1d5fae !important; }
   .prog-btn-ins[aria-pressed="true"]{ background:#1748a0 !important; box-shadow:0 0 0 3px rgba(42,120,214,.35) !important; }
   #prog-modal.modo-ins .prog-grade-wrap{ border:3px solid #2a78d6; box-shadow:0 0 0 3px rgba(42,120,214,.18); }
+  .prog-head-acoes{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .prog-btn-janela{ margin:0 !important; width:auto; padding:5px 10px; font-size:12px; background:#fff !important; color:#334155 !important; border:1px solid #94a3b8 !important; border-style:solid !important; font-weight:600; }
+  .prog-btn-janela:hover{ background:#f1f5f9 !important; }
+  /* janela separada: só a grade; sem abrir outra a partir dela e sem INSERIR/ATUALIZAR */
+  #prog-modal.janela-separada #prog-outra-tela, #prog-modal.janela-separada .prog-btn-atualizar, #prog-modal.janela-separada #rqc008-atualizar-btn{ display:none !important; }
+  #prog-modal.prog-so-ver #prog-outra-tela{ display:none !important; }
   .prog-btn-conj{ background:#db2777 !important; color:#fff !important; border:1px solid #be185d !important; border-style:solid !important; font-weight:700 !important; box-shadow:0 1px 3px rgba(0,0,0,0.25); }
   .prog-btn-conj:hover{ background:#be185d !important; }
   .prog-btn-conj[aria-pressed="true"]{ background:#9d174d !important; box-shadow:0 0 0 3px rgba(219,39,119,.3) !important; }
@@ -19509,7 +19518,30 @@ var SIGNATURES = {
     modal.hidden = false;
     render();
   });
-  $('prog-close').addEventListener('click', function(){ modal.hidden = true; });
+  $('prog-close').addEventListener('click', function(){
+    // na janela separada, "Sair" fecha a janela
+    if (janelaSeparada){ window.close(); return; }
+    modal.hidden = true;
+  });
+
+  // "⧉ Abrir em outra tela": a mesma página numa janela separada (?grade=1), que abre
+  // direto na grade. A tela original continua no app; as duas recebem a planilha nova
+  // pelo mesmo banco, então a segunda não tem INSERIR/ATUALIZAR.
+  var janelaSeparada = /[?&]grade=1\b/.test(location.search);
+  $('prog-outra-tela').addEventListener('click', function(){
+    var w = Math.min(screen.availWidth || 1400, 1600), h = Math.min(screen.availHeight || 900, 1000);
+    var aberta = window.open('index.html?grade=1', 'ripack-rqc008', 'popup,width=' + w + ',height=' + h);
+    if (!aberta) setStatus('O navegador bloqueou a janela nova. Libere os pop-ups deste site e tente de novo.', true);
+  });
+  if (janelaSeparada){
+    modal.classList.add('janela-separada');
+    document.title = 'RQ C 008 — Programação de Entrega';
+    (function abrirQuandoPronto(t){
+      // espera a programação chegar do banco (ou do aparelho) e abre a grade
+      if (prog || (function(){ try { return !!localStorage.getItem(CHAVE); } catch (e){ return false; } })() || t > 40) $('prog-abrir-btn').click();
+      else setTimeout(function(){ abrirQuandoPronto(t + 1); }, 250);
+    })(0);
+  }
 })();
 </script>
 
