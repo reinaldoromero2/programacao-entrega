@@ -25,6 +25,32 @@ export function rotaDaTelaInicial(location: string) {
   return location === "/" || location === ROMANEIO_ROTA || location === PROGRAMACAO_ROTA;
 }
 
+export type AcaoZoom = "+" | "-" | "0";
+const ROMANEIO_IFRAME = 'iframe[title="Romaneio Ripack"]';
+
+/** Com o Romaneio ou a grade RQ C 008 na tela, manda o zoom para a página deles. */
+export function enviarZoomAoRomaneio(acao: AcaoZoom): boolean {
+  const hash = window.location.hash.replace(/^#/, "");
+  if (hash !== ROMANEIO_ROTA && hash !== PROGRAMACAO_ROTA) return false;
+  const frame = document.querySelector<HTMLIFrameElement>(ROMANEIO_IFRAME);
+  if (!frame?.contentWindow) return false;
+  frame.contentWindow.postMessage({ ripack: "zoom", acao }, "*");
+  return true;
+}
+
+// O zoom da Programação é aplicado na página inteira (applyAppZoom); o painel do Romaneio
+// desfaz esse zoom para usar só o dele.
+function useZoomDoApp() {
+  const ler = () => Number(localStorage.getItem("programacao-entrega-zoom")) || 1;
+  const [z, setZ] = useState(ler);
+  useEffect(() => {
+    const aoMudar = (ev: Event) => setZ(Number((ev as CustomEvent<number>).detail) || 1);
+    window.addEventListener("app-zoom-change", aoMudar);
+    return () => window.removeEventListener("app-zoom-change", aoMudar);
+  }, []);
+  return z;
+}
+
 const setaClasse =
   "fixed top-1/2 z-50 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/60 " +
   "bg-white/70 text-slate-700 shadow-lg backdrop-blur transition-opacity duration-300 hover:bg-white hover:text-slate-900 print:hidden";
@@ -70,6 +96,7 @@ export function TelaProgramacao({ children }: { children: ReactNode }) {
 export function RomaneioFrame() {
   const { tela, ir } = useTela();
   const queryClient = useQueryClient();
+  const zoomDoApp = useZoomDoApp();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [montado, setMontado] = useState(tela !== "inicio");
   // de que lado o painel está estacionado e se ele está na tela
@@ -126,6 +153,7 @@ export function RomaneioFrame() {
       <div
         className="fixed inset-0 z-40 bg-white"
         style={{
+          zoom: 1 / zoomDoApp,
           transform: naTela ? "translateX(0)" : fora,
           // ao sair, só some de vez quando o deslize termina
           visibility: naTela ? "visible" : "hidden",

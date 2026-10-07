@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import { applyAppZoom } from "@/components/opcoes-menu";
-import { RomaneioFrame, RomaneioSync, TelaProgramacao, rotaDaTelaInicial } from "@/components/romaneio-frame";
+import { RomaneioFrame, RomaneioSync, TelaProgramacao, enviarZoomAoRomaneio, rotaDaTelaInicial, type AcaoZoom } from "@/components/romaneio-frame";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,18 +43,27 @@ function App() {
     const savedZoom = Number(localStorage.getItem("programacao-entrega-zoom"));
     if (Number.isFinite(savedZoom)) applyAppZoom(savedZoom);
 
+    // cada tela tem o seu zoom: na Programação é o do app; no Romaneio e na grade RQ C 008
+    // o pedido vai para a página do Romaneio, que guarda o zoom de cada uma
+    const zoom = (acao: AcaoZoom) => {
+      if (!enviarZoomAoRomaneio(acao)) {
+        const atual = Number(localStorage.getItem("programacao-entrega-zoom")) || 1;
+        applyAppZoom(acao === "0" ? 1 : atual + (acao === "+" ? 0.1 : -0.1));
+      }
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
 
       if (event.key === "+" || event.key === "=" || event.code === "Equal" || event.code === "NumpadAdd") {
         event.preventDefault();
-        applyAppZoom((Number(localStorage.getItem("programacao-entrega-zoom")) || 1) + 0.1);
+        zoom("+");
       } else if (event.key === "-" || event.key === "_" || event.code === "Minus" || event.code === "NumpadSubtract") {
         event.preventDefault();
-        applyAppZoom((Number(localStorage.getItem("programacao-entrega-zoom")) || 1) - 0.1);
+        zoom("-");
       } else if (event.key === "0") {
         event.preventDefault();
-        applyAppZoom(1);
+        zoom("0");
       }
     };
 
@@ -62,15 +71,20 @@ function App() {
       if (!(event.ctrlKey || event.metaKey)) return;
 
       event.preventDefault();
-      const currentZoom = Number(localStorage.getItem("programacao-entrega-zoom")) || 1;
-      applyAppZoom(currentZoom + (event.deltaY < 0 ? 0.1 : -0.1));
+      zoom(event.deltaY < 0 ? "+" : "-");
     };
+
+    // no app instalado o Electron segura os atalhos de teclado e manda para cá
+    const electron = (window as any)?.require?.("electron");
+    const handleAtalho = (_event: unknown, acao: AcaoZoom) => zoom(acao);
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("wheel", handleWheel, { passive: false });
+    electron?.ipcRenderer.on("atalho-zoom", handleAtalho);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("wheel", handleWheel);
+      electron?.ipcRenderer.removeListener("atalho-zoom", handleAtalho);
     };
   }, []);
 

@@ -179,21 +179,22 @@ function createWindow() {
     },
   });
   win.webContents.setWindowOpenHandler((details) => tratarNovaJanela(win, details));
+  // o zoom antigo era da janela inteira; agora cada tela guarda o seu
+  win.webContents.on('did-finish-load', () => win.webContents.setZoomFactor(1));
 
   win.webContents.on('before-input-event', (event, input) => {
     const modifiers = input.modifiers || [];
     const hasControl = input.control || input.meta || modifiers.includes('control') || modifiers.includes('meta');
     if (!hasControl || input.type !== 'keyDown') return;
 
-    if (input.key === '+' || input.key === '=' || input.code === 'Equal' || input.code === 'NumpadAdd') {
+    // cada tela (Programação, Romaneio, grade RQ C 008) tem o seu zoom: o app decide qual muda
+    let acao = null;
+    if (input.key === '+' || input.key === '=' || input.code === 'Equal' || input.code === 'NumpadAdd') acao = '+';
+    else if (input.key === '-' || input.key === '_' || input.code === 'Minus' || input.code === 'NumpadSubtract') acao = '-';
+    else if (input.key === '0' || input.code === 'Digit0' || input.code === 'Numpad0') acao = '0';
+    if (acao) {
       event.preventDefault();
-      win.webContents.setZoomFactor(Math.min(win.webContents.getZoomFactor() + 0.1, 1.3));
-    } else if (input.key === '-' || input.key === '_' || input.code === 'Minus' || input.code === 'NumpadSubtract') {
-      event.preventDefault();
-      win.webContents.setZoomFactor(Math.max(win.webContents.getZoomFactor() - 0.1, 0.8));
-    } else if (input.key === '0' || input.code === 'Digit0' || input.code === 'Numpad0') {
-      event.preventDefault();
-      win.webContents.setZoomFactor(1);
+      win.webContents.send('atalho-zoom', acao);
     }
   });
 

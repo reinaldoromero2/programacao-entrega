@@ -263,6 +263,69 @@
     }, true);
   }
 
+  // ---- zoom próprio: um para o Romaneio, outro para a grade da Programação (RQ C 008) ----
+  // A página é a mesma; quando a grade (#prog-modal) abre ou fecha, troca para o zoom dela.
+  // Ctrl + / Ctrl - / Ctrl 0 e Ctrl + roda do mouse aqui dentro; no app, os atalhos de
+  // teclado chegam do app como { ripack: 'zoom', acao: '+' | '-' | '0' }.
+  (function () {
+    var MIN = 0.5, MAX = 1.5, PASSO = 0.1;
+    var CHAVES = { romaneio: 'ripack_zoom_romaneio', grade: 'ripack_zoom_rqc008' };
+    function tela() {
+      var m = document.getElementById('prog-modal');
+      return m && !m.hidden ? 'grade' : 'romaneio';
+    }
+    function lido(t) {
+      try { var z = parseFloat(localStorage.getItem(CHAVES[t])); return isFinite(z) ? z : 1; } catch (e) { return 1; }
+    }
+    function aplicar() { document.documentElement.style.zoom = String(lido(tela())); }
+    function mudar(acao) {
+      var t = tela(), z = acao === '0' ? 1 : lido(t) + (acao === '+' ? PASSO : -PASSO);
+      z = Math.min(MAX, Math.max(MIN, Math.round(z * 10) / 10));
+      try { localStorage.setItem(CHAVES[t], String(z)); } catch (e) {}
+      aplicar();
+      avisar(Math.round(z * 100) + '%');
+    }
+    var aviso = null, timer = null;
+    function avisar(texto) {
+      if (!document.body) return;
+      if (!aviso) {
+        aviso = document.createElement('div');
+        aviso.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100000;padding:6px 14px;border-radius:999px;background:rgba(20,20,19,.85);color:#fff;font:600 13px system-ui,sans-serif;pointer-events:none;';
+        document.body.appendChild(aviso);
+      }
+      aviso.textContent = 'Zoom ' + texto;
+      aviso.style.display = 'block';
+      clearTimeout(timer);
+      timer = setTimeout(function () { aviso.style.display = 'none'; }, 1200);
+    }
+    window.addEventListener('message', function (ev) {
+      var m = ev.data;
+      if (m && m.ripack === 'zoom' && (m.acao === '+' || m.acao === '-' || m.acao === '0')) mudar(m.acao);
+    });
+    window.addEventListener('keydown', function (ev) {
+      if (!(ev.ctrlKey || ev.metaKey)) return;
+      var acao = ev.key === '+' || ev.key === '=' || ev.code === 'NumpadAdd' ? '+' : ev.key === '-' || ev.key === '_' || ev.code === 'NumpadSubtract' ? '-' : ev.key === '0' || ev.code === 'Numpad0' ? '0' : '';
+      if (!acao) return;
+      ev.preventDefault();
+      mudar(acao);
+    }, true);
+    window.addEventListener('wheel', function (ev) {
+      if (!(ev.ctrlKey || ev.metaKey)) return;
+      ev.preventDefault();
+      mudar(ev.deltaY < 0 ? '+' : '-');
+    }, { passive: false, capture: true });
+    // a grade abre e fecha mudando o atributo hidden: troca o zoom junto
+    function vigiarGrade() {
+      var m = document.getElementById('prog-modal');
+      if (!m) return setTimeout(vigiarGrade, 300);
+      new MutationObserver(aplicar).observe(m, { attributes: true, attributeFilter: ['hidden'] });
+      aplicar();
+    }
+    aplicar();
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', vigiarGrade);
+    else vigiarGrade();
+  })();
+
   window.claude = {
     use: function (nome) {
       if (nome === 'db') return Promise.resolve(db);
