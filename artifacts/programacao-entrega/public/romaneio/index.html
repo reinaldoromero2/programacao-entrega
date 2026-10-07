@@ -18437,7 +18437,7 @@ var SIGNATURES = {
   .prog-btn-ins{ background:#2a78d6 !important; color:#fff !important; border:1px solid #1d5fae !important; border-style:solid !important; font-weight:700 !important; box-shadow:0 1px 3px rgba(0,0,0,0.25); }
   .prog-btn-ins:hover{ background:#1d5fae !important; }
   .prog-btn-ins[aria-pressed="true"]{ background:#1748a0 !important; box-shadow:0 0 0 3px rgba(42,120,214,.35) !important; }
-  #prog-modal.modo-ins .prog-grade-wrap{ border:3px solid #2a78d6; box-shadow:0 0 0 3px rgba(42,120,214,.18); }
+  #prog-modal.modo-ins .prog-grade-wrap{ border:6px solid #1d5fae; box-shadow:0 0 0 4px rgba(42,120,214,.45), 0 0 18px rgba(42,120,214,.55); }
   .prog-head-acoes{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
   .prog-btn-janela{ margin:0 !important; width:auto; padding:5px 10px; font-size:12px; background:#fff !important; color:#334155 !important; border:1px solid #94a3b8 !important; border-style:solid !important; font-weight:600; }
   .prog-btn-janela:hover{ background:#f1f5f9 !important; }
@@ -19395,6 +19395,29 @@ var SIGNATURES = {
     aplicarSelecao();
   });
   document.addEventListener('mouseup', function(){ arrasteInicio = null; });
+  // Ctrl+C copia a faixa selecionada como no Excel: colunas separadas por tab, linhas por
+  // quebra de linha (colado no Excel, cada valor cai na sua célula). Só o texto da célula:
+  // o ✕, o selo "2x" e o 🔗 ficam de fora.
+  function textoDaCelula(td){
+    return Array.prototype.filter.call(td.childNodes, function(n){ return n.nodeType === 3; })
+      .map(function(n){ return n.textContent; }).join('').replace(/\s+/g, ' ').trim();
+  }
+  document.addEventListener('copy', function(ev){
+    if (modal.hidden || !xlSel) return;
+    var alvo = document.activeElement, tag = alvo && alvo.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (String(window.getSelection && window.getSelection()) !== '') return; // texto selecionado de propósito
+    var linhas = $('prog-grade').querySelectorAll('tbody tr'), l = limitesSelecao(), tsv = [];
+    for (var r = l.r0; r <= l.r1; r++){
+      var tr = linhas[r], cols = [];
+      if (!tr) continue;
+      for (var c = l.c0; c <= l.c1; c++) cols.push(tr.children[c] ? textoDaCelula(tr.children[c]) : '');
+      tsv.push(cols.join('\t'));
+    }
+    ev.preventDefault();
+    ev.clipboardData.setData('text/plain', tsv.join('\r\n'));
+    setStatus('Copiado: ' + (l.r1 - l.r0 + 1) + ' linha(s) × ' + (l.c1 - l.c0 + 1) + ' coluna(s) — é só colar (Ctrl+V).');
+  });
   // clique na área vazia da grade (fora da tabela) apaga a faixa
   $('prog-grade-wrap').addEventListener('click', function(ev){
     if (!(ev.target.closest && ev.target.closest('table.pg')) && xlSel){ xlSel = null; aplicarSelecao(); }
