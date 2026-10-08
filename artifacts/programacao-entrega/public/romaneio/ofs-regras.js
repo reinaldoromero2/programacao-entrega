@@ -77,36 +77,75 @@
     return lista;
   }
 
-  // escolhe sozinho só sem dúvida: ordem do dia do romaneio e nenhuma outra da mesma empresa
-  // empatada em tudo
-  function escolhaDoItem(lista) {
-    var top = lista[0];
-    if (!top) return null;
-    var duvida = lista.slice(1).some(function (g) {
-      return g.empresa === top.empresa && g.distancia === top.distancia && g.mesmaQtd === top.mesmaQtd && g.junto === top.junto;
+  // quais ordens do produto recebem a OF: uma ordem com a mesma quantidade do romaneio ou, se não
+  // houver, um conjunto de ordens da mesma empresa que soma a quantidade (ex.: 2022-003/26 × 338 em
+  // 08/10 = 41903 (26) + 41902 (156) + 41901 (156)). Só quando a combinação é única; com dúvida, null.
+  // No par Matriz/Filial, a Filial. Sem nenhuma combinação, e com uma única ordem no dia, vale ela.
+  function escolhasDoItem(item, lista) {
+    if (!lista.length) return null;
+    var porEmpresa = { filial: [], matriz: [] };
+    lista.forEach(function (g) { (porEmpresa[g.empresa] = porEmpresa[g.empresa] || []).push(g); });
+    var achadas = [];
+    Object.keys(porEmpresa).forEach(function (emp) {
+      var gs = porEmpresa[emp], n = gs.length;
+      if (!n || n > 12) return;
+      for (var mask = 1; mask < (1 << n); mask++) {
+        var soma = 0, sel = [];
+        for (var b = 0; b < n; b++) if (mask & (1 << b)) { soma += Number(gs[b].qtd) || 0; sel.push(gs[b]); }
+        if (Math.abs(soma - item.qtd) < 0.001) achadas.push({ emp: emp, sel: sel });
+      }
     });
-    return duvida ? null : top;
+    // entre combinações da mesma empresa empatadas, desempata o agrupamento que também tem os outros
+    // produtos do cliente; sem desempate, é dúvida
+    function daEmpresa(lista) {
+      if (lista.length === 1) return lista[0].sel;
+      var pontos = lista.map(function (a) { return a.sel.reduce(function (s, g) { return s + g.junto; }, 0); });
+      var max = Math.max.apply(null, pontos);
+      var melhores = lista.filter(function (a, i) { return pontos[i] === max; });
+      return melhores.length === 1 ? melhores[0].sel : null;
+    }
+    function escolher(lista) {
+      if (!lista.length) return undefined;
+      var fil = lista.filter(function (a) { return a.emp === 'filial'; });
+      if (fil.length) return daEmpresa(fil);
+      return daEmpresa(lista.filter(function (a) { return a.emp === 'matriz'; }));
+    }
+    // primeiro uma ordem só com a mesma quantidade; depois as somas
+    var r = escolher(achadas.filter(function (a) { return a.sel.length === 1; }));
+    if (r !== undefined) return r;
+    r = escolher(achadas);
+    if (r !== undefined) return r;
+    return lista.length === 1 ? [lista[0]] : null;
   }
 
-  // plano de um cliente: para cada produto, as opções e a escolhida (null = precisa de alguém escolher)
+  // plano de um cliente: para cada produto, as ordens do dia (opcoes) e as escolhidas ([] = alguém
+  // precisa escolher)
   function planejar(cliente, linhas, dataRomaneio) {
     var itens = cliente.itens.map(function (item) {
       var opcoes = opcoesDoItem(item, cliente, linhas, dataRomaneio);
-      return { item: item, opcoes: opcoes, escolhida: escolhaDoItem(opcoes) };
+      return { item: item, opcoes: opcoes, escolhidas: escolhasDoItem(item, opcoes) || [] };
     });
-    return { itens: itens, completo: itens.every(function (x) { return !!x.escolhida || !x.item.ofs.length; }) };
+    return { itens: itens, completo: itens.every(function (x) { return x.escolhidas.length > 0 || !x.item.ofs.length; }) };
   }
 
-  // linhas a gravar com as escolhas do plano (só produtos com OF e com ordem escolhida)
-  function linhasDoPlano(plano) {
+  // linhas de ordem para gravar. Com todas=true, traz as linhas de TODAS as ordens do dia de cada
+  // produto (para a conferência mostrar tudo), cada uma com "escolhida" dizendo se o app a marcou.
+  function linhasDoPlano(plano, todas) {
     var porLinha = {}, ordem = [];
     plano.itens.forEach(function (x) {
-      var g = x.escolhida, it = x.item;
-      if (!g || !it.ofs.length) return;
-      g.linhas.forEach(function (l) {
-        var k = [l.empresa, l.agrupa, l.codigo, l.codpro, l.pedido].join('|');
-        if (!porLinha[k]) { porLinha[k] = { chave: k, empresa: l.empresa, agrupa: l.agrupa, codigo: l.codigo, codpro: l.codpro, pedido: l.pedido, data: l.data, antes: l.infadc || '', ofs: [] }; ordem.push(k); }
-        it.ofs.forEach(function (o) { if (porLinha[k].ofs.indexOf(o) < 0) porLinha[k].ofs.push(o); });
+      var it = x.item;
+      if (!it.ofs.length) return;
+      (todas ? x.opcoes : x.escolhidas).forEach(function (g) {
+        var marcada = x.escolhidas.indexOf(g) >= 0;
+        g.linhas.forEach(function (l) {
+          var k = [l.empresa, l.agrupa, l.codigo, l.codpro, l.pedido].join('|');
+          if (!porLinha[k]) {
+            porLinha[k] = { chave: k, empresa: l.empresa, agrupa: l.agrupa, codigo: l.codigo, codpro: l.codpro, pedido: l.pedido, data: l.data, qtd: l.qtd, antes: l.infadc || '', ofs: [], escolhida: false };
+            ordem.push(k);
+          }
+          if (marcada) porLinha[k].escolhida = true;
+          it.ofs.forEach(function (o) { if (porLinha[k].ofs.indexOf(o) < 0) porLinha[k].ofs.push(o); });
+        });
       });
     });
     return ordem.map(function (k) {

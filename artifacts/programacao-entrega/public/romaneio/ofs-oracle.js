@@ -60,7 +60,7 @@
         '<div style="padding:10px 18px 16px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">' +
           '<span class="ofs-status foot-note" style="margin-right:auto; align-self:center;"></span>' +
           '<button type="button" class="add-btn btn-destaque-branco ofs-fechar">Fechar</button>' +
-          '<button type="button" class="add-btn btn-destaque-verde ofs-gravar" disabled>Gravar no sistema</button>' +
+          '<button type="button" class="add-btn btn-destaque-verde ofs-gravar" disabled>Lançar todas</button>' +
         '</div>' +
       '</div>';
     // dentro do .app-root: é lá que o tema "vidro" dá o fundo fosco às janelas (fora dele fica transparente)
@@ -119,45 +119,37 @@
       var cli = c.cliente;
       html += '<div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px;">';
       html += '<div style="font-weight:700; margin-bottom:6px;">' + esc(cli.nome) + '</div>';
-      var rotulo = function (g) {
-        return (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' — agrupamento ' + g.agrupa + ' — ' + dataBr(g.data) +
-          ' — ' + g.qtd + ' pç' + (g.mesmaQtd ? ' (mesma qtd)' : ' (qtd diferente)');
-      };
-      c.plano.itens.forEach(function (x, ii) {
+      c.plano.itens.forEach(function (x) {
         var i = x.item;
-        html += '<div style="margin:6px 0 8px;">';
         html += '<div class="foot-note" style="margin:0 0 4px;"><b>' + esc(i.rp) + '</b> × ' + esc(i.qtd) + ' — ' +
-          (i.ofs.length ? 'OF ' + esc(i.ofs.join(', ')) : '<span style="color:var(--critical)">sem número de OF no romaneio' + (i.ofobs ? ' ("' + esc(i.ofobs) + '")' : '') + '</span>') + '</div>';
-        if (!x.opcoes.length) {
-          html += '<div class="foot-note" style="color:var(--critical); margin:0;">Nenhuma ordem de separação deste produto nos últimos dias.</div>';
-        } else if (i.ofs.length) {
-          html += '<select data-ci="' + ci + '" data-ii="' + ii + '" class="ofs-escolha" style="width:100%; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface, #fff); color:inherit;">';
-          html += '<option value="">— escolha a ordem —</option>';
-          x.opcoes.forEach(function (g, gi) {
-            html += '<option value="' + gi + '"' + (g === x.escolhida ? ' selected' : '') + '>' + esc(rotulo(g)) + '</option>';
-          });
-          html += '</select>';
-          if (!x.escolhida) html += '<div class="foot-note" style="color:var(--warning, #b45309); margin:4px 0 0;">Mais de uma ordem possível (ou nenhuma do dia do romaneio): escolha a certa.</div>';
-        }
+          (i.ofs.length ? 'OF ' + esc(i.ofs.join(', ')) : '<span style="color:var(--critical)">sem número de OF no romaneio' + (i.ofobs ? ' ("' + esc(i.ofobs) + '")' : '') + '</span>');
+        if (i.ofs.length && !x.opcoes.length) html += ' — <span style="color:var(--critical)">nenhuma OS deste produto no dia do romaneio</span>';
+        else if (i.ofs.length && !x.escolhidas.length) html += ' — <span style="color:var(--warning, #b45309)">mais de uma combinação possível: marque as OS certas</span>';
+        else if (x.escolhidas.length > 1) html += ' — <span style="color:var(--good)">' + x.escolhidas.length + ' OS somam ' + esc(i.qtd) + '</span>';
         html += '</div>';
       });
-      var linhas = linhasDoPlano(c.plano);
+      // todas as OS do dia de cada produto, uma por linha; as escolhidas pelo app vêm marcadas
+      var linhas = linhasDoPlano(c.plano, true);
+      linhas.sort(function (a, b) {
+        return a.codpro.localeCompare(b.codpro) || ((b.escolhida ? 1 : 0) - (a.escolhida ? 1 : 0)) || (Number(b.agrupa) - Number(a.agrupa));
+      });
       c.linhas = linhas;
       if (linhas.length) {
-        html += '<table style="width:100%; border-collapse:collapse; margin-top:4px; font-size:12px;">' +
-          '<tr style="text-align:left; color:var(--text-secondary);"><th style="padding:3px;"></th><th style="padding:3px;">Agrup.</th><th style="padding:3px;">OS</th><th style="padding:3px;">Produto</th><th style="padding:3px;">Pedido</th><th style="padding:3px;">No sistema hoje</th><th style="padding:3px;">Vai gravar</th></tr>';
+        html += '<table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;">' +
+          '<tr style="text-align:left; color:var(--text-secondary);"><th style="padding:3px;"></th><th style="padding:3px;">Agrup.</th><th style="padding:3px;">OS</th><th style="padding:3px;">Produto</th><th style="padding:3px; text-align:right;">Qtd</th><th style="padding:3px;">Pedido</th><th style="padding:3px;">No sistema hoje</th><th style="padding:3px;">Vai gravar</th></tr>';
         linhas.forEach(function (l) {
-          var marcado = c.marcar[l.chave] !== undefined ? c.marcar[l.chave] : l.situacao === 'vazia';
+          var marcado = c.marcar[l.chave] !== undefined ? c.marcar[l.chave] : (l.escolhida && l.situacao === 'vazia');
           c.marcar[l.chave] = marcado;
           var hoje = l.situacao === 'vazia' ? '<i style="color:var(--text-secondary)">vazio</i>'
             : l.situacao === 'igual' ? '<span style="color:var(--good)">✔ já lançado</span>'
             : '<span style="color:var(--warning, #b45309)">' + esc(l.antes) + '</span>';
-          html += '<tr style="border-top:1px solid var(--grid);">' +
+          html += '<tr style="border-top:1px solid var(--grid);' + (l.escolhida ? '' : ' opacity:0.7;') + '">' +
             '<td style="padding:3px;"><input type="checkbox" class="ofs-marca" data-ci="' + ci + '" data-chave="' + esc(l.chave) + '"' +
               (l.situacao === 'igual' ? ' disabled' : '') + (marcado && l.situacao !== 'igual' ? ' checked' : '') +
-              ' title="' + (l.situacao === 'outra' ? 'Marque para substituir o que já está no sistema' : 'Gravar esta linha') + '"></td>' +
+              ' title="' + (l.situacao === 'outra' ? 'Marque para substituir o que já está no sistema' : 'Gravar esta OS') + '"></td>' +
             '<td style="padding:3px;">' + esc((l.empresa === 'matriz' ? 'M ' : 'F ') + l.agrupa) + '</td>' +
-            '<td style="padding:3px;">' + esc(l.codigo) + '</td><td style="padding:3px;">' + esc(l.codpro) + '</td><td style="padding:3px;">' + esc(l.pedido) + '</td>' +
+            '<td style="padding:3px;">' + esc(l.codigo) + '</td><td style="padding:3px;">' + esc(l.codpro) + '</td>' +
+            '<td style="padding:3px; text-align:right;">' + esc(l.qtd) + '</td><td style="padding:3px;">' + esc(l.pedido) + '</td>' +
             '<td style="padding:3px;">' + hoje + '</td><td style="padding:3px; font-family:monospace;">' + esc(l.novo.trim()) + '</td></tr>';
         });
         html += '</table>';
@@ -165,15 +157,6 @@
       html += '</div>';
     });
     corpo.innerHTML = html;
-    corpo.querySelectorAll('.ofs-escolha').forEach(function (sel) {
-      sel.addEventListener('change', function () {
-        var c = atual.clientes[Number(sel.getAttribute('data-ci'))];
-        var x = c.plano.itens[Number(sel.getAttribute('data-ii'))];
-        x.escolhida = sel.value === '' ? null : x.opcoes[Number(sel.value)];
-        c.marcar = {};
-        desenhar();
-      });
-    });
     corpo.querySelectorAll('.ofs-marca').forEach(function (cb) {
       cb.addEventListener('change', function () {
         atual.clientes[Number(cb.getAttribute('data-ci'))].marcar[cb.getAttribute('data-chave')] = cb.checked;
@@ -194,7 +177,7 @@
   function contar() {
     var n = aGravar().length, btn = janela().querySelector('.ofs-gravar');
     btn.disabled = n === 0;
-    btn.textContent = n ? 'Gravar ' + n + ' linha' + (n > 1 ? 's' : '') + ' no sistema' : 'Gravar no sistema';
+    btn.textContent = n ? 'Lançar todas (' + n + ' OS)' : 'Lançar todas';
     var substitui = aGravar().filter(function (l) { return l.situacao === 'outra'; }).length;
     status(substitui ? substitui + ' linha(s) vão substituir o que já está no sistema.' : '', substitui ? 'var(--warning, #b45309)' : '');
   }
@@ -436,7 +419,7 @@
         var cliente = { nome: '', itens: [{ rp: rp, qtd: qtd, ofs: ofs }] };
         var plano = planejar(cliente, linhas, new Date().toISOString().slice(0, 10));
         var x = plano.itens[0];
-        if (x.escolhida) return conferirEGravar(x.escolhida);
+        if (x.escolhidas.length) return conferirEGravar(null);
         escolher(x.opcoes);
         function escolher(opcoes) {
           var sel = '<select style="max-width:100%; font-size:11px; padding:2px;">' + opcoes.map(function (g, i) {
@@ -449,11 +432,11 @@
           });
         }
         function conferirEGravar(g) {
-          x.escolhida = g;
+          if (g) x.escolhidas = [g];
           var paraGravar = linhasDoPlano(plano);
           var iguais = paraGravar.filter(function (l) { return l.situacao === 'igual'; });
           var outras = paraGravar.filter(function (l) { return l.situacao === 'outra'; });
-          var nome = (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + g.agrupa;
+          var nome = x.escolhidas.map(function (o) { return (o.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + o.agrupa; }).join(' + ');
           if (iguais.length === paraGravar.length) {
             return marcarGravado('✔ Já está no sistema (' + esc(nome) + ').');
           }
