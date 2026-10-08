@@ -403,6 +403,10 @@
       var k = chave(col, id);
       pendentes[k] = (pendentes[k] || 0) + 1;
       fila.push(item);
+      // avisa a página (ex.: lançamento automático das OFs, ofs-oracle.js) com o documento como ficou
+      try {
+        window.dispatchEvent(new CustomEvent('ripack-gravou', { detail: { op: op, col: col, id: id, campos: op === 'delete' ? null : copia(data), doc: copia((local[col] || {})[id]) } }));
+      } catch (e) {}
       return item.salvo.then(function () {
         notificar(col);
         enviarFila();

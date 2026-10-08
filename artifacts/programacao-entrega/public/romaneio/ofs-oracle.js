@@ -220,16 +220,12 @@
       if (mudou.length) partes.push(mudou.length + ' não gravada(s): mudaram no sistema depois da busca — abra de novo para conferir');
       if (falhou.length) partes.push(falhou.length + ' com erro: ' + ((falhou[0] && res[falhou[0].chave] && res[falhou[0].chave].erro) || ((r && r.erros) || []).join('; ') || 'sem resposta'));
       status(partes.join(' · '), falhou.length || mudou.length ? 'var(--critical)' : 'var(--good)');
-      if (ok.length && atual.dbApi && atual.docId) {
-        // fica registrado no romaneio (o botão fica verde)
-        var registro = (atual.d.ofsLancadas && atual.d.ofsLancadas.linhas) || [];
-        ok.forEach(function (l) {
-          registro = registro.filter(function (x) { return x.chave !== l.chave; });
-          registro.push({ chave: l.chave, empresa: l.empresa, agrupa: l.agrupa, codigo: l.codigo, codpro: l.codpro, texto: l.novo.trim() });
+      if (ok.length && atual.docId) {
+        // fica registrado neste PC (o botão fica verde) — nada vai para o romaneio/servidor
+        var docId = atual.docId;
+        oracle({ acao: 'registrar', id: docId, linhas: ok, completo: !falhou.length && !mudou.length }).then(function (st) {
+          if (st) { situacao[docId] = st; atualizarBotoes(docId); }
         });
-        atual.dbApi.collection('romaneios').doc(atual.docId).update({
-          ofsLancadas: { em: new Date().toISOString(), por: atual.nome || null, linhas: registro }
-        }).catch(function () {});
       }
       // mostra o estado novo do sistema
       if (ok.length || mudou.length) {
@@ -242,20 +238,39 @@
   }
 
   // botão para a linha de um romaneio na lista (aparece só no app do PC)
-  function botao(docId, d, dbApi, nome) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    var lancadas = d && d.ofsLancadas && d.ofsLancadas.linhas && d.ofsLancadas.linhas.length;
-    // o automático (ofs-auto.js) já conferiu e não conseguiu decidir tudo sozinho
-    var faltaConferir = d && d.ofsAuto && d.ofsAuto.completo === false;
+  // o que já foi lançado (e o que ficou para conferir) fica num arquivo deste PC, guardado pelo app
+  var situacao = {};
+  var botoesPorId = {};
+  function pintarBotao(b, st) {
+    var lancadas = st && st.linhas && st.linhas.length;
+    // o automático (electron/ofs-auto.js) conferiu e não conseguiu decidir tudo sozinho
+    var faltaConferir = st && st.completo === false;
     b.className = 'add-btn ' + (lancadas && !faltaConferir ? 'btn-destaque-verde' : 'btn-destaque-branco');
     b.textContent = faltaConferir ? '⚠ Lançar OFs' : lancadas ? '✔ OFs no sistema' : '🧾 Lançar OFs';
-    if (faltaConferir) b.style.color = 'var(--warning, #b45309)';
+    b.style.color = faltaConferir ? 'var(--warning, #b45309)' : '';
     b.title = faltaConferir
       ? 'O lançamento automático não conseguiu decidir tudo sozinho (mais de uma ordem possível, OS ainda não emitida ou ordem com outro texto) — clique para conferir'
       : lancadas
-      ? 'OFs já lançadas no sistema' + (d.ofsLancadas.por ? ' por ' + d.ofsLancadas.por : '') + ' — clique para conferir'
+      ? 'OFs lançadas no sistema por este PC — clique para conferir'
       : 'Gravar as OFs deste romaneio na ordem de separação do sistema (como a planilha Inclusor de OF)';
+  }
+  function atualizarBotoes(docId) {
+    (botoesPorId[docId] || []).forEach(function (b) { if (b.isConnected) pintarBotao(b, situacao[docId]); });
+    botoesPorId[docId] = (botoesPorId[docId] || []).filter(function (b) { return b.isConnected; });
+  }
+  aoSaberDisponivel.push(function () {
+    if (!disponivel) return;
+    oracle({ acao: 'status' }).then(function (todos) {
+      situacao = todos && typeof todos === 'object' ? todos : {};
+      Object.keys(botoesPorId).forEach(atualizarBotoes);
+    });
+  });
+
+  function botao(docId, d, dbApi, nome) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    pintarBotao(b, situacao[docId]);
+    (botoesPorId[docId] = botoesPorId[docId] || []).push(b);
     b.addEventListener('click', function () { abrir(docId, d, dbApi, nome); });
     var mostrar = function () { b.hidden = !disponivel; };
     if (disponivel === null) { b.hidden = true; aoSaberDisponivel.push(mostrar); } else mostrar();
@@ -397,12 +412,18 @@
     });
   }
 
-  // ---- romaneio enviado: o app lança as OFs sozinho, em segundo plano (electron/ofs-auto.js) ----
-  // (ele também confere de 5 em 5 minutos; aqui só pede para conferir logo)
-  document.addEventListener('click', function (ev) {
-    var alvo = ev.target && ev.target.closest && ev.target.closest('#enviar-assinatura');
-    if (alvo && disponivel) oracle({ acao: 'auto-agora' });
-  }, true);
+  // ---- romaneio criado (ou editado mudando produtos/OFs): o app lança as OFs sozinho ----
+  // (electron/ofs-auto.js). Vai direto para o app neste PC, que fala só com o Oracle: não usa o
+  // servidor nem o Neon.
+  window.addEventListener('ripack-gravou', function (ev) {
+    var g = ev.detail || {};
+    if (g.col !== 'romaneios' || !g.doc || !disponivel) return;
+    if (g.op !== 'set' && !(g.op === 'update' && g.campos && g.campos.clientes)) return;
+    var d = g.doc;
+    oracle({ acao: 'auto', id: g.id, romaneio: { clientes: d.clientes, cliente: d.cliente, data: d.data, criadoEm: d.criadoEm } }).then(function (st) {
+      if (st && typeof st === 'object' && !Array.isArray(st) && 'completo' in st) { situacao[g.id] = st; atualizarBotoes(g.id); }
+    });
+  });
 
   // linhas da calculadora: as que já existem e as que forem criadas
   function vigiarCalculadora() {

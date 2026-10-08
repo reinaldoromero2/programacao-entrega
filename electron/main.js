@@ -3,7 +3,7 @@ const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { iniciarOfsAuto } = require('./ofs-auto');
+const { criarOfsAuto } = require('./ofs-auto');
 
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 let updatePromptOpen = false;
@@ -197,11 +197,13 @@ function rodarOfsOracle(entrada) {
 
 // a conexão vem das planilhas do Inclusor: sem elas (PC sem o L:), o botão nem aparece
 const OFS_PLANILHA = 'L:\\01 - Inclusor de OF\\Inclusor da OF na NOTA FISCAL - Matriz.xlsm';
-// lançamento automático em segundo plano (ver ofs-auto.js); começa quando o app abre
+// lançamento automático quando um romaneio é criado (ver ofs-auto.js) — só Oracle, sem o servidor/Neon
 let ofsAuto = null;
 ipcMain.handle('ofs-oracle', (_evento, entrada) => {
   if (entrada && entrada.acao === 'disponivel') return { ok: fs.existsSync(OFS_PLANILHA) };
-  if (entrada && entrada.acao === 'auto-agora') { if (ofsAuto) ofsAuto.agora(); return { ok: true }; }
+  if (entrada && entrada.acao === 'auto') return ofsAuto ? ofsAuto.lancar(String(entrada.id), entrada.romaneio || {}) : null;
+  if (entrada && entrada.acao === 'status') return ofsAuto ? ofsAuto.status() : {};
+  if (entrada && entrada.acao === 'registrar') return ofsAuto ? ofsAuto.registrar(String(entrada.id), entrada.linhas, entrada.completo) : null;
   return rodarOfsOracle(entrada);
 });
 
@@ -277,7 +279,7 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   configureAutoUpdates();
-  ofsAuto = iniciarOfsAuto({ rodarOfsOracle, planilha: OFS_PLANILHA, pastaLog: app.getPath('userData') });
+  ofsAuto = criarOfsAuto({ rodarOfsOracle, pastaDados: app.getPath('userData') });
 });
 
 app.on('window-all-closed', () => {
