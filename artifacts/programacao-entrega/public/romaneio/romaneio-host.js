@@ -683,6 +683,14 @@
     else vigiarGrade();
   })();
 
+  // aberto direto pelo link /romaneio/ (celular): pede ao navegador para conferir se saiu versão
+  // nova do app (service worker) — sem isso o celular podia ficar dias na página antiga
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+      navigator.serviceWorker.getRegistration('/').then(function (r) { if (r) r.update().catch(function () {}); }).catch(function () {});
+    }
+  } catch (e) {}
+
   window.claude = {
     use: function (nome) {
       if (nome === 'db') return Promise.resolve(db);
