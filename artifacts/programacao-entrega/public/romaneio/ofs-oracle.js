@@ -350,8 +350,20 @@
   // Um clique grava a OF daquela linha na ordem de separação do produto (mesma quantidade, data
   // mais perto de hoje; no par Matriz/Filial, a Filial). Com dúvida, ou se a ordem já tiver outro
   // texto, mostra a escolha ali mesmo. Não grava sozinho ao digitar (OF pela metade iria junto).
-  function prepararLinha(row) {
-    var input = row && row.querySelector('.ofobs-input');
+  // as duas telas com OF por linha: o formulário "Gerar romaneio" e a Carga Fácil
+  var TIPOS = [
+    { linha: '.item-row', of: '.ofobs-input', rp: '.rp-input', qtd: '.qtd-input' },
+    { linha: '.cf-item-row', of: '.cf-item-of', rp: '.cf-item-fardo', qtd: '.cf-item-qtd', avisoAntes: '.cf-item-total' }
+  ];
+  // na Carga Fácil o RP vem como "0143-002/26 — 38 pçs/fardo": fica só o código
+  function lerRp(row, tipo) { return String(((row.querySelector(tipo.rp) || {}).value) || '').split(' — ')[0].split(' (')[0].trim(); }
+  function lerQtd(row, tipo) { return parseFloat(String(((row.querySelector(tipo.qtd) || {}).value) || '').replace(/\./g, '').replace(',', '.')) || 0; }
+  // a Carga Fácil redesenha as linhas a cada mudança: lembra o que já foi gravado
+  var lembrados = {};
+  function chaveLembrar(rp, of) { return norm(rp) + '|' + String(of || '').trim(); }
+
+  function prepararLinha(row, tipo) {
+    var input = row && row.querySelector(tipo.of);
     if (!input || input.getAttribute('data-ofs')) return;
     input.setAttribute('data-ofs', '1');
     var caixa = document.createElement('div');
@@ -368,18 +380,27 @@
     caixa.appendChild(btn);
     var aviso = document.createElement('div');
     aviso.style.cssText = 'font-size:11px; margin-top:3px; line-height:1.35;';
-    caixa.parentNode.insertBefore(aviso, caixa.nextSibling);
+    var antesDe = tipo.avisoAntes && row.querySelector(tipo.avisoAntes);
+    if (antesDe) antesDe.parentNode.insertBefore(aviso, antesDe); else caixa.parentNode.insertBefore(aviso, caixa.nextSibling);
     input._ofsAviso = aviso;
+    input._ofsTipo = tipo;
     var mostrar = function () { btn.hidden = !disponivel; if (!disponivel) aviso.innerHTML = ''; };
     if (disponivel === null) { btn.hidden = true; aoSaberDisponivel.push(mostrar); } else mostrar();
 
     function dizer(html, cor) { aviso.innerHTML = html; aviso.style.color = cor || ''; }
+    function marcarGravado(html) {
+      aviso.setAttribute('data-gravado', input.value);
+      lembrados[chaveLembrar(lerRp(row, tipo), input.value)] = html;
+      dizer(html, 'var(--good)');
+    }
+    var lembrado = lembrados[chaveLembrar(lerRp(row, tipo), input.value)];
+    if (lembrado && input.value.trim()) marcarGravado(lembrado);
     // mudou a OF depois de gravar: volta a oferecer o botão
     input.addEventListener('input', function () { if (aviso.getAttribute('data-gravado') !== input.value) dizer(''); });
 
     btn.addEventListener('click', function () {
-      var rp = ((row.querySelector('.rp-input') || {}).value || '').trim();
-      var qtd = parseFloat(String((row.querySelector('.qtd-input') || {}).value || '').replace(/\./g, '').replace(',', '.')) || 0;
+      var rp = lerRp(row, tipo);
+      var qtd = lerQtd(row, tipo);
       var ofs = ofsDoTexto(input.value);
       if (!rp) return dizer('Preencha o RP do produto.', 'var(--critical)');
       if (!ofs.length) return dizer('Digite o número da OF.', 'var(--critical)');
@@ -413,8 +434,7 @@
           var outras = paraGravar.filter(function (l) { return l.situacao === 'outra'; });
           var nome = (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + g.agrupa;
           if (iguais.length === paraGravar.length) {
-            aviso.setAttribute('data-gravado', input.value);
-            return dizer('✔ Já está no sistema (' + esc(nome) + ').', 'var(--good)');
+            return marcarGravado('✔ Já está no sistema (' + esc(nome) + ').');
           }
           if (outras.length) {
             dizer('A ordem ' + esc(nome) + ' já tem "' + esc(outras[0].antes) + '". ' +
@@ -449,8 +469,7 @@
             var ok = lista.filter(function (l) { return porChave[l.chave] && porChave[l.chave].gravadas > 0; });
             var erro = lista.map(function (l) { return porChave[l.chave] && porChave[l.chave].erro; }).filter(Boolean)[0] || ((res && res.erros) || [])[0];
             if (ok.length === lista.length) {
-              aviso.setAttribute('data-gravado', input.value);
-              dizer('✔ Gravado no sistema (' + esc(nome) + '): ' + esc(ok.map(function (l) { return l.novo.trim(); }).join(' ')), 'var(--good)');
+              marcarGravado('✔ Gravado no sistema (' + esc(nome) + '): ' + esc(ok.map(function (l) { return l.novo.trim(); }).join(' ')));
             } else if (erro) {
               dizer('Não gravou: ' + esc(erro), 'var(--critical)');
             } else {
@@ -465,11 +484,12 @@
   // ---- aviso ao enviar o romaneio com OF digitada e não gravada no sistema ----
   function ofsNaoGravadas() {
     var lista = [];
-    document.querySelectorAll('.item-row .ofobs-input[data-ofs]').forEach(function (input) {
+    document.querySelectorAll('[data-ofs]').forEach(function (input) {
       var ofs = ofsDoTexto(input.value);
       if (!ofs.length || !input._ofsAviso || input._ofsAviso.getAttribute('data-gravado') === input.value) return;
-      var row = input.closest('.item-row');
-      lista.push({ rp: ((row && row.querySelector('.rp-input')) || {}).value || '', ofs: ofs, input: input });
+      var tipo = input._ofsTipo, row = tipo && input.closest(tipo.linha);
+      if (!row) return;
+      lista.push({ rp: lerRp(row, tipo), qtd: lerQtd(row, tipo), ofs: ofs, input: input });
     });
     return lista;
   }
@@ -497,13 +517,13 @@
       var linhas = (r && r.linhas) || [];
       var hoje = new Date().toISOString().slice(0, 10);
       lista = lista.filter(function (x) {
-        var row = x.input.closest('.item-row');
-        var qtd = parseFloat(String(((row && row.querySelector('.qtd-input')) || {}).value || '').replace(/\./g, '').replace(',', '.')) || 0;
+        var qtd = x.qtd;
         var cliente = { nome: '', itens: [{ rp: x.rp, qtd: qtd, ofs: x.ofs }] };
         var g = escolhaAutomatica(cliente, candidatos(cliente, linhas.filter(function (l) { return norm(l.codpro) === norm(x.rp); }), hoje));
         var jaEsta = g && linhasParaGravar(cliente, g).every(function (l) { return l.situacao === 'igual'; });
         if (jaEsta) {
           x.input._ofsAviso.setAttribute('data-gravado', x.input.value);
+          lembrados[chaveLembrar(x.rp, x.input.value)] = '✔ Já está no sistema (' + (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + esc(g.agrupa) + ').';
           x.input._ofsAviso.innerHTML = '✔ Já está no sistema (' + (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + esc(g.agrupa) + ').';
           x.input._ofsAviso.style.color = 'var(--good)';
         }
@@ -545,7 +565,9 @@
   function vigiarCalculadora() {
     if (!document.body) return setTimeout(vigiarCalculadora, 200);
     var varrer = function () {
-      document.querySelectorAll('.item-row').forEach(function (row) { if (row.querySelector('.ofobs-input')) prepararLinha(row); });
+      TIPOS.forEach(function (tipo) {
+        document.querySelectorAll(tipo.linha).forEach(function (row) { if (row.querySelector(tipo.of)) prepararLinha(row, tipo); });
+      });
     };
     varrer();
     var agendado = null;
