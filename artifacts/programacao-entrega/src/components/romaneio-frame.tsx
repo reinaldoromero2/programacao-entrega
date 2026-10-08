@@ -105,6 +105,9 @@ export function RomaneioFrame() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [montado, setMontado] = useState(tela !== "inicio");
   const [naTela, setNaTela] = useState(false);
+  // a página do iframe já está na tela pedida (grade aberta ou fechada); até lá o painel fica em branco
+  const [conteudoPronto, setConteudoPronto] = useState(false);
+  const reservaRef = useRef<number | undefined>(undefined);
 
   const carregado = useRef(false);
   const avisarPagina = (t: Tela) => {
@@ -112,6 +115,9 @@ export function RomaneioFrame() {
     const filtroCliente = t === "programacao" ? filtroPendente : null;
     iframeRef.current?.contentWindow?.postMessage({ ripack: "programacao", abrir: t === "programacao", filtroCliente }, "*");
     filtroPendente = null;
+    // reserva, caso a página não avise (ex.: versão antiga em cache)
+    window.clearTimeout(reservaRef.current);
+    reservaRef.current = window.setTimeout(() => setConteudoPronto(true), 1500);
   };
 
   useEffect(() => {
@@ -120,6 +126,7 @@ export function RomaneioFrame() {
       return;
     }
     setMontado(true);
+    setConteudoPronto(false);
     avisarPagina(tela);
     setNaTela(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,6 +137,10 @@ export function RomaneioFrame() {
   useEffect(() => {
     const aoMensagem = (ev: MessageEvent) => {
       if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (ev.data?.ripack === "tela-pronta" && !!ev.data.abrir === (window.location.hash.replace(/^#/, "") === PROGRAMACAO_ROTA)) {
+        window.clearTimeout(reservaRef.current);
+        setConteudoPronto(true);
+      }
       if (ev.data?.ripack === "programacao-fechou") ir("/");
       // a grade fechou indo para o romaneio (ex.: calculadora de carga): vira a tela do Romaneio
       if (ev.data?.ripack === "grade-virou-romaneio" && window.location.hash.replace(/^#/, "") === PROGRAMACAO_ROTA) {
@@ -198,6 +209,7 @@ export function RomaneioFrame() {
           src="./romaneio/index.html"
           title="Romaneio Ripack"
           className="h-full w-full border-0"
+          style={{ visibility: conteudoPronto ? undefined : "hidden" }}
           allow="clipboard-read; clipboard-write"
           onLoad={() => {
             carregado.current = true;

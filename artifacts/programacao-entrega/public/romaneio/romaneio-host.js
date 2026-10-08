@@ -550,6 +550,8 @@
         if (!m.abrir && !modal.hidden) modal.hidden = true;
         // botão direito no cliente da Programação: a grade abre filtrada por ele
         if (m.abrir && m.filtroCliente) window.dispatchEvent(new CustomEvent('ripack-filtro-cliente', { detail: m.filtroCliente }));
+        // já está na tela certa: o app pode mostrar (antes aparecia a tela anterior por um instante)
+        window.parent.postMessage({ ripack: 'tela-pronta', abrir: !!m.abrir }, '*');
       };
       abrir();
     });
