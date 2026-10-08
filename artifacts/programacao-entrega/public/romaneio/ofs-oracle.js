@@ -43,7 +43,7 @@
   }
   var R = window.ripackOfsRegras;
   var norm = R.norm, dataBr = R.dataBr, diasEntre = R.diasEntre, ofsDoTexto = R.ofsDoTexto, textoOfs = R.textoOfs;
-  var clientesDoRomaneio = R.clientesDoRomaneio, candidatos = R.candidatos, escolhaAutomatica = R.escolhaAutomatica, linhasParaGravar = R.linhasParaGravar;
+  var clientesDoRomaneio = R.clientesDoRomaneio, planejar = R.planejar, linhasDoPlano = R.linhasDoPlano;
 
   // ---- janela ----
   var modal = null;
@@ -101,10 +101,7 @@
       atual = {
         docId: docId, d: d, dbApi: dbApi, nome: nome, dataRomaneio: dataRomaneio, erros: r.erros || [],
         clientes: clientes.map(function (c) {
-          var rps = c.itens.map(function (i) { return norm(i.rp); });
-          var lista = candidatos(c, (r.linhas || []).filter(function (l) { return rps.indexOf(norm(l.codpro)) >= 0; }), dataRomaneio);
-          var auto = escolhaAutomatica(c, lista);
-          return { cliente: c, lista: lista, escolhido: auto ? auto.empresa + '|' + auto.agrupa : '', marcar: {} };
+          return { cliente: c, plano: planejar(c, r.linhas || [], dataRomaneio), marcar: {} };
         })
       };
       desenhar();
@@ -122,49 +119,48 @@
       var cli = c.cliente;
       html += '<div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px;">';
       html += '<div style="font-weight:700; margin-bottom:6px;">' + esc(cli.nome) + '</div>';
-      html += '<div class="foot-note" style="margin:0 0 6px;">' + cli.itens.map(function (i) {
-        return esc(i.rp) + ' × ' + esc(i.qtd) + ' — ' + (i.ofs.length ? 'OF ' + esc(i.ofs.join(', ')) : '<span style="color:var(--critical)">sem número de OF no romaneio' + (i.ofobs ? ' ("' + esc(i.ofobs) + '")' : '') + '</span>');
-      }).join('<br>') + '</div>';
-      if (!c.lista.length) {
-        html += '<div class="foot-note" style="color:var(--critical); margin:0;">Nenhuma ordem de separação encontrada com esses produtos nos últimos dias.</div>';
-      } else {
-        html += '<label class="foot-note" style="display:block; margin:6px 0 4px;">Agrupamento:</label>';
-        html += '<select data-ci="' + ci + '" class="ofs-escolha" style="width:100%; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface, #fff); color:inherit;">';
-        html += '<option value="">— escolha o agrupamento —</option>';
-        c.lista.forEach(function (g) {
-          var v = g.empresa + '|' + g.agrupa;
-          html += '<option value="' + esc(v) + '"' + (v === c.escolhido ? ' selected' : '') + '>' +
-            esc((g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' — agrupamento ' + g.agrupa + ' — ' + dataBr(g.data) +
-              ' — ' + g.cobertos + ' de ' + cli.itens.length + ' produto(s) com a mesma quantidade') + '</option>';
-        });
-        html += '</select>';
-        if (!c.escolhido && c.lista.length) {
-          html += '<div class="foot-note" style="color:var(--warning, #b45309); margin:4px 0 0;">Mais de uma opção possível (ou nenhuma com tudo igual): escolha a certa.</div>';
-        }
-        var g = c.lista.filter(function (x) { return x.empresa + '|' + x.agrupa === c.escolhido; })[0];
-        if (g) {
-          var linhas = linhasParaGravar(cli, g);
-          c.linhas = linhas;
-          html += '<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:12px;">' +
-            '<tr style="text-align:left; color:var(--text-secondary);"><th style="padding:3px;"></th><th style="padding:3px;">OS</th><th style="padding:3px;">Produto</th><th style="padding:3px;">Pedido</th><th style="padding:3px;">No sistema hoje</th><th style="padding:3px;">Vai gravar</th></tr>';
-          linhas.forEach(function (l) {
-            var marcado = c.marcar[l.chave] !== undefined ? c.marcar[l.chave] : l.situacao === 'vazia';
-            c.marcar[l.chave] = marcado;
-            var hoje = l.situacao === 'vazia' ? '<i style="color:var(--text-secondary)">vazio</i>'
-              : l.situacao === 'igual' ? '<span style="color:var(--good)">✔ já lançado</span>'
-              : '<span style="color:var(--warning, #b45309)">' + esc(l.antes) + '</span>';
-            html += '<tr style="border-top:1px solid var(--grid);">' +
-              '<td style="padding:3px;"><input type="checkbox" class="ofs-marca" data-ci="' + ci + '" data-chave="' + esc(l.chave) + '"' +
-                (l.situacao === 'igual' ? ' disabled' : '') + (marcado && l.situacao !== 'igual' ? ' checked' : '') +
-                ' title="' + (l.situacao === 'outra' ? 'Marque para substituir o que já está no sistema' : 'Gravar esta linha') + '"></td>' +
-              '<td style="padding:3px;">' + esc(l.codigo) + '</td><td style="padding:3px;">' + esc(l.codpro) + '</td><td style="padding:3px;">' + esc(l.pedido) + '</td>' +
-              '<td style="padding:3px;">' + hoje + '</td><td style="padding:3px; font-family:monospace;">' + esc(l.novo.trim()) + '</td></tr>';
+      var rotulo = function (g) {
+        return (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' — agrupamento ' + g.agrupa + ' — ' + dataBr(g.data) +
+          ' — ' + g.qtd + ' pç' + (g.mesmaQtd ? ' (mesma qtd)' : ' (qtd diferente)');
+      };
+      c.plano.itens.forEach(function (x, ii) {
+        var i = x.item;
+        html += '<div style="margin:6px 0 8px;">';
+        html += '<div class="foot-note" style="margin:0 0 4px;"><b>' + esc(i.rp) + '</b> × ' + esc(i.qtd) + ' — ' +
+          (i.ofs.length ? 'OF ' + esc(i.ofs.join(', ')) : '<span style="color:var(--critical)">sem número de OF no romaneio' + (i.ofobs ? ' ("' + esc(i.ofobs) + '")' : '') + '</span>') + '</div>';
+        if (!x.opcoes.length) {
+          html += '<div class="foot-note" style="color:var(--critical); margin:0;">Nenhuma ordem de separação deste produto nos últimos dias.</div>';
+        } else if (i.ofs.length) {
+          html += '<select data-ci="' + ci + '" data-ii="' + ii + '" class="ofs-escolha" style="width:100%; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface, #fff); color:inherit;">';
+          html += '<option value="">— escolha a ordem —</option>';
+          x.opcoes.forEach(function (g, gi) {
+            html += '<option value="' + gi + '"' + (g === x.escolhida ? ' selected' : '') + '>' + esc(rotulo(g)) + '</option>';
           });
-          html += '</table>';
-          if (!linhas.length) html += '<div class="foot-note" style="margin:6px 0 0;">Nada a gravar neste agrupamento (produtos sem OF no romaneio).</div>';
-        } else {
-          c.linhas = [];
+          html += '</select>';
+          if (!x.escolhida) html += '<div class="foot-note" style="color:var(--warning, #b45309); margin:4px 0 0;">Mais de uma ordem possível (ou nenhuma do dia do romaneio): escolha a certa.</div>';
         }
+        html += '</div>';
+      });
+      var linhas = linhasDoPlano(c.plano);
+      c.linhas = linhas;
+      if (linhas.length) {
+        html += '<table style="width:100%; border-collapse:collapse; margin-top:4px; font-size:12px;">' +
+          '<tr style="text-align:left; color:var(--text-secondary);"><th style="padding:3px;"></th><th style="padding:3px;">Agrup.</th><th style="padding:3px;">OS</th><th style="padding:3px;">Produto</th><th style="padding:3px;">Pedido</th><th style="padding:3px;">No sistema hoje</th><th style="padding:3px;">Vai gravar</th></tr>';
+        linhas.forEach(function (l) {
+          var marcado = c.marcar[l.chave] !== undefined ? c.marcar[l.chave] : l.situacao === 'vazia';
+          c.marcar[l.chave] = marcado;
+          var hoje = l.situacao === 'vazia' ? '<i style="color:var(--text-secondary)">vazio</i>'
+            : l.situacao === 'igual' ? '<span style="color:var(--good)">✔ já lançado</span>'
+            : '<span style="color:var(--warning, #b45309)">' + esc(l.antes) + '</span>';
+          html += '<tr style="border-top:1px solid var(--grid);">' +
+            '<td style="padding:3px;"><input type="checkbox" class="ofs-marca" data-ci="' + ci + '" data-chave="' + esc(l.chave) + '"' +
+              (l.situacao === 'igual' ? ' disabled' : '') + (marcado && l.situacao !== 'igual' ? ' checked' : '') +
+              ' title="' + (l.situacao === 'outra' ? 'Marque para substituir o que já está no sistema' : 'Gravar esta linha') + '"></td>' +
+            '<td style="padding:3px;">' + esc((l.empresa === 'matriz' ? 'M ' : 'F ') + l.agrupa) + '</td>' +
+            '<td style="padding:3px;">' + esc(l.codigo) + '</td><td style="padding:3px;">' + esc(l.codpro) + '</td><td style="padding:3px;">' + esc(l.pedido) + '</td>' +
+            '<td style="padding:3px;">' + hoje + '</td><td style="padding:3px; font-family:monospace;">' + esc(l.novo.trim()) + '</td></tr>';
+        });
+        html += '</table>';
       }
       html += '</div>';
     });
@@ -172,7 +168,8 @@
     corpo.querySelectorAll('.ofs-escolha').forEach(function (sel) {
       sel.addEventListener('change', function () {
         var c = atual.clientes[Number(sel.getAttribute('data-ci'))];
-        c.escolhido = sel.value;
+        var x = c.plano.itens[Number(sel.getAttribute('data-ii'))];
+        x.escolhida = sel.value === '' ? null : x.opcoes[Number(sel.value)];
         c.marcar = {};
         desenhar();
       });
@@ -422,14 +419,14 @@
           return dizer('Nenhuma ordem de separação deste produto nos últimos 10 dias' + erro + '. Se a ordem ainda não foi emitida, tente depois — ou use "🧾 Lançar OFs" no romaneio.', 'var(--critical)');
         }
         var cliente = { nome: '', itens: [{ rp: rp, qtd: qtd, ofs: ofs }] };
-        var lista = candidatos(cliente, linhas, new Date().toISOString().slice(0, 10));
-        var auto = escolhaAutomatica(cliente, lista);
-        if (auto) return conferirEGravar(auto);
-        escolher(lista);
+        var plano = planejar(cliente, linhas, new Date().toISOString().slice(0, 10));
+        var x = plano.itens[0];
+        if (x.escolhida) return conferirEGravar(x.escolhida);
+        escolher(x.opcoes);
         function escolher(opcoes) {
           var sel = '<select style="max-width:100%; font-size:11px; padding:2px;">' + opcoes.map(function (g, i) {
             return '<option value="' + i + '">' + esc((g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + g.agrupa + ' — ' + dataBr(g.data) +
-              (g.cobertos ? ' — mesma qtd' : ' — qtd diferente')) + '</option>';
+              ' — ' + g.qtd + ' pç' + (g.mesmaQtd ? ' (mesma qtd)' : ' (qtd diferente)')) + '</option>';
           }).join('') + '</select>';
           dizer('Mais de uma ordem possível — escolha: ' + sel + ' <button type="button" class="ofs-ok" style="font-size:11px;">Gravar</button>', 'var(--warning, #b45309)');
           aviso.querySelector('.ofs-ok').addEventListener('click', function () {
@@ -437,7 +434,8 @@
           });
         }
         function conferirEGravar(g) {
-          var paraGravar = linhasParaGravar(cliente, g);
+          x.escolhida = g;
+          var paraGravar = linhasDoPlano(plano);
           var iguais = paraGravar.filter(function (l) { return l.situacao === 'igual'; });
           var outras = paraGravar.filter(function (l) { return l.situacao === 'outra'; });
           var nome = (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + g.agrupa;

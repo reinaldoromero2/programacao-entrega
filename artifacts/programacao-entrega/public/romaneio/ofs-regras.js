@@ -39,74 +39,77 @@
     return lista;
   }
 
-  // agrupamentos possíveis para um cliente, do melhor para o pior:
-  // mais produtos do cliente com a mesma quantidade, depois a data mais perto do romaneio
-  function candidatos(cliente, linhas, dataRomaneio) {
+  // ---- escolha da ordem, produto por produto ----
+  // O sistema pode separar os produtos do mesmo cliente em agrupamentos diferentes (ex.: 2019 BOSCH
+  // CAMPINAS em 08/10: 2018-002/25 no 41885 e 2019-001/24 no 41886), então cada produto procura a
+  // própria ordem. Ordem das opções de um produto:
+  //   1. a data mais perto do romaneio (a de hoje vence a de ontem, mesmo com as mesmas OFs)
+  //   2. a mesma quantidade do romaneio
+  //   3. o agrupamento que também tem os outros produtos do cliente
+  //   4. no par Matriz/Filial do mesmo dia, a Filial (no histórico de set–out/2026, 22 de 28 pares
+  //      assim tinham a OF só na Filial e nenhum só na Matriz)
+  function opcoesDoItem(item, cliente, linhas, dataRomaneio) {
     var grupos = {};
     linhas.forEach(function (l) {
+      if (norm(l.codpro) !== norm(item.rp)) return;
       var k = l.empresa + '|' + l.agrupa;
       (grupos[k] = grupos[k] || { empresa: l.empresa, agrupa: l.agrupa, data: l.data, linhas: [] }).linhas.push(l);
     });
+    var outrosRps = cliente.itens.filter(function (i) { return i !== item; }).map(function (i) { return norm(i.rp); });
     var lista = Object.keys(grupos).map(function (k) {
-      var g = grupos[k], cobertos = 0, algum = 0;
-      cliente.itens.forEach(function (it) {
-        var doProduto = g.linhas.filter(function (l) { return norm(l.codpro) === norm(it.rp); });
-        if (!doProduto.length) return;
-        algum++;
-        var soma = doProduto.reduce(function (s, l) { return s + (Number(l.qtd) || 0); }, 0);
-        if (Math.abs(soma - it.qtd) < 0.001) cobertos++;
+      var g = grupos[k];
+      var soma = g.linhas.reduce(function (s, l) { return s + (Number(l.qtd) || 0); }, 0);
+      g.qtd = soma;
+      g.mesmaQtd = Math.abs(soma - item.qtd) < 0.001;
+      g.distancia = Math.round(diasEntre(g.data, dataRomaneio));
+      // quantos outros produtos do cliente estão no mesmo agrupamento
+      g.junto = 0;
+      outrosRps.forEach(function (rp) {
+        if (linhas.some(function (l) { return l.empresa === g.empresa && l.agrupa === g.agrupa && norm(l.codpro) === rp; })) g.junto++;
       });
-      g.cobertos = cobertos;
-      g.algum = algum;
-      g.distancia = diasEntre(g.data, dataRomaneio);
       return g;
-    }).filter(function (g) { return g.algum > 0; });
-    // mesmo produto e quantidade no mesmo dia na Matriz e na Filial: a OF vai na da Filial
-    // (no histórico de set–out/2026, 22 de 28 pares assim tinham a OF só na Filial e nenhum só na Matriz)
+    });
     lista.sort(function (a, b) {
-      return (b.cobertos - a.cobertos) || (a.distancia - b.distancia) ||
+      return (a.distancia - b.distancia) || ((b.mesmaQtd ? 1 : 0) - (a.mesmaQtd ? 1 : 0)) || (b.junto - a.junto) ||
         ((a.empresa === 'filial' ? 0 : 1) - (b.empresa === 'filial' ? 0 : 1)) || (Number(b.agrupa) - Number(a.agrupa));
     });
     return lista;
   }
 
-  // escolhe sozinho só quando não há dúvida: cobre todos os produtos, data até 3 dias do
-  // romaneio e nenhum outro agrupamento da mesma empresa empata (o par Matriz/Filial já se
-  // resolve pela Filial, na ordem acima)
-  function escolhaAutomatica(cliente, lista) {
+  // escolhe sozinho só sem dúvida: ordem do mesmo dia do romaneio (ou do dia anterior com a mesma
+  // quantidade) e nenhuma outra da mesma empresa empatada em tudo
+  function escolhaDoItem(lista) {
     var top = lista[0];
-    if (top && top.cobertos === cliente.itens.length && top.distancia <= 3) {
-      var empata = function (g) { return g && g.cobertos === top.cobertos && Math.abs(g.distancia - top.distancia) < 1; };
-      var duvida = lista.slice(1).some(function (g) { return empata(g) && g.empresa === top.empresa; });
-      return duvida ? null : top;
-    }
-    // quantidade do romaneio diferente da ordem (ex.: carregou menos que o programado): vale a ordem
-    // com todos os produtos do cliente no dia do romaneio (até 1 dia), se for a única — no par
-    // Matriz/Filial do mesmo dia, a Filial (a lista já vem com a Filial na frente)
-    var perto = lista.filter(function (g) { return g.algum === cliente.itens.length && g.distancia <= 1; });
-    perto.sort(function (a, b) {
-      return (a.distancia - b.distancia) || ((a.empresa === 'filial' ? 0 : 1) - (b.empresa === 'filial' ? 0 : 1));
+    if (!top) return null;
+    if (!(top.distancia === 0 || (top.distancia <= 1 && top.mesmaQtd))) return null;
+    var duvida = lista.slice(1).some(function (g) {
+      return g.empresa === top.empresa && g.distancia === top.distancia && g.mesmaQtd === top.mesmaQtd && g.junto === top.junto;
     });
-    var escolhida = perto[0];
-    if (!escolhida) return null;
-    // dúvida só com outra ordem da mesma empresa no mesmo dia (a do dia anterior perde para a de hoje)
-    var outra = perto.slice(1).some(function (g) { return g.empresa === escolhida.empresa && Math.abs(g.distancia - escolhida.distancia) < 1; });
-    return outra ? null : escolhida;
+    return duvida ? null : top;
   }
 
-  // linhas a gravar quando o cliente usa o agrupamento g
-  function linhasParaGravar(cliente, g) {
-    var porLinha = {};
-    cliente.itens.forEach(function (it) {
-      if (!it.ofs.length) return;
+  // plano de um cliente: para cada produto, as opções e a escolhida (null = precisa de alguém escolher)
+  function planejar(cliente, linhas, dataRomaneio) {
+    var itens = cliente.itens.map(function (item) {
+      var opcoes = opcoesDoItem(item, cliente, linhas, dataRomaneio);
+      return { item: item, opcoes: opcoes, escolhida: escolhaDoItem(opcoes) };
+    });
+    return { itens: itens, completo: itens.every(function (x) { return !!x.escolhida || !x.item.ofs.length; }) };
+  }
+
+  // linhas a gravar com as escolhas do plano (só produtos com OF e com ordem escolhida)
+  function linhasDoPlano(plano) {
+    var porLinha = {}, ordem = [];
+    plano.itens.forEach(function (x) {
+      var g = x.escolhida, it = x.item;
+      if (!g || !it.ofs.length) return;
       g.linhas.forEach(function (l) {
-        if (norm(l.codpro) !== norm(it.rp)) return;
         var k = [l.empresa, l.agrupa, l.codigo, l.codpro, l.pedido].join('|');
-        var r = porLinha[k] = porLinha[k] || { chave: k, empresa: l.empresa, agrupa: l.agrupa, codigo: l.codigo, codpro: l.codpro, pedido: l.pedido, antes: l.infadc || '', ofs: [] };
-        it.ofs.forEach(function (o) { if (r.ofs.indexOf(o) < 0) r.ofs.push(o); });
+        if (!porLinha[k]) { porLinha[k] = { chave: k, empresa: l.empresa, agrupa: l.agrupa, codigo: l.codigo, codpro: l.codpro, pedido: l.pedido, data: l.data, antes: l.infadc || '', ofs: [] }; ordem.push(k); }
+        it.ofs.forEach(function (o) { if (porLinha[k].ofs.indexOf(o) < 0) porLinha[k].ofs.push(o); });
       });
     });
-    return Object.keys(porLinha).map(function (k) {
+    return ordem.map(function (k) {
       var r = porLinha[k];
       r.novo = textoOfs(r.ofs);
       r.situacao = !r.antes ? 'vazia' : mesmoTexto(r.antes, r.novo) ? 'igual' : 'outra';
@@ -114,5 +117,5 @@
     });
   }
 
-  return { norm, dataBr, diasEntre, ofsDoTexto, textoOfs, mesmoTexto, clientesDoRomaneio, candidatos, escolhaAutomatica, linhasParaGravar };
+  return { norm, dataBr, diasEntre, ofsDoTexto, textoOfs, mesmoTexto, clientesDoRomaneio, planejar, linhasDoPlano };
 });

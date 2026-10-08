@@ -17,7 +17,7 @@ function carregarRegras() {
     try {
       const m = { exports: {} };
       new Function('module', 'exports', fs.readFileSync(c, 'utf8')).call({}, m, m.exports);
-      if (m.exports && m.exports.candidatos) return m.exports;
+      if (m.exports && m.exports.planejar) return m.exports;
     } catch { /* tenta o próximo */ }
   }
   return null;
@@ -77,10 +77,10 @@ function criarOfsAuto({ rodarOfsOracle, pastaDados, simular = false }) {
     const paraGravar = [];
     let completo = true;
     for (const c of clientes) {
-      const rps = c.itens.map((i) => R.norm(i.rp));
-      const g = R.escolhaAutomatica(c, R.candidatos(c, linhas.filter((l) => rps.includes(R.norm(l.codpro))), dataRomaneio));
-      if (!g) { completo = false; continue; } // dúvida ou OS ainda não emitida
-      for (const l of R.linhasParaGravar(c, g)) {
+      // produto por produto (o sistema pode separar os produtos do cliente em agrupamentos diferentes)
+      const plano = R.planejar(c, linhas, dataRomaneio);
+      if (!plano.completo) completo = false; // algum produto com dúvida ou OS ainda não emitida
+      for (const l of R.linhasDoPlano(plano)) {
         if (l.situacao === 'vazia') paraGravar.push(l);
         else if (l.situacao === 'outra') completo = false; // já tem outro texto: só pela tela, com alguém olhando
       }
