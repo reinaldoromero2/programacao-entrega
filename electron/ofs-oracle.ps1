@@ -72,7 +72,8 @@ if ($entrada.acao -eq 'buscar') {
         foreach ($g in $agrupas) { [void]$cmd.Parameters.AddWithValue('g', [decimal]$g) }
       }
       if (-not $condicoes.Count) { continue }
-      $cmd.CommandText = "SELECT O.ORD_AGRUPA, O.ORD_CODIGO, O.ORD_STATUS, TO_CHAR(O.ORD_DTEMIS, 'YYYY-MM-DD'), O.ORD_CODPRO, O.ORD_QTDENV, O.ORD_NUMPED, O.ORD_INFADC FROM $u.F_ORDEMSEP O WHERE " + ($condicoes -join ' OR ')
+      # quantidade: a enviada; com a OS ainda em coleta (status C) ela é 0 e vale a programada
+      $cmd.CommandText = "SELECT O.ORD_AGRUPA, O.ORD_CODIGO, O.ORD_STATUS, TO_CHAR(O.ORD_DTEMIS, 'YYYY-MM-DD'), O.ORD_CODPRO, CASE WHEN NVL(O.ORD_QTDENV, 0) > 0 THEN O.ORD_QTDENV ELSE O.ORD_QTPROG END, O.ORD_NUMPED, O.ORD_INFADC FROM $u.F_ORDEMSEP O WHERE " + ($condicoes -join ' OR ')
       $r = $cmd.ExecuteReader()
       while ($r.Read()) {
         $saida.linhas += [pscustomobject]@{
