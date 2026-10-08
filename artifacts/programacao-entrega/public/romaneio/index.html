@@ -16937,12 +16937,6 @@ var SIGNATURES = {
       btn.style.cssText += 'flex:0 0 auto;';
       topRow.appendChild(btn);
     });
-    // "Lançar OFs" no sistema (só no app do PC, ver ofs-oracle.js)
-    if (window.ripackOfs){
-      var ofsBtn = window.ripackOfs.botao(doc.id, d, dbApi, currentSessionNome);
-      ofsBtn.style.cssText += 'flex:0 0 auto;';
-      topRow.appendChild(ofsBtn);
-    }
     // botão amarelo "N" — aparece em TODOS os romaneios finalizados (não só
     // nos de clientes cadastrados no Nathan, já que ele pode acompanhar uma
     // carga fora do padrão dele); some sozinho depois que todo cliente do
