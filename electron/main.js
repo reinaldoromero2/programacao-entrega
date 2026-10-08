@@ -155,6 +155,52 @@ async function rodarRqc008() {
 // botão "📗 Atualizar RQ C 008" dentro do app: roda o script e devolve o resultado
 ipcMain.handle('rodar-rqc008', () => rodarRqc008());
 
+// Lançar OFs no sistema (Oracle), a partir do Romaneio: o mesmo das planilhas "Inclusor da OF".
+// O script vai como -EncodedCommand (dentro do app instalado ele fica no pacote .asar, que o
+// PowerShell não abre) e roda no PowerShell 32 bits, como a conexão Oracle destes PCs.
+const OFS_SCRIPT = path.join(__dirname, 'ofs-oracle.ps1');
+const OFS_TEMPO = 120 * 1000;
+
+function rodarOfsOracle(entrada) {
+  return new Promise((resolve) => {
+    let script;
+    try {
+      script = fs.readFileSync(OFS_SCRIPT, 'utf8').replace(/^\uFEFF/, '');
+    } catch {
+      resolve({ ok: false, erros: ['Script do lançamento de OFs não encontrado no app.'] });
+      return;
+    }
+    const ps32 = path.join(process.env.WINDIR || 'C:\\Windows', 'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const exe = fs.existsSync(ps32) ? ps32 : 'powershell.exe';
+    const child = spawn(exe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
+      windowsHide: true,
+      env: { ...process.env, RIPACK_OFS_ENTRADA: Buffer.from(JSON.stringify(entrada), 'utf8').toString('base64') },
+    });
+    let saida = '';
+    let erro = '';
+    child.stdout.on('data', (d) => { saida += d.toString('utf8'); });
+    child.stderr.on('data', (d) => { erro += d.toString('utf8'); });
+    const timer = setTimeout(() => child.kill(), OFS_TEMPO);
+    child.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, erros: [e.message] }); });
+    child.on('exit', () => {
+      clearTimeout(timer);
+      const json = saida.trim().split(/\r?\n/).reverse().find((l) => l.startsWith('{'));
+      try {
+        resolve(JSON.parse(json));
+      } catch {
+        resolve({ ok: false, erros: [(erro || saida || 'Sem resposta do Oracle.').trim().slice(0, 500)] });
+      }
+    });
+  });
+}
+
+// a conexão vem das planilhas do Inclusor: sem elas (PC sem o L:), o botão nem aparece
+const OFS_PLANILHA = 'L:\\01 - Inclusor de OF\\Inclusor da OF na NOTA FISCAL - Matriz.xlsm';
+ipcMain.handle('ofs-oracle', (_evento, entrada) => {
+  if (entrada && entrada.acao === 'disponivel') return { ok: fs.existsSync(OFS_PLANILHA) };
+  return rodarOfsOracle(entrada);
+});
+
 // O Romaneio roda num iframe da janela principal (rota #/romaneio). Pedidos de nova janela
 // dele chegam aqui: o botão "📗 Atualizar RQ C 008" roda o script e o app envia a planilha.
 function tratarNovaJanela(win, { url }) {

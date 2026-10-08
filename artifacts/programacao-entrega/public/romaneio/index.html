@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Romaneio">
 <script src="romaneio-host.js"></script>
+<script src="ofs-oracle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js"></script>
@@ -16413,6 +16414,8 @@ var SIGNATURES = {
     viewBtnPend.addEventListener('click', function(){ previewRomaneioFromDoc(d, pendStatusEl); });
     btnWrap.appendChild(viewBtnPend);
     cfBotoesDesenho(d, false, doc.id).forEach(function(btn){ btnWrap.appendChild(btn); });
+    // "Lançar OFs" no sistema (só no app do PC, ver ofs-oracle.js)
+    if (window.ripackOfs) btnWrap.appendChild(window.ripackOfs.botao(doc.id, d, dbApi, currentSessionNome));
     if (!carregando && podeIniciarCarregamento()){
       var startBtn = document.createElement('button');
       startBtn.type = 'button';
@@ -16933,6 +16936,12 @@ var SIGNATURES = {
       btn.style.cssText += 'flex:0 0 auto;';
       topRow.appendChild(btn);
     });
+    // "Lançar OFs" no sistema (só no app do PC, ver ofs-oracle.js)
+    if (window.ripackOfs){
+      var ofsBtn = window.ripackOfs.botao(doc.id, d, dbApi, currentSessionNome);
+      ofsBtn.style.cssText += 'flex:0 0 auto;';
+      topRow.appendChild(ofsBtn);
+    }
     // botão amarelo "N" — aparece em TODOS os romaneios finalizados (não só
     // nos de clientes cadastrados no Nathan, já que ele pode acompanhar uma
     // carga fora do padrão dele); some sozinho depois que todo cliente do

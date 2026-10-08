@@ -147,6 +147,19 @@ export function RomaneioFrame() {
         ir(ROMANEIO_ROTA);
       }
       if (ev.data?.ripack === "entregas-mudaram") queryClient.invalidateQueries();
+      // "Lançar OFs" do Romaneio: o Oracle só é alcançado pelo app do PC (Electron)
+      if (ev.data?.ripack === "ofs-oracle") {
+        const responder = (resultado: unknown) =>
+          iframeRef.current?.contentWindow?.postMessage({ ripack: "ofs-oracle-resultado", id: ev.data.id, resultado }, "*");
+        const ipc = (window as any)?.require?.("electron")?.ipcRenderer;
+        if (!ipc) {
+          responder({ ok: false, erros: ["Só o app do computador lança OFs no sistema."] });
+          return;
+        }
+        ipc.invoke("ofs-oracle", ev.data.entrada)
+          .then(responder)
+          .catch((err: unknown) => responder({ ok: false, erros: [err instanceof Error ? err.message : "Falha ao falar com o sistema."] }));
+      }
       // "Copiar imagem" do Romaneio: o navegador recusou, então o app copia direto (Electron)
       if (ev.data?.ripack === "copiar-imagem") {
         const responder = (ok: boolean, erro?: string) =>
