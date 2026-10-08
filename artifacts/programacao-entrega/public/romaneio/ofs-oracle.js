@@ -369,6 +369,7 @@
     var aviso = document.createElement('div');
     aviso.style.cssText = 'font-size:11px; margin-top:3px; line-height:1.35;';
     caixa.parentNode.insertBefore(aviso, caixa.nextSibling);
+    input._ofsAviso = aviso;
     var mostrar = function () { btn.hidden = !disponivel; if (!disponivel) aviso.innerHTML = ''; };
     if (disponivel === null) { btn.hidden = true; aoSaberDisponivel.push(mostrar); } else mostrar();
 
@@ -460,6 +461,85 @@
       });
     });
   }
+
+  // ---- aviso ao enviar o romaneio com OF digitada e não gravada no sistema ----
+  function ofsNaoGravadas() {
+    var lista = [];
+    document.querySelectorAll('.item-row .ofobs-input[data-ofs]').forEach(function (input) {
+      var ofs = ofsDoTexto(input.value);
+      if (!ofs.length || !input._ofsAviso || input._ofsAviso.getAttribute('data-gravado') === input.value) return;
+      var row = input.closest('.item-row');
+      lista.push({ rp: ((row && row.querySelector('.rp-input')) || {}).value || '', ofs: ofs, input: input });
+    });
+    return lista;
+  }
+  var liberado = false, avisoEnvio = null;
+  function perguntarAntesDeEnviar(botaoEnviar, lista) {
+    if (!avisoEnvio) {
+      avisoEnvio = document.createElement('div');
+      avisoEnvio.className = 'rom-modal-overlay';
+      avisoEnvio.style.zIndex = '220';
+      avisoEnvio.hidden = true;
+      document.body.appendChild(avisoEnvio);
+    }
+    var seguir = function () {
+      avisoEnvio.hidden = true;
+      liberado = true;
+      try { botaoEnviar.click(); } finally { liberado = false; }
+    };
+    avisoEnvio.innerHTML =
+      '<div class="rom-modal-card" style="max-width:440px;"><div style="padding:18px;" class="foot-note">Conferindo as OFs no sistema…</div></div>';
+    avisoEnvio.hidden = false;
+    // a OF pode já estar no sistema (lançada antes, pela planilha ou por outro PC): essas não entram no aviso
+    var codpros = [];
+    lista.forEach(function (x) { if (x.rp && codpros.indexOf(x.rp) < 0) codpros.push(x.rp); });
+    oracle({ acao: 'buscar', codpros: codpros, agrupas: [], dias: 10 }).then(function (r) {
+      var linhas = (r && r.linhas) || [];
+      var hoje = new Date().toISOString().slice(0, 10);
+      lista = lista.filter(function (x) {
+        var row = x.input.closest('.item-row');
+        var qtd = parseFloat(String(((row && row.querySelector('.qtd-input')) || {}).value || '').replace(/\./g, '').replace(',', '.')) || 0;
+        var cliente = { nome: '', itens: [{ rp: x.rp, qtd: qtd, ofs: x.ofs }] };
+        var g = escolhaAutomatica(cliente, candidatos(cliente, linhas.filter(function (l) { return norm(l.codpro) === norm(x.rp); }), hoje));
+        var jaEsta = g && linhasParaGravar(cliente, g).every(function (l) { return l.situacao === 'igual'; });
+        if (jaEsta) {
+          x.input._ofsAviso.setAttribute('data-gravado', x.input.value);
+          x.input._ofsAviso.innerHTML = '✔ Já está no sistema (' + (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + esc(g.agrupa) + ').';
+          x.input._ofsAviso.style.color = 'var(--good)';
+        }
+        return !jaEsta;
+      });
+      if (!lista.length) return seguir();
+      mostrar();
+    });
+    function mostrar() {
+    avisoEnvio.innerHTML =
+      '<div class="rom-modal-card" style="max-width:440px;">' +
+        '<div class="rom-modal-head"><h3>OF não gravada no sistema</h3></div>' +
+        '<div style="padding:14px 18px; display:flex; flex-direction:column; gap:10px;">' +
+          '<p class="foot-note" style="margin:0;">Estas OFs estão só no romaneio — ainda não foram gravadas no sistema (Inclusor de OF):</p>' +
+          '<div class="foot-note" style="margin:0; font-family:monospace;">' + lista.map(function (x) { return esc(x.rp) + ' — OF ' + esc(x.ofs.join(', ')); }).join('<br>') + '</div>' +
+          '<button type="button" class="add-btn btn-destaque-branco wiz-choice-btn ofs-voltar">Voltar e gravar (botão ⇪ de cada linha)</button>' +
+          '<button type="button" class="add-btn btn-destaque-verde wiz-choice-btn ofs-so-romaneio">Só salvar no romaneio</button>' +
+        '</div>' +
+      '</div>';
+    avisoEnvio.hidden = false;
+    avisoEnvio.querySelector('.ofs-voltar').addEventListener('click', function () {
+      avisoEnvio.hidden = true;
+      try { lista[0].input.focus(); } catch (e) {}
+    });
+    avisoEnvio.querySelector('.ofs-so-romaneio').addEventListener('click', seguir);
+    }
+  }
+  document.addEventListener('click', function (ev) {
+    var alvo = ev.target && ev.target.closest && ev.target.closest('#enviar-assinatura');
+    if (!alvo || liberado || !disponivel) return;
+    var lista = ofsNaoGravadas();
+    if (!lista.length) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    perguntarAntesDeEnviar(alvo, lista);
+  }, true);
 
   // linhas da calculadora: as que já existem e as que forem criadas
   function vigiarCalculadora() {
