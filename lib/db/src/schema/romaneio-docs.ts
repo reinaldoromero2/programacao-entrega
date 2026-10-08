@@ -16,3 +16,11 @@ export const romaneioDocsTable = pgTable("romaneio_docs", {
 ]);
 
 export type RomaneioDoc = typeof romaneioDocsTable.$inferSelect;
+
+// Imagens do Romaneio (assinatura, desenho da carga) guardadas uma vez cada, pelo hash do
+// conteúdo; os documentos levam só "ripack-arquivo:<hash>".
+export const romaneioArquivosTable = pgTable("romaneio_arquivos", {
+  hash: text("hash").primaryKey(),
+  conteudo: text("conteudo").notNull(),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});

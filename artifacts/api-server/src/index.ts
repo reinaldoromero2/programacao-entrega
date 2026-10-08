@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
+import { migrarArquivosAntigos } from "./routes/romaneio";
 
 const rawPort = process.env["PORT"];
 
@@ -49,6 +50,14 @@ async function assertSchema(): Promise<void> {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS romaneio_docs_seq_idx ON romaneio_docs (seq)`);
+    // imagens do Romaneio, guardadas uma vez cada (ver routes/romaneio.ts)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS romaneio_arquivos (
+        hash text PRIMARY KEY,
+        conteudo text NOT NULL,
+        criado_em timestamptz NOT NULL DEFAULT NOW()
+      )
+    `);
 
     const result = await client.query<{ table_name: string }>(
       `SELECT table_name
@@ -100,6 +109,9 @@ async function start(): Promise<void> {
         reject(err);
       } else {
         logger.info({ port }, "Server listening");
+        migrarArquivosAntigos()
+          .then((n) => { if (n) logger.info({ n }, "Imagens do Romaneio separadas dos documentos"); })
+          .catch((err) => logger.error({ err }, "Falha ao separar imagens do Romaneio"));
         resolve();
       }
     });

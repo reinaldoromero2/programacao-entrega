@@ -52,11 +52,58 @@
     return ms * (0.8 + Math.random() * 0.4); // espalha os aparelhos para não tentarem juntos
   }
 
+  // ---- imagens guardadas à parte ----
+  // O servidor tira assinatura e desenho da carga de dentro dos documentos e manda só
+  // "ripack-arquivo:<hash>" (?arq=1). Cada imagem é baixada uma vez e fica no cache do navegador
+  // para sempre (o conteúdo de um hash nunca muda); a página continua recebendo o "data:..." de antes.
+  var MARCA_ARQUIVO = /^ripack-arquivo:([0-9a-f]{64})$/;
+  var arquivos = {};
+  function lerArquivo(hash) {
+    if (!arquivos[hash]) {
+      arquivos[hash] = fetch(BASE + '/arquivos/' + hash).then(function (r) {
+        if (r.status === 404) return 'ripack-arquivo:' + hash; // não deve acontecer: fica a marca
+        if (!r.ok) throw erroHttp(r.status, null);
+        return r.text();
+      });
+      arquivos[hash].catch(function () { delete arquivos[hash]; });
+    }
+    return arquivos[hash];
+  }
+  function juntarMarcas(v, hashes) {
+    if (typeof v === 'string') { var m = MARCA_ARQUIVO.exec(v); if (m) hashes[m[1]] = true; return; }
+    if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { juntarMarcas(v[k], hashes); });
+  }
+  function trocarMarcas(v, conteudo) {
+    if (typeof v === 'string') { var m = MARCA_ARQUIVO.exec(v); return m ? conteudo[m[1]] : v; }
+    if (Array.isArray(v)) return v.map(function (x) { return trocarMarcas(x, conteudo); });
+    if (v && typeof v === 'object') {
+      var saida = {};
+      Object.keys(v).forEach(function (k) { saida[k] = trocarMarcas(v[k], conteudo); });
+      return saida;
+    }
+    return v;
+  }
+  // devolve a resposta (um doc ou {docs}) com as imagens no lugar das marcas
+  function hidratar(r) {
+    if (!r) return r;
+    var docs = r.docs || [r], hashes = {};
+    docs.forEach(function (d) { juntarMarcas(d.data, hashes); });
+    var lista = Object.keys(hashes);
+    if (!lista.length) return r;
+    return Promise.all(lista.map(lerArquivo)).then(function (textos) {
+      var conteudo = {};
+      lista.forEach(function (h, i) { conteudo[h] = textos[i]; });
+      docs.forEach(function (d) { d.data = trocarMarcas(d.data, conteudo); });
+      return r;
+    });
+  }
+
   // leitura: insiste enquanto o servidor estiver dormindo/fora (Render grátis demora ~1 min a acordar)
   function lerComInsistencia(caminho) {
     var tentativa = 0;
+    caminho += (caminho.indexOf('?') >= 0 ? '&' : '?') + 'arq=1';
     function vai() {
-      return http('GET', caminho).catch(function (e) {
+      return http('GET', caminho).then(hidratar).catch(function (e) {
         if (e.status && e.status < 500 && e.status !== 429) throw e;
         tentativa++;
         return esperar(esperaDaTentativa(tentativa, e)).then(vai);

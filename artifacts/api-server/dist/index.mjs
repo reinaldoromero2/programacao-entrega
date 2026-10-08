@@ -94957,6 +94957,7 @@ __export(schema_exports, {
   lembretesTable: () => lembretesTable,
   motivosCancelamentoTable: () => motivosCancelamentoTable,
   motoristasTable: () => motoristasTable,
+  romaneioArquivosTable: () => romaneioArquivosTable,
   romaneioDocsTable: () => romaneioDocsTable
 });
 
@@ -106428,6 +106429,11 @@ var romaneioDocsTable = pgTable("romaneio_docs", {
   primaryKey({ columns: [table.collection, table.id] }),
   index("romaneio_docs_seq_idx").on(table.seq)
 ]);
+var romaneioArquivosTable = pgTable("romaneio_arquivos", {
+  hash: text("hash").primaryKey(),
+  conteudo: text("conteudo").notNull(),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow()
+});
 
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
@@ -106445,7 +106451,7 @@ router.get("/ping", (_req, res) => {
   res.json({ status: "ok" });
 });
 router.get("/healthz", (_req, res) => {
-  res.status(200).json({ status: "ok", db: "not_checked", release: "dev-cd35659" });
+  res.status(200).json({ status: "ok", db: "not_checked", release: "dev-c5ede64" });
 });
 router.get("/readyz", async (_req, res) => {
   let db2 = "error";
@@ -106462,7 +106468,7 @@ router.get("/readyz", async (_req, res) => {
   const status = db2 === "ok" ? "ok" : "degraded";
   const data = HealthCheckResponse.parse({ status });
   const httpStatus = db2 === "ok" ? 200 : 503;
-  res.status(httpStatus).json({ ...data, db: db2, release: "dev-cd35659" });
+  res.status(httpStatus).json({ ...data, db: db2, release: "dev-c5ede64" });
 });
 var health_default = router;
 
@@ -107321,7 +107327,7 @@ var lembretes_default = router7;
 // src/routes/romaneio.ts
 var import_express8 = __toESM(require_express2(), 1);
 import { EventEmitter } from "node:events";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 var router8 = (0, import_express8.Router)();
 var NOME = /^[A-Za-z0-9_\-.~:@+]{1,200}$/;
 var LIMITE_MAX = 5e3;
@@ -107335,11 +107341,153 @@ function nomeValido(valor) {
 function dadosValidos(valor) {
   return typeof valor === "object" && valor !== null && !Array.isArray(valor);
 }
+var MARCA = "ripack-arquivo:";
+var TAMANHO_MIN_ARQUIVO = 2048;
+var MARCA_VALIDA = /^ripack-arquivo:[0-9a-f]{64}$/;
+var HASH_VALIDO = /^[0-9a-f]{64}$/;
+var CACHE_ARQUIVOS_MAX = 64 * 1024 * 1024;
+var cacheArquivos = /* @__PURE__ */ new Map();
+var cacheArquivosBytes = 0;
+function guardarNoCache(hash, conteudo) {
+  if (cacheArquivos.has(hash)) return;
+  cacheArquivos.set(hash, conteudo);
+  cacheArquivosBytes += conteudo.length;
+  for (const [h, c] of cacheArquivos) {
+    if (cacheArquivosBytes <= CACHE_ARQUIVOS_MAX) break;
+    cacheArquivos.delete(h);
+    cacheArquivosBytes -= c.length;
+  }
+}
+function lerDoCache(hash) {
+  const c = cacheArquivos.get(hash);
+  if (c !== void 0) {
+    cacheArquivos.delete(hash);
+    cacheArquivos.set(hash, c);
+  }
+  return c;
+}
+function separarArquivos(valor, arquivos) {
+  if (typeof valor === "string") {
+    if (valor.length < TAMANHO_MIN_ARQUIVO || !valor.startsWith("data:")) return valor;
+    const hash = createHash("sha256").update(valor).digest("hex");
+    arquivos.set(hash, valor);
+    return MARCA + hash;
+  }
+  if (Array.isArray(valor)) return valor.map((v) => separarArquivos(v, arquivos));
+  if (valor && typeof valor === "object") {
+    const saida = {};
+    for (const [k, v] of Object.entries(valor)) saida[k] = separarArquivos(v, arquivos);
+    return saida;
+  }
+  return valor;
+}
+async function gravarArquivos(arquivos) {
+  for (const [hash, conteudo] of arquivos) {
+    if (cacheArquivos.has(hash)) continue;
+    await pool.query(
+      `INSERT INTO romaneio_arquivos (hash, conteudo) VALUES ($1, $2) ON CONFLICT (hash) DO NOTHING`,
+      [hash, conteudo]
+    );
+    guardarNoCache(hash, conteudo);
+  }
+}
+async function lerArquivos(hashes) {
+  const achados = /* @__PURE__ */ new Map();
+  const faltam = [];
+  for (const h of hashes) {
+    const c = lerDoCache(h);
+    if (c !== void 0) achados.set(h, c);
+    else faltam.push(h);
+  }
+  if (faltam.length) {
+    const result = await pool.query(
+      `SELECT hash, conteudo FROM romaneio_arquivos WHERE hash = ANY($1::text[])`,
+      [faltam]
+    );
+    for (const r of result.rows) {
+      achados.set(r.hash, r.conteudo);
+      guardarNoCache(r.hash, r.conteudo);
+    }
+  }
+  return achados;
+}
+function juntarMarcas(valor, hashes) {
+  if (typeof valor === "string") {
+    if (MARCA_VALIDA.test(valor)) hashes.add(valor.slice(MARCA.length));
+    return;
+  }
+  if (valor && typeof valor === "object") for (const v of Object.values(valor)) juntarMarcas(v, hashes);
+}
+function trocarMarcas(valor, arquivos) {
+  if (typeof valor === "string") return MARCA_VALIDA.test(valor) ? arquivos.get(valor.slice(MARCA.length)) ?? valor : valor;
+  if (Array.isArray(valor)) return valor.map((v) => trocarMarcas(v, arquivos));
+  if (valor && typeof valor === "object") {
+    const saida = {};
+    for (const [k, v] of Object.entries(valor)) saida[k] = trocarMarcas(v, arquivos);
+    return saida;
+  }
+  return valor;
+}
+async function remontar(docs) {
+  const hashes = /* @__PURE__ */ new Set();
+  for (const d of docs) juntarMarcas(d.data, hashes);
+  if (!hashes.size) return docs;
+  const arquivos = await lerArquivos([...hashes]);
+  return docs.map((d) => ({ ...d, data: trocarMarcas(d.data, arquivos) }));
+}
+async function migrarArquivosAntigos() {
+  const ids = await pool.query(
+    `SELECT collection, id FROM romaneio_docs WHERE NOT deleted AND strpos(data::text, '"data:') > 0`
+  );
+  let migrados = 0;
+  for (const { collection, id } of ids.rows) {
+    const r = await pool.query(
+      `SELECT data FROM romaneio_docs WHERE collection = $1 AND id = $2`,
+      [collection, id]
+    );
+    if (!r.rowCount) continue;
+    const arquivos = /* @__PURE__ */ new Map();
+    const data = separarArquivos(r.rows[0].data, arquivos);
+    if (!arquivos.size) continue;
+    await gravarArquivos(arquivos);
+    await pool.query(
+      `UPDATE romaneio_docs SET data = $3::jsonb WHERE collection = $1 AND id = $2 AND data = $4::jsonb`,
+      [collection, id, JSON.stringify(data), JSON.stringify(r.rows[0].data)]
+    );
+    migrados++;
+  }
+  return migrados;
+}
+var CONFERE_SEQ_MS = 5 * 6e4;
+var ultimaSeq = -1;
+var seqConferidaEm = 0;
+var conferindoSeq = null;
+function anotarSeq(seq) {
+  if (seq > ultimaSeq) ultimaSeq = seq;
+  avisos.emit("mudou");
+}
+async function seqAtual() {
+  if (ultimaSeq >= 0 && Date.now() - seqConferidaEm < CONFERE_SEQ_MS) return ultimaSeq;
+  if (!conferindoSeq) {
+    conferindoSeq = pool.query(`SELECT MAX(seq) AS seq FROM romaneio_docs`).then((r) => {
+      const seq = Number(r.rows[0].seq ?? 0);
+      if (seq > ultimaSeq) ultimaSeq = seq;
+      seqConferidaEm = Date.now();
+      return ultimaSeq;
+    }).finally(() => {
+      conferindoSeq = null;
+    });
+  }
+  return conferindoSeq;
+}
 function novoId() {
   const letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   return Array.from(randomBytes(20), (b) => letras[b % letras.length]).join("");
 }
-async function gravar(collection, id, data) {
+async function gravar(collection, id, recebido) {
+  const arquivos = /* @__PURE__ */ new Map();
+  const data = separarArquivos(recebido, arquivos);
+  await gravarArquivos(arquivos);
   const result = await pool.query(
     `INSERT INTO romaneio_docs (collection, id, data, seq, deleted, updated_at)
      VALUES ($1, $2, $3::jsonb, nextval('romaneio_docs_seq_gen'), false, NOW())
@@ -107348,8 +107496,9 @@ async function gravar(collection, id, data) {
      RETURNING seq`,
     [collection, id, JSON.stringify(data)]
   );
-  avisos.emit("mudou");
-  return Number(result.rows[0].seq);
+  const seq = Number(result.rows[0].seq);
+  anotarSeq(seq);
+  return seq;
 }
 router8.get("/romaneio/docs/:col", async (req, res) => {
   const col = req.params.col;
@@ -107382,7 +107531,7 @@ router8.get("/romaneio/docs/:col", async (req, res) => {
   params.push(limit);
   sql2 += ` LIMIT $${params.length}`;
   const result = await pool.query(sql2, params);
-  res.json({ docs: result.rows });
+  res.json({ docs: req.query["arq"] === "1" ? result.rows : await remontar(result.rows) });
 });
 router8.get("/romaneio/docs/:col/:id", async (req, res) => {
   const { col, id } = req.params;
@@ -107398,7 +107547,22 @@ router8.get("/romaneio/docs/:col/:id", async (req, res) => {
     res.status(404).json({ error: "Documento n\xE3o encontrado" });
     return;
   }
-  res.json({ id, data: result.rows[0].data });
+  const doc = { id, data: result.rows[0].data };
+  res.json(req.query["arq"] === "1" ? doc : (await remontar([doc]))[0]);
+});
+router8.get("/romaneio/arquivos/:hash", async (req, res) => {
+  const hash = req.params.hash;
+  if (!HASH_VALIDO.test(hash)) {
+    res.status(400).json({ error: "Arquivo inv\xE1lido" });
+    return;
+  }
+  const conteudo = (await lerArquivos([hash])).get(hash);
+  if (conteudo === void 0) {
+    res.status(404).json({ error: "Arquivo n\xE3o encontrado" });
+    return;
+  }
+  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.type("text/plain").send(conteudo);
 });
 router8.post("/romaneio/docs/:col", async (req, res) => {
   const col = req.params.col;
@@ -107428,19 +107592,23 @@ router8.patch("/romaneio/docs/:col/:id", async (req, res) => {
     res.status(400).json({ error: "Cole\xE7\xE3o, id ou dados inv\xE1lidos" });
     return;
   }
+  const arquivos = /* @__PURE__ */ new Map();
+  const campos = separarArquivos(data, arquivos);
+  await gravarArquivos(arquivos);
   const result = await pool.query(
     `UPDATE romaneio_docs
         SET data = data || $3::jsonb, seq = nextval('romaneio_docs_seq_gen'), updated_at = NOW()
       WHERE collection = $1 AND id = $2 AND NOT deleted
       RETURNING seq`,
-    [col, id, JSON.stringify(data)]
+    [col, id, JSON.stringify(campos)]
   );
   if (result.rowCount === 0) {
     res.status(404).json({ error: "Documento n\xE3o encontrado" });
     return;
   }
-  avisos.emit("mudou");
-  res.json({ id, seq: Number(result.rows[0].seq) });
+  const seq = Number(result.rows[0].seq);
+  anotarSeq(seq);
+  res.json({ id, seq });
 });
 router8.delete("/romaneio/docs/:col/:id", async (req, res) => {
   const { col, id } = req.params;
@@ -107451,17 +107619,17 @@ router8.delete("/romaneio/docs/:col/:id", async (req, res) => {
   const result = await pool.query(
     `UPDATE romaneio_docs
         SET deleted = true, data = '{}'::jsonb, seq = nextval('romaneio_docs_seq_gen'), updated_at = NOW()
-      WHERE collection = $1 AND id = $2 AND NOT deleted`,
+      WHERE collection = $1 AND id = $2 AND NOT deleted
+      RETURNING seq`,
     [col, id]
   );
-  if (result.rowCount) avisos.emit("mudou");
+  if (result.rowCount) anotarSeq(Number(result.rows[0].seq));
   res.sendStatus(204);
 });
 router8.get("/romaneio/changes", async (req, res) => {
   const since = Number(req.query["since"]);
   if (!Number.isFinite(since) || since < 0) {
-    const atual = await pool.query(`SELECT MAX(seq) AS seq FROM romaneio_docs`);
-    res.json({ seq: Number(atual.rows[0].seq ?? 0), changes: [] });
+    res.json({ seq: await seqAtual(), changes: [] });
     return;
   }
   let aberto = true;
@@ -107470,6 +107638,14 @@ router8.get("/romaneio/changes", async (req, res) => {
   });
   const fim = Date.now() + ESPERA_MAX_MS;
   while (aberto) {
+    if (await seqAtual() <= since) {
+      if (Date.now() >= fim) {
+        res.json({ seq: since, changes: [] });
+        return;
+      }
+      await esperarAviso(fim);
+      continue;
+    }
     const result = await pool.query(
       `SELECT collection, id, deleted, seq FROM romaneio_docs WHERE seq > $1 ORDER BY seq LIMIT 1000`,
       [since]
@@ -107482,17 +107658,20 @@ router8.get("/romaneio/changes", async (req, res) => {
       });
       return;
     }
-    await new Promise((resolve) => {
-      const timer = setTimeout(acordar, Math.min(VERIFICA_MS, fim - Date.now()));
-      function acordar() {
-        clearTimeout(timer);
-        avisos.off("mudou", acordar);
-        resolve();
-      }
-      avisos.on("mudou", acordar);
-    });
+    await esperarAviso(fim);
   }
 });
+function esperarAviso(fim) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(acordar, Math.max(0, Math.min(VERIFICA_MS, fim - Date.now())));
+    function acordar() {
+      clearTimeout(timer);
+      avisos.off("mudou", acordar);
+      resolve();
+    }
+    avisos.on("mudou", acordar);
+  });
+}
 var romaneio_default = router8;
 
 // src/routes/index.ts
@@ -107623,6 +107802,13 @@ async function assertSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS romaneio_docs_seq_idx ON romaneio_docs (seq)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS romaneio_arquivos (
+        hash text PRIMARY KEY,
+        conteudo text NOT NULL,
+        criado_em timestamptz NOT NULL DEFAULT NOW()
+      )
+    `);
     const result = await client.query(
       `SELECT table_name
          FROM information_schema.tables
@@ -107665,6 +107851,9 @@ async function start() {
         reject(err);
       } else {
         logger.info({ port }, "Server listening");
+        migrarArquivosAntigos().then((n) => {
+          if (n) logger.info({ n }, "Imagens do Romaneio separadas dos documentos");
+        }).catch((err2) => logger.error({ err: err2 }, "Falha ao separar imagens do Romaneio"));
         resolve();
       }
     });
