@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { rqc008Disponivel, sincronizarRqc008 } from "@/lib/rqc008-sync";
+import { marcarServidorOk } from "@workspace/api-client-react";
 
 // Três telas lado a lado:  [ Romaneio ]  ‹  [ Programação de Entrega ]  ›  [ Programação RQ C 008 ]
 // As duas laterais usam a mesma página do Romaneio (um iframe só): pela direita ela entra com a
@@ -146,7 +147,12 @@ export function RomaneioFrame() {
       if (ev.data?.ripack === "grade-virou-romaneio" && window.location.hash.replace(/^#/, "") === PROGRAMACAO_ROTA) {
         ir(ROMANEIO_ROTA);
       }
-      if (ev.data?.ripack === "entregas-mudaram") queryClient.invalidateQueries();
+      // a grade acabou de gravar entregas no servidor: ele está no ar — sai do modo offline (senão a
+      // tela mostrava a cópia local, de antes da inclusão, como se as entregas tivessem sumido)
+      if (ev.data?.ripack === "entregas-mudaram") {
+        marcarServidorOk();
+        queryClient.invalidateQueries();
+      }
       // "Lançar OFs" do Romaneio: o Oracle só é alcançado pelo app do PC (Electron)
       if (ev.data?.ripack === "ofs-oracle") {
         const responder = (resultado: unknown) =>

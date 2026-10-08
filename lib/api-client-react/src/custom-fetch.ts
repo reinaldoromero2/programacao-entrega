@@ -127,12 +127,33 @@ function servidorMarcadoFora(): boolean {
   try { return Date.now() < Number(localStorage.getItem(SERVIDOR_FORA_KEY) || 0); } catch { return false; }
 }
 
+let sondaAgendada = false;
 function marcarServidorFora(): void {
   try { localStorage.setItem(SERVIDOR_FORA_KEY, String(Date.now() + SERVIDOR_FORA_MS)); } catch { /* sem armazenamento */ }
+  // quando passar o prazo, pergunta ao servidor se voltou (sem isso a tela ficava na cópia local)
+  if (!sondaAgendada && typeof window !== "undefined") {
+    sondaAgendada = true;
+    window.setTimeout(() => { sondaAgendada = false; void sondarServidor(); }, SERVIDOR_FORA_MS + 1000);
+  }
 }
 
-function marcarServidorOk(): void {
-  try { localStorage.removeItem(SERVIDOR_FORA_KEY); } catch { /* sem armazenamento */ }
+// o servidor respondeu: sai do modo "fora do ar" e, se estava nele, a tela busca tudo de novo
+// (a cópia local podia estar velha — ex.: entregas incluídas pela grade RQ C 008)
+export function marcarServidorOk(): void {
+  let estavaFora = false;
+  try { estavaFora = localStorage.getItem(SERVIDOR_FORA_KEY) !== null; localStorage.removeItem(SERVIDOR_FORA_KEY); } catch { /* sem armazenamento */ }
+  if (estavaFora && typeof window !== "undefined") window.dispatchEvent(new Event("api-fila-enviada"));
+}
+
+// pergunta leve (não toca no banco): mantém o servidor do Render acordado e detecta a volta dele
+async function sondarServidor(): Promise<void> {
+  if (!_baseUrl || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+  try {
+    const r = await fetchComTempo(`${_baseUrl}/api/healthz`, { cache: "no-store" }, TEMPO_LEITURA_MS);
+    if (r.ok) marcarServidorOk(); else if (servidorIndisponivel(r.status)) marcarServidorFora();
+  } catch {
+    marcarServidorFora();
+  }
 }
 
 /** respostas que querem dizer "servidor indisponível agora", não "pedido errado" */
@@ -172,6 +193,7 @@ function trocarIdsNoCorpo(body: string | undefined, mapa: Record<string, number>
 }
 
 let reenviando = false;
+const falhas500: Record<number, number> = {};
 
 async function replayQueuedRequests(): Promise<void> {
   if (reenviando || (typeof navigator !== "undefined" && !navigator.onLine)) return;
@@ -197,7 +219,13 @@ async function replayQueuedRequests(): Promise<void> {
         marcarServidorFora();
         break;
       }
-      if (!response.ok && servidorIndisponivel(response.status)) {
+      if (!response.ok && response.status === 500) {
+        // defeito daquele pedido, não servidor fora: tenta por uns 10 min e depois desiste dele,
+        // para não travar a fila (e o app na cópia local) para sempre
+        falhas500[queued.id] = (falhas500[queued.id] || 0) + 1;
+        if (falhas500[queued.id] < 30) break;
+        delete falhas500[queued.id];
+      } else if (!response.ok && servidorIndisponivel(response.status)) {
         marcarServidorFora();
         break;
       }
@@ -273,6 +301,9 @@ if (typeof window !== "undefined") {
     void replayQueuedRequests().then(syncSnapshot).catch(() => {});
   });
   window.setInterval(() => { void replayQueuedRequests().catch(() => {}); }, REENVIO_MS);
+  // o Render grátis dorme depois de um tempo parado e leva ~1 min para acordar: uma pergunta
+  // leve a cada 10 min (só /api/healthz, sem banco) mantém ele acordado enquanto o app está aberto
+  window.setInterval(() => { void sondarServidor(); }, 10 * 60 * 1000);
   void replayQueuedRequests().catch(() => {});
   void syncSnapshot();
 }
@@ -690,12 +721,16 @@ export async function customFetch<T = unknown>(
   }
 
   if (!response.ok) {
+    // 500 é defeito daquele pedido, não servidor fora: só esse pedido usa a cópia local (antes, um
+    // único endereço com erro deixava o app inteiro na cópia local, às vezes velha). Servidor caído
+    // ou acordando (502/503/504/429/408) põe tudo no modo offline.
     if (podeFicarOffline && servidorIndisponivel(response.status)) {
-      marcarServidorFora();
+      const so500 = response.status === 500;
+      if (!so500) marcarServidorFora();
       if (isRead) {
         const local = await lerCopiaLocal();
         if (local !== undefined) return local;
-      } else {
+      } else if (!so500) {
         return guardarNaFila();
       }
     }
@@ -703,6 +738,7 @@ export async function customFetch<T = unknown>(
     throw new ApiError(response, errorData, requestInfo);
   }
 
+  if (isApiRequest && !offlineReplay) marcarServidorOk();
   const data = (await parseSuccessBody(response, responseType, requestInfo)) as T;
   if (isApiRequest && isRead && responseType !== "blob") {
     await writeCached(requestInfo.url, data).catch(() => {});

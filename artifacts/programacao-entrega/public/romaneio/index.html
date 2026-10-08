@@ -19309,8 +19309,12 @@ var SIGNATURES = {
     }).then(function(){ botao.disabled = !Object.keys(selIns).length; });
   });
 
+  // 0005 RIPACK é a própria empresa: nunca entra na Programação de Entrega
+  function ehRipackPropria(nomeRq){ return codigoCli(nomeRq) === '0005' || /^RIPACK\b/.test(norm(semCodigo(nomeRq))); }
+
   function abrirEnvio(){
-    var grupos = gruposIns();
+    var grupos = gruposIns().filter(function(g){ return !ehRipackPropria(g.nomeRq); });
+    if (!grupos.length){ setStatus('Só o 0005 RIPACK estava marcado — ele não vai para a Programação de Entrega.'); return; }
     var opcoes = cadastroProg.map(function(c){ return '<option>' + esc(c) + '</option>'; }).join('');
     var linhas = grupos.map(function(g, i){
       var d = destinoDe(g.nomeRq);
