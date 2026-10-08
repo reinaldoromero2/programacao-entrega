@@ -175,7 +175,7 @@ function rodarOfsOracle(entrada) {
     const exe = fs.existsSync(ps32) ? ps32 : 'powershell.exe';
     const child = spawn(exe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
       windowsHide: true,
-      env: { ...process.env, RIPACK_OFS_ENTRADA: Buffer.from(JSON.stringify(entrada), 'utf8').toString('base64') },
+      env: { ...process.env, RIPACK_OFS_ENTRADA: Buffer.from(JSON.stringify(entrada), 'utf8').toString('base64'), RIPACK_OFS_PASTA: pastaInclusor() || '' },
     });
     let saida = '';
     let erro = '';
@@ -196,11 +196,23 @@ function rodarOfsOracle(entrada) {
 }
 
 // a conexão vem das planilhas do Inclusor: sem elas (PC sem o L:), o botão nem aparece
-const OFS_PLANILHA = 'L:\\01 - Inclusor de OF\\Inclusor da OF na NOTA FISCAL - Matriz.xlsm';
+// pasta das planilhas do Inclusor: em qualquer letra de unidade (o L: aqui é o N: em outro PC — a
+// mesma pasta de rede) ou, sem unidade mapeada, direto pelo caminho de rede
+const OFS_PASTAS = [
+  ...'LNDEFGHIJKMOPQRSTUVWXYZ'.split('').map((l) => l + ':\\01 - Inclusor de OF'),
+  '\\\\server\\logistica\\01 - Inclusor de OF',
+];
+const OFS_ARQUIVO_MATRIZ = 'Inclusor da OF na NOTA FISCAL - Matriz.xlsm';
+let ofsPastaAchada = null;
+function pastaInclusor() {
+  if (ofsPastaAchada && fs.existsSync(path.join(ofsPastaAchada, OFS_ARQUIVO_MATRIZ))) return ofsPastaAchada;
+  ofsPastaAchada = OFS_PASTAS.find((p) => { try { return fs.existsSync(path.join(p, OFS_ARQUIVO_MATRIZ)); } catch { return false; } }) || null;
+  return ofsPastaAchada;
+}
 // lançamento automático quando um romaneio é criado (ver ofs-auto.js) — só Oracle, sem o servidor/Neon
 let ofsAuto = null;
 ipcMain.handle('ofs-oracle', (_evento, entrada) => {
-  if (entrada && entrada.acao === 'disponivel') return { ok: fs.existsSync(OFS_PLANILHA) };
+  if (entrada && entrada.acao === 'disponivel') return { ok: !!pastaInclusor() };
   if (entrada && entrada.acao === 'auto') return ofsAuto ? ofsAuto.lancar(String(entrada.id), entrada.romaneio || {}) : null;
   if (entrada && entrada.acao === 'status') return ofsAuto ? ofsAuto.status() : {};
   if (entrada && entrada.acao === 'registrar') return ofsAuto ? ofsAuto.registrar(String(entrada.id), entrada.linhas, entrada.completo) : null;
@@ -279,7 +291,7 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   configureAutoUpdates();
-  ofsAuto = criarOfsAuto({ rodarOfsOracle, pastaDados: app.getPath('userData'), disponivel: () => fs.existsSync(OFS_PLANILHA) });
+  ofsAuto = criarOfsAuto({ rodarOfsOracle, pastaDados: app.getPath('userData'), disponivel: () => !!pastaInclusor() });
 });
 
 app.on('window-all-closed', () => {
