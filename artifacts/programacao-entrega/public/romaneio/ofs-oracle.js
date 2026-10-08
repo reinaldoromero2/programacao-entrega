@@ -225,7 +225,7 @@
         // fica registrado neste PC (o botão fica verde) — nada vai para o romaneio/servidor
         var docId = atual.docId;
         oracle({ acao: 'registrar', id: docId, linhas: ok, completo: !falhou.length && !mudou.length }).then(function (st) {
-          if (st) { situacao[docId] = st; atualizarBotoes(docId); }
+          if (st) { situacao[docId] = st; atualizarBotoes(docId); desenharCardPendentes(); }
         });
       }
       // mostra o estado novo do sistema
@@ -264,8 +264,84 @@
     oracle({ acao: 'status' }).then(function (todos) {
       situacao = todos && typeof todos === 'object' ? todos : {};
       Object.keys(botoesPorId).forEach(atualizarBotoes);
+      desenharCardPendentes();
     });
   });
+
+  // ---- card "OFs para conferir": logo abaixo de CARREGAMENTOS, só quando houver pendência ----
+  // Pendência = romaneio que o lançamento automático não conseguiu resolver sozinho (mais de uma
+  // ordem possível, OS ainda não emitida ou ordem com outro texto). Sem pendência, o card some.
+  var cardPend = null;
+  var PEND_DIAS = 7;
+  function estiloCard() {
+    if (document.getElementById('ofs-card-estilo')) return;
+    var st = document.createElement('style');
+    st.id = 'ofs-card-estilo';
+    st.textContent =
+      '.card.card-cristal-laranja{ background:linear-gradient(160deg, rgba(245,158,11,0.24), rgba(245,158,11,0.07) 55%, rgba(245,158,11,0.13));' +
+      ' border:1px solid rgba(251,191,36,0.55); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);' +
+      ' box-shadow:0 6px 28px rgba(217,119,6,0.20), inset 0 1px 0 rgba(255,255,255,0.08); }' +
+      '.card.card-cristal-laranja h2{ color:#d97706; font-size:20px; }' +
+      '.ofs-pend-linha{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 0; border-bottom:1px solid var(--grid); }' +
+      '.ofs-pend-linha:last-child{ border-bottom:none; }';
+    document.head.appendChild(st);
+  }
+  function desenharCardPendentes() {
+    var limite = Date.now() - PEND_DIAS * 86400000;
+    var ids = Object.keys(situacao).filter(function (id) {
+      var st = situacao[id];
+      return st && st.completo === false && st.romaneio && Date.parse(st.em || '') >= limite;
+    }).sort(function (a, b) { return String(situacao[b].em).localeCompare(String(situacao[a].em)); });
+    var ancora = document.getElementById('pend-list');
+    var cardCarreg = ancora && ancora.closest('.card');
+    if (!ids.length || !cardCarreg || !disponivel) {
+      if (cardPend) { cardPend.remove(); cardPend = null; }
+      return;
+    }
+    estiloCard();
+    if (!cardPend) {
+      cardPend = document.createElement('div');
+      cardPend.className = 'card card-cristal-laranja';
+      cardPend.id = 'ofs-pend-card';
+    }
+    if (cardPend.previousElementSibling !== cardCarreg) cardCarreg.parentNode.insertBefore(cardPend, cardCarreg.nextSibling);
+    cardPend.innerHTML = '<h2>OFs PARA CONFERIR</h2>' +
+      '<p class="foot-note" style="margin:6px 0 6px;">O lançamento automático não conseguiu decidir sozinho onde gravar a OF destes romaneios ' +
+      '(mais de uma ordem possível, OS ainda não emitida ou ordem com outro texto). Confira e grave — ou escolha não lançar.</p>' +
+      ids.map(function (id) {
+        var r = situacao[id].romaneio;
+        var nomes = (r.clientes || []).map(function (c) { return c.nome; }).join(' + ') || r.cliente || 'Romaneio';
+        var ofs = [];
+        (r.clientes || []).forEach(function (c) { (c.itens || []).forEach(function (i) { ofsDoTexto(i.ofobs).forEach(function (o) { ofs.push(o); }); }); });
+        return '<div class="ofs-pend-linha">' +
+          '<div style="flex:1 1 220px; min-width:0;"><b>' + esc(nomes) + '</b>' +
+            '<div class="foot-note" style="margin:2px 0 0;">' + esc(dataBr(r.data || r.criadoEm)) + (ofs.length ? ' · OF ' + esc(ofs.join(', ')) : '') + '</div></div>' +
+          '<button type="button" class="add-btn btn-destaque-branco ofs-pend-abrir" data-id="' + esc(id) + '" style="flex:0 0 auto; margin-top:0;">⚠ Conferir e lançar</button>' +
+          '<button type="button" class="add-btn ofs-pend-ignorar" data-id="' + esc(id) + '" title="Não gravar nada no sistema para este romaneio e tirá-lo daqui" style="flex:0 0 auto; margin-top:0; color:var(--critical); border-color:var(--critical);">Não lançar</button>' +
+        '</div>';
+      }).join('');
+    cardPend.querySelectorAll('.ofs-pend-abrir').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-id');
+        abrir(id, situacao[id].romaneio, null, null);
+      });
+    });
+    cardPend.querySelectorAll('.ofs-pend-ignorar').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-id');
+        oracle({ acao: 'registrar', id: id, linhas: [], completo: true }).then(function (st) {
+          if (st) { situacao[id] = st; atualizarBotoes(id); desenharCardPendentes(); }
+        });
+      });
+    });
+  }
+  // a lista de CARREGAMENTOS é redesenhada pela página: mantém o card logo abaixo dela
+  // (e desenha assim que a lista existir: a página é grande e o status pode chegar antes dela)
+  setInterval(function () {
+    if (!cardPend) { if (disponivel) desenharCardPendentes(); return; }
+    var ancora = document.getElementById('pend-list'), cardCarreg = ancora && ancora.closest('.card');
+    if (cardCarreg && cardPend.previousElementSibling !== cardCarreg) cardCarreg.parentNode.insertBefore(cardPend, cardCarreg.nextSibling);
+  }, 3000);
 
   function botao(docId, d, dbApi, nome) {
     var b = document.createElement('button');
@@ -422,7 +498,7 @@
     if (g.op !== 'set' && !(g.op === 'update' && g.campos && g.campos.clientes)) return;
     var d = g.doc;
     oracle({ acao: 'auto', id: g.id, romaneio: { clientes: d.clientes, cliente: d.cliente, data: d.data, criadoEm: d.criadoEm } }).then(function (st) {
-      if (st && typeof st === 'object' && !Array.isArray(st) && 'completo' in st) { situacao[g.id] = st; atualizarBotoes(g.id); }
+      if (st && typeof st === 'object' && !Array.isArray(st) && 'completo' in st) { situacao[g.id] = st; atualizarBotoes(g.id); desenharCardPendentes(); }
     });
   });
 

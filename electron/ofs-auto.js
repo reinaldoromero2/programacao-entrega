@@ -104,7 +104,9 @@ function criarOfsAuto({ rodarOfsOracle, pastaDados, simular = false }) {
     if (gravadas.length < paraGravar.length) completo = false;
     if (simular) log(`SIMULAÇÃO romaneio ${id}: ${completo ? 'resolvido' : 'fica para o "⚠ Lançar OFs"'}`);
 
-    situacao[id] = { em: new Date().toISOString(), chave: assinatura, completo, linhas: juntarLinhas(id, gravadas) };
+    // resumo do romaneio guardado junto (só neste PC): o card "OFs para conferir" mostra e abre a conferência
+    const resumo = { cliente: d.cliente || '', data: d.data || '', criadoEm: d.criadoEm || '', clientes: (d.clientes || []).map((c) => ({ nome: c.nome, itens: (c.itens || []).map((i) => ({ rp: i.rp, qtd: i.qtd, ofobs: i.ofobs })) })) };
+    situacao[id] = { em: new Date().toISOString(), chave: assinatura, completo, linhas: juntarLinhas(id, gravadas), romaneio: resumo };
     if (!simular) salvar();
     return situacao[id];
   }
@@ -127,7 +129,8 @@ function criarOfsAuto({ rodarOfsOracle, pastaDados, simular = false }) {
 
   // lançamento feito pela tela ("🧾 Lançar OFs"): só registra o resultado neste PC
   function registrar(id, linhas, completo) {
-    situacao[id] = { em: new Date().toISOString(), chave: (situacao[id] && situacao[id].chave) || '', completo: !!completo, linhas: juntarLinhas(id, linhas || []) };
+    const antes = situacao[id] || {};
+    situacao[id] = { em: new Date().toISOString(), chave: antes.chave || '', completo: !!completo, linhas: juntarLinhas(id, linhas || []), romaneio: antes.romaneio };
     salvar();
     return situacao[id];
   }
