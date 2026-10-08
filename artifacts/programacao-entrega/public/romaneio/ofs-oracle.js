@@ -41,98 +41,9 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function norm(s) { return String(s || '').trim().toUpperCase(); }
-  function dataBr(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? m[3] + '/' + m[2] : (iso || ''); }
-  function diasEntre(a, b) {
-    var x = Date.parse(a), y = Date.parse(b);
-    if (isNaN(x) || isNaN(y)) return 99;
-    return Math.abs(x - y) / 86400000;
-  }
-  // OFs do campo do romaneio: só os números (o campo às vezes tem texto, como "1ª ENTREGA DE OUTUBRO")
-  function ofsDoTexto(t) {
-    var achadas = String(t || '').match(/\b\d{5,7}\b/g) || [];
-    return achadas.filter(function (o, i) { return achadas.indexOf(o) === i; });
-  }
-  // mesmo texto da planilha: "OF:253858  OF:253328  " (a coluna aceita 100 caracteres)
-  function textoOfs(ofs) { return ofs.map(function (o) { return 'OF:' + o + '  '; }).join('').slice(0, 100); }
-  function mesmoTexto(a, b) { return norm(a).replace(/\s+/g, ' ') === norm(b).replace(/\s+/g, ' '); }
-
-  // ---- monta a conferência ----
-  // clientes do romaneio -> [{ nome, itens: [{ rp, qtd, ofs }] }]
-  function clientesDoRomaneio(d) {
-    var lista = [];
-    (d.clientes || []).forEach(function (c) {
-      var itens = [];
-      (c.itens || []).forEach(function (i) {
-        if (!i || !i.rp) return;
-        itens.push({ rp: String(i.rp).trim(), qtd: Number(i.qtd) || 0, ofs: ofsDoTexto(i.ofobs), ofobs: i.ofobs || '' });
-      });
-      if (itens.length) lista.push({ nome: c.nome || d.cliente || 'Cliente', itens: itens });
-    });
-    return lista;
-  }
-
-  // agrupamentos possíveis para um cliente, do melhor para o pior:
-  // mais produtos do cliente com a mesma quantidade, depois a data mais perto do romaneio
-  function candidatos(cliente, linhas, dataRomaneio) {
-    var grupos = {};
-    linhas.forEach(function (l) {
-      var k = l.empresa + '|' + l.agrupa;
-      (grupos[k] = grupos[k] || { empresa: l.empresa, agrupa: l.agrupa, data: l.data, linhas: [] }).linhas.push(l);
-    });
-    var lista = Object.keys(grupos).map(function (k) {
-      var g = grupos[k], cobertos = 0, algum = 0;
-      cliente.itens.forEach(function (it) {
-        var doProduto = g.linhas.filter(function (l) { return norm(l.codpro) === norm(it.rp); });
-        if (!doProduto.length) return;
-        algum++;
-        var soma = doProduto.reduce(function (s, l) { return s + (Number(l.qtd) || 0); }, 0);
-        if (Math.abs(soma - it.qtd) < 0.001) cobertos++;
-      });
-      g.cobertos = cobertos;
-      g.algum = algum;
-      g.distancia = diasEntre(g.data, dataRomaneio);
-      return g;
-    }).filter(function (g) { return g.algum > 0; });
-    // mesmo produto e quantidade no mesmo dia na Matriz e na Filial: a OF vai na da Filial
-    // (no histórico de set–out/2026, 22 de 28 pares assim tinham a OF só na Filial e nenhum só na Matriz)
-    lista.sort(function (a, b) {
-      return (b.cobertos - a.cobertos) || (a.distancia - b.distancia) ||
-        ((a.empresa === 'filial' ? 0 : 1) - (b.empresa === 'filial' ? 0 : 1)) || (Number(b.agrupa) - Number(a.agrupa));
-    });
-    return lista;
-  }
-
-  // escolhe sozinho só quando não há dúvida: cobre todos os produtos, data até 3 dias do
-  // romaneio e nenhum outro agrupamento da mesma empresa empata (o par Matriz/Filial já se
-  // resolve pela Filial, na ordem acima)
-  function escolhaAutomatica(cliente, lista) {
-    var top = lista[0];
-    if (!top || top.cobertos < cliente.itens.length || top.distancia > 3) return null;
-    var empata = function (g) { return g && g.cobertos === top.cobertos && Math.abs(g.distancia - top.distancia) < 1; };
-    var duvida = lista.slice(1).some(function (g) { return empata(g) && g.empresa === top.empresa; });
-    return duvida ? null : top;
-  }
-
-  // linhas a gravar quando o cliente usa o agrupamento g
-  function linhasParaGravar(cliente, g) {
-    var porLinha = {};
-    cliente.itens.forEach(function (it) {
-      if (!it.ofs.length) return;
-      g.linhas.forEach(function (l) {
-        if (norm(l.codpro) !== norm(it.rp)) return;
-        var k = [l.empresa, l.agrupa, l.codigo, l.codpro, l.pedido].join('|');
-        var r = porLinha[k] = porLinha[k] || { chave: k, empresa: l.empresa, agrupa: l.agrupa, codigo: l.codigo, codpro: l.codpro, pedido: l.pedido, antes: l.infadc || '', ofs: [] };
-        it.ofs.forEach(function (o) { if (r.ofs.indexOf(o) < 0) r.ofs.push(o); });
-      });
-    });
-    return Object.keys(porLinha).map(function (k) {
-      var r = porLinha[k];
-      r.novo = textoOfs(r.ofs);
-      r.situacao = !r.antes ? 'vazia' : mesmoTexto(r.antes, r.novo) ? 'igual' : 'outra';
-      return r;
-    });
-  }
+  var R = window.ripackOfsRegras;
+  var norm = R.norm, dataBr = R.dataBr, diasEntre = R.diasEntre, ofsDoTexto = R.ofsDoTexto, textoOfs = R.textoOfs;
+  var clientesDoRomaneio = R.clientesDoRomaneio, candidatos = R.candidatos, escolhaAutomatica = R.escolhaAutomatica, linhasParaGravar = R.linhasParaGravar;
 
   // ---- janela ----
   var modal = null;
@@ -335,9 +246,14 @@
     var b = document.createElement('button');
     b.type = 'button';
     var lancadas = d && d.ofsLancadas && d.ofsLancadas.linhas && d.ofsLancadas.linhas.length;
-    b.className = 'add-btn ' + (lancadas ? 'btn-destaque-verde' : 'btn-destaque-branco');
-    b.textContent = lancadas ? '✔ OFs no sistema' : '🧾 Lançar OFs';
-    b.title = lancadas
+    // o automático (ofs-auto.js) já conferiu e não conseguiu decidir tudo sozinho
+    var faltaConferir = d && d.ofsAuto && d.ofsAuto.completo === false;
+    b.className = 'add-btn ' + (lancadas && !faltaConferir ? 'btn-destaque-verde' : 'btn-destaque-branco');
+    b.textContent = faltaConferir ? '⚠ Lançar OFs' : lancadas ? '✔ OFs no sistema' : '🧾 Lançar OFs';
+    if (faltaConferir) b.style.color = 'var(--warning, #b45309)';
+    b.title = faltaConferir
+      ? 'O lançamento automático não conseguiu decidir tudo sozinho (mais de uma ordem possível, OS ainda não emitida ou ordem com outro texto) — clique para conferir'
+      : lancadas
       ? 'OFs já lançadas no sistema' + (d.ofsLancadas.por ? ' por ' + d.ofsLancadas.por : '') + ' — clique para conferir'
       : 'Gravar as OFs deste romaneio na ordem de separação do sistema (como a planilha Inclusor de OF)';
     b.addEventListener('click', function () { abrir(docId, d, dbApi, nome); });
@@ -481,84 +397,11 @@
     });
   }
 
-  // ---- aviso ao enviar o romaneio com OF digitada e não gravada no sistema ----
-  function ofsNaoGravadas() {
-    var lista = [];
-    document.querySelectorAll('[data-ofs]').forEach(function (input) {
-      var ofs = ofsDoTexto(input.value);
-      if (!ofs.length || !input._ofsAviso || input._ofsAviso.getAttribute('data-gravado') === input.value) return;
-      var tipo = input._ofsTipo, row = tipo && input.closest(tipo.linha);
-      if (!row) return;
-      lista.push({ rp: lerRp(row, tipo), qtd: lerQtd(row, tipo), ofs: ofs, input: input });
-    });
-    return lista;
-  }
-  var liberado = false, avisoEnvio = null;
-  function perguntarAntesDeEnviar(botaoEnviar, lista) {
-    if (!avisoEnvio) {
-      avisoEnvio = document.createElement('div');
-      avisoEnvio.className = 'rom-modal-overlay';
-      avisoEnvio.style.zIndex = '220';
-      avisoEnvio.hidden = true;
-      document.body.appendChild(avisoEnvio);
-    }
-    var seguir = function () {
-      avisoEnvio.hidden = true;
-      liberado = true;
-      try { botaoEnviar.click(); } finally { liberado = false; }
-    };
-    avisoEnvio.innerHTML =
-      '<div class="rom-modal-card" style="max-width:440px;"><div style="padding:18px;" class="foot-note">Conferindo as OFs no sistema…</div></div>';
-    avisoEnvio.hidden = false;
-    // a OF pode já estar no sistema (lançada antes, pela planilha ou por outro PC): essas não entram no aviso
-    var codpros = [];
-    lista.forEach(function (x) { if (x.rp && codpros.indexOf(x.rp) < 0) codpros.push(x.rp); });
-    oracle({ acao: 'buscar', codpros: codpros, agrupas: [], dias: 10 }).then(function (r) {
-      var linhas = (r && r.linhas) || [];
-      var hoje = new Date().toISOString().slice(0, 10);
-      lista = lista.filter(function (x) {
-        var qtd = x.qtd;
-        var cliente = { nome: '', itens: [{ rp: x.rp, qtd: qtd, ofs: x.ofs }] };
-        var g = escolhaAutomatica(cliente, candidatos(cliente, linhas.filter(function (l) { return norm(l.codpro) === norm(x.rp); }), hoje));
-        var jaEsta = g && linhasParaGravar(cliente, g).every(function (l) { return l.situacao === 'igual'; });
-        if (jaEsta) {
-          x.input._ofsAviso.setAttribute('data-gravado', x.input.value);
-          lembrados[chaveLembrar(x.rp, x.input.value)] = '✔ Já está no sistema (' + (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + esc(g.agrupa) + ').';
-          x.input._ofsAviso.innerHTML = '✔ Já está no sistema (' + (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + esc(g.agrupa) + ').';
-          x.input._ofsAviso.style.color = 'var(--good)';
-        }
-        return !jaEsta;
-      });
-      if (!lista.length) return seguir();
-      mostrar();
-    });
-    function mostrar() {
-    avisoEnvio.innerHTML =
-      '<div class="rom-modal-card" style="max-width:440px;">' +
-        '<div class="rom-modal-head"><h3>OF não gravada no sistema</h3></div>' +
-        '<div style="padding:14px 18px; display:flex; flex-direction:column; gap:10px;">' +
-          '<p class="foot-note" style="margin:0;">Estas OFs estão só no romaneio — ainda não foram gravadas no sistema (Inclusor de OF):</p>' +
-          '<div class="foot-note" style="margin:0; font-family:monospace;">' + lista.map(function (x) { return esc(x.rp) + ' — OF ' + esc(x.ofs.join(', ')); }).join('<br>') + '</div>' +
-          '<button type="button" class="add-btn btn-destaque-branco wiz-choice-btn ofs-voltar">Voltar e gravar (botão ⇪ de cada linha)</button>' +
-          '<button type="button" class="add-btn btn-destaque-verde wiz-choice-btn ofs-so-romaneio">Só salvar no romaneio</button>' +
-        '</div>' +
-      '</div>';
-    avisoEnvio.hidden = false;
-    avisoEnvio.querySelector('.ofs-voltar').addEventListener('click', function () {
-      avisoEnvio.hidden = true;
-      try { lista[0].input.focus(); } catch (e) {}
-    });
-    avisoEnvio.querySelector('.ofs-so-romaneio').addEventListener('click', seguir);
-    }
-  }
+  // ---- romaneio enviado: o app lança as OFs sozinho, em segundo plano (electron/ofs-auto.js) ----
+  // (ele também confere de 5 em 5 minutos; aqui só pede para conferir logo)
   document.addEventListener('click', function (ev) {
     var alvo = ev.target && ev.target.closest && ev.target.closest('#enviar-assinatura');
-    if (!alvo || liberado || !disponivel) return;
-    var lista = ofsNaoGravadas();
-    if (!lista.length) return;
-    ev.preventDefault();
-    ev.stopImmediatePropagation();
-    perguntarAntesDeEnviar(alvo, lista);
+    if (alvo && disponivel) oracle({ acao: 'auto-agora' });
   }, true);
 
   // linhas da calculadora: as que já existem e as que forem criadas
