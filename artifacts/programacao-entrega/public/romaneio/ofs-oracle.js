@@ -63,7 +63,8 @@
           '<button type="button" class="add-btn btn-destaque-verde ofs-gravar" disabled>Gravar no sistema</button>' +
         '</div>' +
       '</div>';
-    document.body.appendChild(modal);
+    // dentro do .app-root: é lá que o tema "vidro" dá o fundo fosco às janelas (fora dele fica transparente)
+    (document.querySelector('.app-root') || document.body).appendChild(modal);
     modal.querySelector('.ofs-fechar').addEventListener('click', function () { modal.hidden = true; });
     modal.addEventListener('click', function (ev) { if (ev.target === modal) modal.hidden = true; });
     return modal;
