@@ -19276,16 +19276,22 @@ var SIGNATURES = {
     Object.keys(selIns).forEach(function(k){
       var it = prog.itens[+k.split('|')[0]];
       if (!it) return;
-      var g = por[it.cliente] || (por[it.cliente] = { nomeRq: it.cliente, bases: {}, vezes: 1, conj: conjGrupo[it.cliente] || 0 });
+      var g = por[it.cliente] || (por[it.cliente] = { nomeRq: it.cliente, bases: {}, vezes: 1, conj: conjGrupo[it.cliente] || 0, pos: Infinity });
       g.bases[String(it.base || '').toUpperCase()] = true;
+      g.pos = Math.min(g.pos, +k.split('|')[0]); // linha do cliente na grade RQ C 008
       // quantas linhas o cliente ganha na Programação: a maior marcação dele
       g.vezes = Math.max(g.vezes, selIns[k]);
     });
-    // conjugados aparecem juntos, na ordem em que foram ligados
-    return Object.keys(por).map(function(n){ return por[n]; }).sort(function(a, b){
-      var ka = a.conj ? '0' + letraGrupo(a.conj) + String(conjOrdem[a.conj].indexOf(a.nomeRq)).padStart(3, '0') : '1' + a.nomeRq;
-      var kb = b.conj ? '0' + letraGrupo(b.conj) + String(conjOrdem[b.conj].indexOf(b.nomeRq)).padStart(3, '0') : '1' + b.nomeRq;
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    // na ordem das linhas da grade RQ C 008; conjugados juntos, no lugar do primeiro deles e na
+    // ordem em que foram ligados
+    var grupos = Object.keys(por).map(function(n){ return por[n]; });
+    var posConj = {};
+    grupos.forEach(function(g){ if (g.conj) posConj[g.conj] = Math.min(posConj[g.conj] == null ? Infinity : posConj[g.conj], g.pos); });
+    return grupos.sort(function(a, b){
+      var pa = a.conj ? posConj[a.conj] : a.pos, pb = b.conj ? posConj[b.conj] : b.pos;
+      if (pa !== pb) return pa - pb;
+      if (a.conj && a.conj === b.conj) return conjOrdem[a.conj].indexOf(a.nomeRq) - conjOrdem[b.conj].indexOf(b.nomeRq);
+      return a.pos - b.pos;
     });
   }
   function unidadeDe(bases){
@@ -19365,6 +19371,8 @@ var SIGNATURES = {
         x.vezes = Math.max(x.vezes, e.g.vezes);
       });
       var novos = Object.keys(porDestino).map(function(k){ var x = porDestino[k]; x.cliente = x.nomes.join(' + '); return x; });
+      // o que é só da Filial vai por último (a ordem da grade vale dentro de cada parte)
+      novos = novos.filter(function(n){ return unidadeDe(n.bases) !== 'FILIAL'; }).concat(novos.filter(function(n){ return unidadeDe(n.bases) === 'FILIAL'; }));
       if (!novos.length){ msg.textContent = 'Nenhum cliente para inserir.'; return; }
       var btn = this; btn.disabled = true; msg.textContent = 'Inserindo...';
       fetch(apiBase() + '/api/entregas?date=' + data, { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(existentes){
@@ -19376,13 +19384,26 @@ var SIGNATURES = {
           for (var f = ja[norm(n.cliente)] || 0; f < n.vezes; f++) criar.push(n);
         });
         // uma de cada vez, para manter a ordem na lista do dia
+        var criadas = [];
         return criar.reduce(function(p, n){
           return p.then(function(){
             return fetch(apiBase() + '/api/entregas', { method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ date: data, cliente: n.cliente, unidade: unidadeDe(n.bases) }) })
-              .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); });
+              .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json().catch(function(){ return null; }); })
+              .then(function(e){ if (e && e.id != null) criadas.push(e); });
           });
-        }, Promise.resolve()).then(function(){ return { criar: criar, pular: pular }; });
+        }, Promise.resolve()).then(function(){
+          // a Filial fica sempre por último no dia: as que já estavam (na ordem em que estavam), depois
+          // as novas — primeiro tudo que não é só Filial, depois o que é só Filial
+          var ehFilial = function(e){ return String(e.unidade || '').toUpperCase() === 'FILIAL'; };
+          var dia = (existentes || []).slice().sort(function(a, b){ return (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id; });
+          var ordem = dia.filter(function(e){ return !ehFilial(e); }).concat(criadas.filter(function(e){ return !ehFilial(e); }),
+            dia.filter(ehFilial), criadas.filter(ehFilial)).map(function(e){ return e.id; });
+          var atual = dia.concat(criadas).map(function(e){ return e.id; });
+          if (!criadas.length || ordem.join() === atual.join()) return;
+          return fetch(apiBase() + '/api/entregas/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ordem }) })
+            .catch(function(){ /* a ordem fica como foi incluída; as entregas já estão gravadas */ });
+        }).then(function(){ return { criar: criar, pular: pular }; });
       }).then(function(r){
         fechar();
         selIns = {}; modoIns = false; conjGrupo = {}; conjOrdem = {}; ultimoIns = null; sairConjugar();
