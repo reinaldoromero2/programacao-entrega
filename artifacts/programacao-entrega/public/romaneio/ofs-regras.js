@@ -42,11 +42,11 @@
   // ---- escolha da ordem, produto por produto ----
   // O sistema pode separar os produtos do mesmo cliente em agrupamentos diferentes (ex.: 2019 BOSCH
   // CAMPINAS em 08/10: 2018-002/25 no 41885 e 2019-001/24 no 41886), então cada produto procura a
-  // própria ordem. Ordem das opções de um produto:
-  //   1. a data mais perto do romaneio (a de hoje vence a de ontem, mesmo com as mesmas OFs)
-  //   2. a mesma quantidade do romaneio
-  //   3. o agrupamento que também tem os outros produtos do cliente
-  //   4. no par Matriz/Filial do mesmo dia, a Filial (no histórico de set–out/2026, 22 de 28 pares
+  // própria ordem. Só valem ordens do MESMO DIA do romaneio (a OS e o romaneio são feitos juntos; uma
+  // de ontem com as mesmas OFs dava "já lançado" sem gravar na de hoje). Ordem das opções:
+  //   1. a mesma quantidade do romaneio
+  //   2. o agrupamento que também tem os outros produtos do cliente
+  //   3. no par Matriz/Filial do mesmo dia, a Filial (no histórico de set–out/2026, 22 de 28 pares
   //      assim tinham a OF só na Filial e nenhum só na Matriz)
   function opcoesDoItem(item, cliente, linhas, dataRomaneio) {
     var grupos = {};
@@ -69,6 +69,7 @@
       });
       return g;
     });
+    lista = lista.filter(function (g) { return g.distancia === 0; });
     lista.sort(function (a, b) {
       return (a.distancia - b.distancia) || ((b.mesmaQtd ? 1 : 0) - (a.mesmaQtd ? 1 : 0)) || (b.junto - a.junto) ||
         ((a.empresa === 'filial' ? 0 : 1) - (b.empresa === 'filial' ? 0 : 1)) || (Number(b.agrupa) - Number(a.agrupa));
@@ -76,12 +77,11 @@
     return lista;
   }
 
-  // escolhe sozinho só sem dúvida: ordem do mesmo dia do romaneio (ou do dia anterior com a mesma
-  // quantidade) e nenhuma outra da mesma empresa empatada em tudo
+  // escolhe sozinho só sem dúvida: ordem do dia do romaneio e nenhuma outra da mesma empresa
+  // empatada em tudo
   function escolhaDoItem(lista) {
     var top = lista[0];
     if (!top) return null;
-    if (!(top.distancia === 0 || (top.distancia <= 1 && top.mesmaQtd))) return null;
     var duvida = lista.slice(1).some(function (g) {
       return g.empresa === top.empresa && g.distancia === top.distancia && g.mesmaQtd === top.mesmaQtd && g.junto === top.junto;
     });
