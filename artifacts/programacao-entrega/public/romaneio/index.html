@@ -18515,6 +18515,12 @@ var SIGNATURES = {
   #prog-modal.prog-so-ver .prog-grade-wrap{ margin:6px 8px 0; -webkit-overflow-scrolling:touch; }
   #prog-modal.prog-so-ver .pg th, #prog-modal.prog-so-ver .pg td{ position:static !important; }
   #prog-modal.prog-so-ver .pg td{ cursor:default; -webkit-tap-highlight-color:transparent; }
+  /* celular em pé: a tabela encolhida para caber apertava a coluna Cliente até "011…"; o nome vai
+     num bloco de largura fixa, que o navegador não aperta (a Descr continua como está) */
+  #prog-modal.prog-so-ver .pg .cli-nome{ display:inline-block; width:200px; overflow:hidden; text-overflow:ellipsis; vertical-align:bottom; }
+  /* toque numa célula: a linha fica roxa da célula até o começo (para seguir a linha); outro toque desmarca */
+  #prog-modal.prog-so-ver .pg td.cel-marca{ background:#ede9fe !important; color:#4c1d95 !important; }
+  #prog-modal.prog-so-ver .pg td.cel-marca-fim{ background:#c4b5fd !important; color:#2e1065 !important; font-weight:700; }
   #prog-modal.prog-so-ver #prog-ins-btn, #prog-modal.prog-so-ver #prog-ins-enviar,
   #prog-modal.prog-so-ver #rqc008-atualizar-btn, #prog-modal.prog-so-ver .prog-btn-atualizar,
   #prog-modal.prog-so-ver .prog-carga{ display:none !important; }
@@ -18836,7 +18842,7 @@ var SIGNATURES = {
     var lista = filtrados();
     var d = prog.dias;
     var h = '<table class="pg"><thead>' +
-      '<tr class="h1"><th class="c-cli" rowspan="3">Cliente</th><th class="c-prod" rowspan="3">Produto</th><th rowspan="3">Un</th><th rowspan="3">Descr</th><th rowspan="3">Base<br>fatura</th>' +
+      '<tr class="h1"><th class="c-cli" rowspan="3"><span class="cli-nome">Cliente</span></th><th class="c-prod" rowspan="3">Produto</th><th rowspan="3">Un</th><th rowspan="3">Descr</th><th rowspan="3">Base<br>fatura</th>' +
       '<th class="h-blq" colspan="2">Estq BLQ</th><th class="h-ok" colspan="3">Estq OK</th><th class="h-atr">Atr</th>' +
       d.map(function(x){ return '<th class="h-dia' + (x.fds ? ' h-fds' : '') + '">' + x.dia + '</th>'; }).join('') + '<th rowspan="3">prog<br>próx<br>15 d</th></tr>' +
       '<tr class="h2"><th class="h-blq" rowspan="2">MAT</th><th class="h-blq" rowspan="2">FIL</th><th class="h-ok" rowspan="2">MAT</th><th class="h-ok" rowspan="2">FIL</th><th class="h-ok" rowspan="2">TOT</th><th class="h-atr">aso</th>' +
@@ -18860,7 +18866,7 @@ var SIGNATURES = {
           (selIns[k] > 1 ? '<span class="ins-x">' + selIns[k] + 'x</span>' : '') +
           (selIns[k] && conjGrupo[it.cliente] ? '<span class="ins-cj">🔗' + letraGrupo(conjGrupo[it.cliente]) + '</span>' : '') + '</td>';
       }).join('');
-      return '<tr' + (ate >= 0 ? ' class="ins-linha"' : '') + '><td class="c-cli" title="' + esc(it.cliente) + '">' + esc(it.cliente) + '</td><td class="c-prod">' + esc(it.rp) + '</td><td class="n">' + esc(it.un) + '</td>' +
+      return '<tr' + (ate >= 0 ? ' class="ins-linha"' : '') + '><td class="c-cli" title="' + esc(it.cliente) + '"><span class="cli-nome">' + esc(it.cliente) + '</span></td><td class="c-prod">' + esc(it.rp) + '</td><td class="n">' + esc(it.un) + '</td>' +
         '<td class="c-desc" title="' + esc(it.desc) + '">' + esc(it.desc) + '</td><td class="n">' + esc(it.base) + '</td>' +
         '<td class="n' + (it.blqM > 0 ? ' blq-pos' : '') + '">' + cel(it.blqM) + '</td><td class="n' + (it.blqF > 0 ? ' blq-pos' : '') + '">' + cel(it.blqF) + '</td>' +
         '<td class="n">' + cel(it.okM) + '</td><td class="n">' + cel(it.okF) + '</td><td class="n tot">' + cel(it.okM + it.okF) + '</td>' +
@@ -19073,8 +19079,21 @@ var SIGNATURES = {
     renderGrade(); renderCarga();
   }
 
+  // celular: a grade é só para ver, mas o toque marca de roxo a linha, da célula tocada até o começo
+  function marcarLinhaCelular(ev){
+    var cel = ev.target.closest ? ev.target.closest('tbody td') : null;
+    var grade = $('prog-grade');
+    var era = cel && cel.classList.contains('cel-marca-fim');
+    Array.prototype.forEach.call(grade.querySelectorAll('td.cel-marca, td.cel-marca-fim'), function(td){ td.classList.remove('cel-marca', 'cel-marca-fim'); });
+    if (!cel || era) return; // tocar de novo na mesma célula desmarca
+    var tds = cel.parentNode.children;
+    for (var i = 0; i < tds.length; i++){
+      tds[i].classList.add('cel-marca');
+      if (tds[i] === cel){ cel.classList.add('cel-marca-fim'); break; }
+    }
+  }
   $('prog-grade').addEventListener('click', function(ev){
-    if (somenteVer) return; // no celular a grade é só para ver
+    if (somenteVer){ marcarLinhaCelular(ev); return; } // no celular a grade é só para ver
     // ✕ vermelho da quantidade marcada: desmarca
     var rm = ev.target.closest ? ev.target.closest('[data-rm-ins]') : null;
     if (rm && modoIns){
