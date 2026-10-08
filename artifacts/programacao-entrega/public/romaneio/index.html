@@ -18512,6 +18512,9 @@ var SIGNATURES = {
   /* celular em pé: a tabela encolhida para caber apertava a coluna Cliente até "011…"; o nome vai
      num bloco de largura fixa, que o navegador não aperta (a Descr continua como está) */
   #prog-modal.prog-so-ver .pg .cli-nome{ display:inline-block; width:200px; overflow:hidden; text-overflow:ellipsis; vertical-align:bottom; }
+  /* a célula não corta nem limita: quem manda é o bloco de 200px do nome (o Safari ignora
+     min-width em célula de tabela e apertava a coluna com a tabela encolhida) */
+  #prog-modal.prog-so-ver .pg td.c-cli, #prog-modal.prog-so-ver .pg th.c-cli{ width:200px; min-width:200px; max-width:none; overflow:visible; text-overflow:clip; }
   /* toque numa célula: a linha fica roxa da célula até o começo (para seguir a linha); outro toque desmarca */
   #prog-modal.prog-so-ver .pg td.cel-marca{ background:#ede9fe !important; color:#4c1d95 !important; }
   /* celular: cópia do cabeçalho da grade presa no topo da área da grade (o sticky de verdade

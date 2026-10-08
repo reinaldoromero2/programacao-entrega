@@ -202,6 +202,11 @@ async function replayQueuedRequests(): Promise<void> {
   try {
     const mapa = ((await readCached(IDS_TEMPORARIOS_KEY).catch(() => undefined)) ?? {}) as Record<string, number>;
     for (const queued of await readQueuedRequests()) {
+      // pedido para outro servidor (versão antiga do app, ex.: data-fill-tool): nunca vai ser aceito aqui
+      if (_baseUrl && !queued.url.startsWith(_baseUrl)) {
+        await removeQueuedRequest(queued.id);
+        continue;
+      }
       const url = trocarIdsTemporarios(queued.url, mapa);
       // a criação dessa entrega não foi aceita pelo servidor: não há o que alterar
       if (ID_TEMPORARIO_NA_URL.test(url)) {
@@ -247,6 +252,31 @@ async function replayQueuedRequests(): Promise<void> {
     marcarServidorOk();
     if (typeof window !== "undefined") window.dispatchEvent(new Event("api-fila-enviada"));
   }
+}
+
+// lista de entregas que veio do servidor + o que ainda está na fila (criar/alterar/apagar)
+async function sobreporFila(url: string, dados: unknown): Promise<unknown> {
+  if (!Array.isArray(dados) || !/\/api\/entregas(\?|$)/.test(url)) return dados;
+  const fila = await readQueuedRequests();
+  if (!fila.length) return dados;
+  const mapa = ((await readCached(IDS_TEMPORARIOS_KEY).catch(() => undefined)) ?? {}) as Record<string, number>;
+  const dia = new URL(url).searchParams.get("date");
+  let lista = (dados as Array<Record<string, unknown>>).slice();
+  for (const q of fila) {
+    const corpo = q.body ? (() => { try { return JSON.parse(q.body as string) as Record<string, unknown>; } catch { return {}; } })() : {};
+    if (q.method === "POST" && q.url.endsWith("/api/entregas") && q.tempId !== undefined && !mapa[q.tempId]) {
+      if ((!dia || corpo.date === dia) && !lista.some((e) => e.id === q.tempId)) {
+        lista.push({ ...corpo, id: q.tempId, sortOrder: corpo.sortOrder ?? lista.length, checked: corpo.checked ?? "none", nf: corpo.nf ?? "none", cg: corpo.cg ?? "none" });
+      }
+      continue;
+    }
+    const m = trocarIdsTemporarios(q.url, mapa).match(/\/api\/entregas\/(-?\d+)$/);
+    if (!m) continue;
+    const id = Number(m[1]);
+    if (q.method === "DELETE") lista = lista.filter((e) => e.id !== id);
+    else if (q.method === "PATCH") lista = lista.map((e) => (e.id === id ? { ...e, ...corpo } : e));
+  }
+  return lista;
 }
 
 async function applyOfflineDeliveryMutation(url: string, method: string, body: string | undefined, tempId?: number): Promise<void> {
@@ -695,15 +725,20 @@ export async function customFetch<T = unknown>(
 
   const podeFicarOffline = isApiRequest && !offlineReplay && method !== "HEAD";
   const semInternet = typeof navigator !== "undefined" && !navigator.onLine;
-  // com gravação ainda na fila, o servidor não tem tudo: a cópia local é a mais atual
-  const usarLocal = podeFicarOffline && (semInternet || servidorMarcadoFora() || await temFila());
+  // só o servidor fora (ou sem internet) põe a tela na cópia local. Antes, qualquer coisa na fila
+  // também punha — e um pedido preso (ex.: de uma versão antiga) deixava a tela velha para sempre.
+  const servidorFora = podeFicarOffline && (semInternet || servidorMarcadoFora());
 
-  if (usarLocal && isRead) {
+  if (servidorFora && isRead) {
     const local = await lerCopiaLocal();
     if (local !== undefined) return local;
   }
-  // gravações entram atrás das que já estão na fila, para manter a ordem
-  if (usarLocal && !isRead) return guardarNaFila();
+  if (servidorFora && !isRead) return guardarNaFila();
+  // gravação com outras ainda na fila: tenta mandar a fila antes; se não esvaziar, entra atrás (ordem)
+  if (podeFicarOffline && !isRead && await temFila()) {
+    await replayQueuedRequests().catch(() => {});
+    if (await temFila()) return guardarNaFila();
+  }
 
   let response: Response;
   try {
@@ -739,8 +774,10 @@ export async function customFetch<T = unknown>(
   }
 
   if (isApiRequest && !offlineReplay) marcarServidorOk();
-  const data = (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  let data = (await parseSuccessBody(response, responseType, requestInfo)) as T;
   if (isApiRequest && isRead && responseType !== "blob") {
+    // o que ainda está na fila (o servidor não tem) vai por cima do que veio dele
+    if (await temFila()) data = (await sobreporFila(requestInfo.url, data).catch(() => data)) as T;
     await writeCached(requestInfo.url, data).catch(() => {});
     if (requestInfo.url.endsWith("/api/sync/snapshot")) await writeCached("__offline_snapshot__", data).catch(() => {});
   }
