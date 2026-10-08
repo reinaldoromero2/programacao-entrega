@@ -30,6 +30,21 @@ export default defineConfig({
       workbox: {
         // o Romaneio é outra página (public/romaneio): não pode cair na tela da Programação
         navigateFallbackDenylist: [/^\/romaneio/],
+        // o Romaneio não vai no pré-cache (a cópia guardada só trocava quando o celular percebia a
+        // atualização — no iPhone demorava e ficava a versão velha): com internet, sempre busca a
+        // nova; sem internet, usa a última guardada
+        globIgnores: ["romaneio/**"],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes("/romaneio/"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "romaneio",
+              networkTimeoutSeconds: 8,
+              expiration: { maxEntries: 20 },
+            },
+          },
+        ],
       },
       manifest: {
         name: "Programação de Entrega",
