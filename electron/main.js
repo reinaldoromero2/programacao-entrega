@@ -279,7 +279,7 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   configureAutoUpdates();
-  ofsAuto = criarOfsAuto({ rodarOfsOracle, pastaDados: app.getPath('userData') });
+  ofsAuto = criarOfsAuto({ rodarOfsOracle, pastaDados: app.getPath('userData'), disponivel: () => fs.existsSync(OFS_PLANILHA) });
 });
 
 app.on('window-all-closed', () => {

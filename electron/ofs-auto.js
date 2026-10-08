@@ -29,7 +29,8 @@ function assinaturaDosItens(d) {
 }
 
 // simular: só registra o que faria (para teste), sem gravar no sistema
-function criarOfsAuto({ rodarOfsOracle, pastaDados, simular = false }) {
+// disponivel: este PC alcança o Oracle (enxerga as planilhas do Inclusor no L:)
+function criarOfsAuto({ rodarOfsOracle, pastaDados, simular = false, disponivel = () => true }) {
   const R = carregarRegras();
   const logArq = path.join(pastaDados, 'ofs-auto.log');
   const statusArq = path.join(pastaDados, 'ofs-status.json');
@@ -135,7 +136,27 @@ function criarOfsAuto({ rodarOfsOracle, pastaDados, simular = false }) {
     return situacao[id];
   }
 
-  return { lancar, registrar, status: () => situacao };
+  // romaneio pendente (a OS ainda não existia ao criar): tenta de novo a cada 3 min, só os das
+  // últimas 24 h — quando a OS aparece, grava sozinho e sai do card. Só o Oracle; nada de servidor/Neon.
+  const RETENTAR_MS = 3 * 60 * 1000;
+  async function retentarPendentes() {
+    if (!R || !disponivel()) return;
+    const limite = Date.now() - 24 * 3600 * 1000;
+    const ids = Object.keys(situacao).filter((id) => {
+      const st = situacao[id];
+      return st && st.completo === false && st.romaneio && Date.parse(st.em || '') >= limite;
+    });
+    for (const id of ids) {
+      const antes = situacao[id];
+      const depois = await lancar(id, antes.romaneio);
+      // ainda pendente: mantém a hora de quando ficou pendente (para parar depois de 24 h)
+      if (depois && depois.completo === false) { depois.em = antes.em; salvar(); }
+      else if (depois && depois.completo) log('romaneio ' + id + ': resolvido na nova tentativa');
+    }
+  }
+  if (!simular) setInterval(() => { retentarPendentes().catch((e) => log('nova tentativa: ' + e.message)); }, RETENTAR_MS);
+
+  return { lancar, registrar, status: () => situacao, retentarPendentes };
 }
 
 module.exports = { criarOfsAuto };

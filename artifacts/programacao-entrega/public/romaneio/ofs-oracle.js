@@ -264,6 +264,21 @@
       desenharCardPendentes();
     });
   });
+  // o app tenta de novo sozinho os pendentes (a cada 3 min): a cada 1 min a tela relê a situação
+  // guardada neste PC (sem rede) e atualiza botões e card — o card some quando a OF é gravada
+  var marcaSituacao = '';
+  setInterval(function () {
+    if (!disponivel) return;
+    oracle({ acao: 'status' }).then(function (todos) {
+      if (!todos || typeof todos !== 'object') return;
+      var marca = JSON.stringify(todos);
+      if (marca === marcaSituacao) return;
+      marcaSituacao = marca;
+      situacao = todos;
+      Object.keys(botoesPorId).forEach(atualizarBotoes);
+      desenharCardPendentes();
+    });
+  }, 60 * 1000);
 
   // ---- card "OFs para conferir": logo abaixo de CARREGAMENTOS, só quando houver pendência ----
   // Pendência = romaneio que o lançamento automático não conseguiu resolver sozinho (mais de uma
