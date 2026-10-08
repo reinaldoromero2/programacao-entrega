@@ -18520,6 +18520,12 @@ var SIGNATURES = {
   #prog-modal.prog-so-ver .pg .cli-nome{ display:inline-block; width:200px; overflow:hidden; text-overflow:ellipsis; vertical-align:bottom; }
   /* toque numa célula: a linha fica roxa da célula até o começo (para seguir a linha); outro toque desmarca */
   #prog-modal.prog-so-ver .pg td.cel-marca{ background:#ede9fe !important; color:#4c1d95 !important; }
+  /* celular: cópia do cabeçalho da grade presa no topo da área da grade (o sticky de verdade
+     desalinha no iPhone com a tabela encolhida); aparece ao rolar para baixo */
+  #prog-cab-fixo{ position:absolute; overflow:hidden; pointer-events:none; z-index:5; box-shadow:0 2px 4px rgba(0,0,0,0.18); }
+  #prog-cab-fixo[hidden]{ display:none; }
+  #prog-cab-fixo table.pg{ table-layout:auto; }
+  #prog-cab-fixo th{ box-sizing:border-box; }
   #prog-modal.prog-so-ver .pg td.cel-marca-fim{ background:#c4b5fd !important; color:#2e1065 !important; font-weight:700; }
   #prog-modal.prog-so-ver #prog-ins-btn, #prog-modal.prog-so-ver #prog-ins-enviar,
   #prog-modal.prog-so-ver #rqc008-atualizar-btn, #prog-modal.prog-so-ver .prog-btn-atualizar,
@@ -18671,7 +18677,48 @@ var SIGNATURES = {
     t.style.zoom = String(Math.round(z * 1000) / 1000);
     wrap.scrollLeft = fx * z - (cx || 0);
     wrap.scrollTop = fy * z - (cy || 0);
+    cabecalhoFixo();
   }
+  // ---- celular: cabeçalho sempre visível ----
+  // cópia do <thead> com as mesmas larguras, por cima do topo da área da grade; segue a rolagem
+  // para os lados e o zoom (pinça); só aparece depois de rolar para baixo
+  function cabecalhoFixo(){
+    if (!somenteVer) return;
+    var wrap = $('prog-grade-wrap'), t = tabelaGrade(), fixo = $('prog-cab-fixo');
+    if (!t || !t.tHead){ if (fixo) fixo.hidden = true; return; }
+    if (!fixo){
+      fixo = document.createElement('div');
+      fixo.id = 'prog-cab-fixo';
+      wrap.parentNode.insertBefore(fixo, wrap);
+      if (getComputedStyle(wrap.parentNode).position === 'static') wrap.parentNode.style.position = 'relative';
+    }
+    var z = parseFloat(t.style.zoom) || 1;
+    var copia = document.createElement('table');
+    copia.className = t.className;
+    copia.style.zoom = t.style.zoom;
+    copia.appendChild(t.tHead.cloneNode(true));
+    var orig = t.tHead.querySelectorAll('th'), cop = copia.querySelectorAll('th');
+    for (var i = 0; i < orig.length && i < cop.length; i++){
+      var w = orig[i].getBoundingClientRect().width / z + 'px';
+      cop[i].style.width = w; cop[i].style.minWidth = w; cop[i].style.maxWidth = w;
+      cop[i].style.position = 'static';
+    }
+    copia.style.width = (t.getBoundingClientRect().width / z) + 'px';
+    fixo.innerHTML = '';
+    fixo.appendChild(copia);
+    posicionarCabecalhoFixo();
+  }
+  function posicionarCabecalhoFixo(){
+    var wrap = $('prog-grade-wrap'), fixo = $('prog-cab-fixo');
+    if (!fixo || !fixo.firstChild) return;
+    fixo.style.top = (wrap.offsetTop + wrap.clientTop) + 'px';
+    fixo.style.left = (wrap.offsetLeft + wrap.clientLeft) + 'px';
+    fixo.style.width = wrap.clientWidth + 'px';
+    fixo.hidden = wrap.scrollTop < 4;
+    fixo.scrollLeft = wrap.scrollLeft;
+  }
+  if (somenteVer) $('prog-grade-wrap').addEventListener('scroll', posicionarCabecalhoFixo, { passive: true });
+
   function caberNaTela(){
     if (!somenteVer) return;
     var wrap = $('prog-grade-wrap'), t = tabelaGrade();
@@ -18685,6 +18732,7 @@ var SIGNATURES = {
     escalaFit = Math.round(z * 1000) / 1000;
     escalaAtual = escalaFit;
     t.style.zoom = String(escalaFit);
+    cabecalhoFixo();
   }
   window.addEventListener('resize', function(){ if (!modal.hidden) caberNaTela(); });
   if (somenteVer) (function(){
