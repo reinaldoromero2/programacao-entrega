@@ -346,5 +346,135 @@
     return b;
   }
 
+  // ---- direto na calculadora: botão ⇪ ao lado do OF/OBS de cada linha ----
+  // Um clique grava a OF daquela linha na ordem de separação do produto (mesma quantidade, data
+  // mais perto de hoje; no par Matriz/Filial, a Filial). Com dúvida, ou se a ordem já tiver outro
+  // texto, mostra a escolha ali mesmo. Não grava sozinho ao digitar (OF pela metade iria junto).
+  function prepararLinha(row) {
+    var input = row && row.querySelector('.ofobs-input');
+    if (!input || input.getAttribute('data-ofs')) return;
+    input.setAttribute('data-ofs', '1');
+    var caixa = document.createElement('div');
+    caixa.style.cssText = 'display:flex; gap:4px; align-items:center;';
+    input.parentNode.insertBefore(caixa, input);
+    caixa.appendChild(input);
+    input.style.flex = '1 1 auto';
+    input.style.minWidth = '0';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '⇪';
+    btn.title = 'Gravar esta OF no sistema (ordem de separação)';
+    btn.style.cssText = 'flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid var(--accent-blue, #2563eb); background:none; color:var(--accent-blue, #2563eb); cursor:pointer; font-size:16px; line-height:1;';
+    caixa.appendChild(btn);
+    var aviso = document.createElement('div');
+    aviso.style.cssText = 'font-size:11px; margin-top:3px; line-height:1.35;';
+    caixa.parentNode.insertBefore(aviso, caixa.nextSibling);
+    var mostrar = function () { btn.hidden = !disponivel; if (!disponivel) aviso.innerHTML = ''; };
+    if (disponivel === null) { btn.hidden = true; aoSaberDisponivel.push(mostrar); } else mostrar();
+
+    function dizer(html, cor) { aviso.innerHTML = html; aviso.style.color = cor || ''; }
+    // mudou a OF depois de gravar: volta a oferecer o botão
+    input.addEventListener('input', function () { if (aviso.getAttribute('data-gravado') !== input.value) dizer(''); });
+
+    btn.addEventListener('click', function () {
+      var rp = ((row.querySelector('.rp-input') || {}).value || '').trim();
+      var qtd = parseFloat(String((row.querySelector('.qtd-input') || {}).value || '').replace(/\./g, '').replace(',', '.')) || 0;
+      var ofs = ofsDoTexto(input.value);
+      if (!rp) return dizer('Preencha o RP do produto.', 'var(--critical)');
+      if (!ofs.length) return dizer('Digite o número da OF.', 'var(--critical)');
+      btn.disabled = true;
+      dizer('Procurando a ordem de separação…', 'var(--text-secondary, #666)');
+      oracle({ acao: 'buscar', codpros: [rp], agrupas: [], dias: 10 }).then(function (r) {
+        btn.disabled = false;
+        var linhas = ((r && r.linhas) || []).filter(function (l) { return norm(l.codpro) === norm(rp); });
+        if (!linhas.length) {
+          var erro = r && r.erros && r.erros.length ? ' (' + esc(r.erros.join('; ')) + ')' : '';
+          return dizer('Nenhuma ordem de separação deste produto nos últimos 10 dias' + erro + '. Se a ordem ainda não foi emitida, tente depois — ou use "🧾 Lançar OFs" no romaneio.', 'var(--critical)');
+        }
+        var cliente = { nome: '', itens: [{ rp: rp, qtd: qtd, ofs: ofs }] };
+        var lista = candidatos(cliente, linhas, new Date().toISOString().slice(0, 10));
+        var auto = escolhaAutomatica(cliente, lista);
+        if (auto) return conferirEGravar(auto);
+        escolher(lista);
+        function escolher(opcoes) {
+          var sel = '<select style="max-width:100%; font-size:11px; padding:2px;">' + opcoes.map(function (g, i) {
+            return '<option value="' + i + '">' + esc((g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + g.agrupa + ' — ' + dataBr(g.data) +
+              (g.cobertos ? ' — mesma qtd' : ' — qtd diferente')) + '</option>';
+          }).join('') + '</select>';
+          dizer('Mais de uma ordem possível — escolha: ' + sel + ' <button type="button" class="ofs-ok" style="font-size:11px;">Gravar</button>', 'var(--warning, #b45309)');
+          aviso.querySelector('.ofs-ok').addEventListener('click', function () {
+            conferirEGravar(opcoes[Number(aviso.querySelector('select').value)]);
+          });
+        }
+        function conferirEGravar(g) {
+          var paraGravar = linhasParaGravar(cliente, g);
+          var iguais = paraGravar.filter(function (l) { return l.situacao === 'igual'; });
+          var outras = paraGravar.filter(function (l) { return l.situacao === 'outra'; });
+          var nome = (g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + g.agrupa;
+          if (iguais.length === paraGravar.length) {
+            aviso.setAttribute('data-gravado', input.value);
+            return dizer('✔ Já está no sistema (' + esc(nome) + ').', 'var(--good)');
+          }
+          if (outras.length) {
+            dizer('A ordem ' + esc(nome) + ' já tem "' + esc(outras[0].antes) + '". ' +
+              '<button type="button" class="ofs-sub" style="font-size:11px;">Substituir</button> ' +
+              '<button type="button" class="ofs-junta" style="font-size:11px;">Juntar as duas</button> ' +
+              '<button type="button" class="ofs-nao" style="font-size:11px;">Cancelar</button>', 'var(--warning, #b45309)');
+            aviso.querySelector('.ofs-sub').addEventListener('click', function () { enviar(paraGravar, nome); });
+            aviso.querySelector('.ofs-junta').addEventListener('click', function () {
+              paraGravar.forEach(function (l) {
+                if (l.situacao !== 'outra') return;
+                var todas = ofsDoTexto(l.antes);
+                l.ofs.forEach(function (o) { if (todas.indexOf(o) < 0) todas.push(o); });
+                l.novo = textoOfs(todas);
+              });
+              enviar(paraGravar, nome);
+            });
+            aviso.querySelector('.ofs-nao').addEventListener('click', function () { dizer(''); });
+            return;
+          }
+          enviar(paraGravar, nome);
+        }
+        function enviar(lista, nome) {
+          lista = lista.filter(function (l) { return l.situacao !== 'igual'; });
+          btn.disabled = true;
+          dizer('Gravando no sistema…', 'var(--text-secondary, #666)');
+          oracle({ acao: 'gravar', linhas: lista.map(function (l) {
+            return { chave: l.chave, empresa: l.empresa, agrupa: l.agrupa, codigo: l.codigo, codpro: l.codpro, pedido: l.pedido, antes: l.antes, novo: l.novo };
+          }) }).then(function (res) {
+            btn.disabled = false;
+            var porChave = {};
+            ((res && res.resultados) || []).forEach(function (x) { porChave[x.chave] = x; });
+            var ok = lista.filter(function (l) { return porChave[l.chave] && porChave[l.chave].gravadas > 0; });
+            var erro = lista.map(function (l) { return porChave[l.chave] && porChave[l.chave].erro; }).filter(Boolean)[0] || ((res && res.erros) || [])[0];
+            if (ok.length === lista.length) {
+              aviso.setAttribute('data-gravado', input.value);
+              dizer('✔ Gravado no sistema (' + esc(nome) + '): ' + esc(ok.map(function (l) { return l.novo.trim(); }).join(' ')), 'var(--good)');
+            } else if (erro) {
+              dizer('Não gravou: ' + esc(erro), 'var(--critical)');
+            } else {
+              dizer('Não gravou: a ordem mudou no sistema agora há pouco. Clique em ⇪ de novo para conferir.', 'var(--critical)');
+            }
+          });
+        }
+      });
+    });
+  }
+
+  // linhas da calculadora: as que já existem e as que forem criadas
+  function vigiarCalculadora() {
+    if (!document.body) return setTimeout(vigiarCalculadora, 200);
+    var varrer = function () {
+      document.querySelectorAll('.item-row').forEach(function (row) { if (row.querySelector('.ofobs-input')) prepararLinha(row); });
+    };
+    varrer();
+    var agendado = null;
+    new MutationObserver(function () {
+      if (agendado) return;
+      agendado = setTimeout(function () { agendado = null; varrer(); }, 150);
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+  vigiarCalculadora();
+
   window.ripackOfs = { botao: botao };
 })();
