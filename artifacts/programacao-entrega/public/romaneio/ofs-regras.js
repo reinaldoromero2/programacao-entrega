@@ -75,10 +75,23 @@
   // resolve pela Filial, na ordem acima)
   function escolhaAutomatica(cliente, lista) {
     var top = lista[0];
-    if (!top || top.cobertos < cliente.itens.length || top.distancia > 3) return null;
-    var empata = function (g) { return g && g.cobertos === top.cobertos && Math.abs(g.distancia - top.distancia) < 1; };
-    var duvida = lista.slice(1).some(function (g) { return empata(g) && g.empresa === top.empresa; });
-    return duvida ? null : top;
+    if (top && top.cobertos === cliente.itens.length && top.distancia <= 3) {
+      var empata = function (g) { return g && g.cobertos === top.cobertos && Math.abs(g.distancia - top.distancia) < 1; };
+      var duvida = lista.slice(1).some(function (g) { return empata(g) && g.empresa === top.empresa; });
+      return duvida ? null : top;
+    }
+    // quantidade do romaneio diferente da ordem (ex.: carregou menos que o programado): vale a ordem
+    // com todos os produtos do cliente no dia do romaneio (até 1 dia), se for a única — no par
+    // Matriz/Filial do mesmo dia, a Filial (a lista já vem com a Filial na frente)
+    var perto = lista.filter(function (g) { return g.algum === cliente.itens.length && g.distancia <= 1; });
+    perto.sort(function (a, b) {
+      return (a.distancia - b.distancia) || ((a.empresa === 'filial' ? 0 : 1) - (b.empresa === 'filial' ? 0 : 1));
+    });
+    var escolhida = perto[0];
+    if (!escolhida) return null;
+    // dúvida só com outra ordem da mesma empresa no mesmo dia (a do dia anterior perde para a de hoje)
+    var outra = perto.slice(1).some(function (g) { return g.empresa === escolhida.empresa && Math.abs(g.distancia - escolhida.distancia) < 1; });
+    return outra ? null : escolhida;
   }
 
   // linhas a gravar quando o cliente usa o agrupamento g
