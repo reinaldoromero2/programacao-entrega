@@ -1,7 +1,8 @@
 // Substitui o runtime do artefato do claude.ai (window.claude.use) para o Romaneio rodar no app.
 // - claude.use('db'): o mesmo jeito do Firestore que a página usa (collection/doc/where "=="/
-//   orderBy/limit/get/add/set/update/delete/onSnapshot), gravando no servidor do app
-//   (/api/romaneio). Mudanças de outros aparelhos chegam por long-poll em /api/romaneio/changes.
+//   orderBy/limit/get/add/set/update/delete/onSnapshot). Funciona sem internet: lê e grava numa
+//   cópia local (IndexedDB) e uma fila sobe as gravações para o servidor do app (/api/romaneio).
+//   Mudanças de outros aparelhos chegam por long-poll em /api/romaneio/changes.
 // - claude.use('downloads'): save({ filename, data: Blob }) vira um download comum.
 (function () {
   'use strict';
@@ -29,20 +30,27 @@
     return e;
   }
 
-  function http(method, caminho, corpo) {
+  // pedido ao servidor com tempo máximo: servidor travado conta como fora do ar
+  function http(method, caminho, corpo, tempoMs) {
+    var controle = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = controle ? setTimeout(function () { controle.abort(); }, tempoMs || 20000) : null;
     return fetch(BASE + caminho, {
       method: method,
       headers: corpo ? { 'Content-Type': 'application/json' } : undefined,
       body: corpo ? JSON.stringify(corpo) : undefined,
-      cache: 'no-store'
+      cache: 'no-store',
+      signal: controle ? controle.signal : undefined
     }).then(function (r) {
       if (r.status === 204) return null;
       return r.json().catch(function () { return null; }).then(function (j) {
         if (!r.ok) throw erroHttp(r.status, j);
         return j;
       });
-    });
+    }).then(function (j) { clearTimeout(timer); return j; }, function (e) { clearTimeout(timer); throw e; });
   }
+
+  // "não adianta tentar de novo": pedido recusado pelo servidor (não é queda nem sobrecarga)
+  function recusadoDeVez(e) { return !!(e && e.status && e.status < 500 && e.status !== 429 && e.status !== 408); }
 
   // espera crescente entre tentativas (2 s, 4 s, 8 s… até 1 min). No 429 ("pedidos demais", o
   // Cloudflare na frente do Render bloqueando a rede) espera no mínimo 20 s, para não piorar.
@@ -52,20 +60,101 @@
     return ms * (0.8 + Math.random() * 0.4); // espalha os aparelhos para não tentarem juntos
   }
 
+  // ---- cópia local (funciona sem internet e com o servidor fora) ----
+  // Cada aparelho guarda no IndexedDB os documentos que já viu, a fila do que gravou e as imagens.
+  // As telas sempre mostram a cópia local; o servidor só atualiza essa cópia. Gravar muda a cópia
+  // na hora e entra na fila, que sobe sozinha, em ordem, quando o servidor responde.
+  var IDB_NOME = 'ripack-romaneio-offline';
+  var idbP = null;
+  function idb() {
+    if (!idbP) {
+      idbP = new Promise(function (resolve) {
+        try {
+          var req = indexedDB.open(IDB_NOME, 1);
+          req.onupgradeneeded = function () {
+            var d = req.result;
+            if (!d.objectStoreNames.contains('docs')) d.createObjectStore('docs', { keyPath: 'k' });
+            if (!d.objectStoreNames.contains('fila')) d.createObjectStore('fila', { keyPath: 'n', autoIncrement: true });
+            if (!d.objectStoreNames.contains('arquivos')) d.createObjectStore('arquivos', { keyPath: 'h' });
+          };
+          req.onsuccess = function () { resolve(req.result); };
+          req.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); } // sem IndexedDB (ex.: aba anônima): funciona só na memória
+      });
+    }
+    return idbP;
+  }
+  function idbFazer(loja, modo, fn) {
+    return idb().then(function (d) {
+      if (!d) return undefined;
+      return new Promise(function (resolve) {
+        try {
+          var tx = d.transaction(loja, modo), r = fn(tx.objectStore(loja));
+          tx.oncomplete = function () { resolve(r && 'result' in r ? r.result : undefined); };
+          tx.onerror = tx.onabort = function () { resolve(undefined); };
+        } catch (e) { resolve(undefined); }
+      });
+    });
+  }
+
+  function chave(col, id) { return col + '|' + id; }
+  var local = {};      // col -> { id -> data }
+  var fila = [];       // [{ n, op: 'set'|'update'|'delete', col, id, data }]
+  var pendentes = {};  // chave -> gravações deste doc ainda na fila (o servidor ainda não tem)
+  var CONHECIDAS_KEY = 'ripack_romaneio_colecoes';
+  var conhecidas = {};
+  try { conhecidas = JSON.parse(localStorage.getItem(CONHECIDAS_KEY) || '{}') || {}; } catch (e) {}
+  function marcarConhecida(col) {
+    if (conhecidas[col]) return;
+    conhecidas[col] = true;
+    try { localStorage.setItem(CONHECIDAS_KEY, JSON.stringify(conhecidas)); } catch (e) {}
+  }
+
+  var pronto = Promise.all([
+    idbFazer('docs', 'readonly', function (s) { return s.getAll(); }),
+    idbFazer('fila', 'readonly', function (s) { return s.getAll(); })
+  ]).then(function (r) {
+    (r[0] || []).forEach(function (d) { (local[d.col] = local[d.col] || {})[d.id] = d.data; });
+    fila = (r[1] || []).sort(function (a, b) { return a.n - b.n; });
+    fila.forEach(function (g) { g.salvo = Promise.resolve(g.n); });
+    fila.forEach(function (g) { var k = chave(g.col, g.id); pendentes[k] = (pendentes[k] || 0) + 1; });
+  }, function () {});
+
+  // data null = apagado
+  function guardarLocal(col, id, data) {
+    var c = local[col] = local[col] || {};
+    if (data === null || data === undefined) {
+      if (!(id in c)) return;
+      delete c[id];
+      idbFazer('docs', 'readwrite', function (s) { return s['delete'](chave(col, id)); });
+    } else {
+      c[id] = data;
+      idbFazer('docs', 'readwrite', function (s) { return s.put({ k: chave(col, id), col: col, id: id, data: data }); });
+    }
+  }
+
   // ---- imagens guardadas à parte ----
   // O servidor tira assinatura e desenho da carga de dentro dos documentos e manda só
-  // "ripack-arquivo:<hash>" (?arq=1). Cada imagem é baixada uma vez e fica no cache do navegador
-  // para sempre (o conteúdo de um hash nunca muda); a página continua recebendo o "data:..." de antes.
+  // "ripack-arquivo:<hash>" (?arq=1). Cada imagem é baixada uma vez e guardada no aparelho; a
+  // página continua recebendo o "data:..." de antes.
   var MARCA_ARQUIVO = /^ripack-arquivo:([0-9a-f]{64})$/;
   var arquivos = {};
   function lerArquivo(hash) {
     if (!arquivos[hash]) {
-      arquivos[hash] = fetch(BASE + '/arquivos/' + hash).then(function (r) {
-        if (r.status === 404) return 'ripack-arquivo:' + hash; // não deve acontecer: fica a marca
-        if (!r.ok) throw erroHttp(r.status, null);
-        return r.text();
+      arquivos[hash] = idbFazer('arquivos', 'readonly', function (s) { return s.get(hash); }).then(function (guardado) {
+        if (guardado) return guardado.v;
+        var controle = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        if (controle) setTimeout(function () { controle.abort(); }, 20000);
+        return fetch(BASE + '/arquivos/' + hash, { signal: controle ? controle.signal : undefined }).then(function (r) {
+          if (!r.ok) throw erroHttp(r.status, null);
+          return r.text();
+        }).then(function (t) {
+          idbFazer('arquivos', 'readwrite', function (s) { return s.put({ h: hash, v: t }); });
+          return t;
+        });
       });
-      arquivos[hash].catch(function () { delete arquivos[hash]; });
+      // sem servidor e sem cópia: fica a marca por enquanto (tenta de novo na próxima vez)
+      arquivos[hash] = arquivos[hash].catch(function () { delete arquivos[hash]; return 'ripack-arquivo:' + hash; });
     }
     return arquivos[hash];
   }
@@ -83,33 +172,17 @@
     }
     return v;
   }
-  // devolve a resposta (um doc ou {docs}) com as imagens no lugar das marcas
-  function hidratar(r) {
-    if (!r) return r;
-    var docs = r.docs || [r], hashes = {};
+  // [{id, data}] -> nova lista com as imagens no lugar das marcas (a cópia local fica com as marcas)
+  function hidratar(docs) {
+    var hashes = {};
     docs.forEach(function (d) { juntarMarcas(d.data, hashes); });
     var lista = Object.keys(hashes);
-    if (!lista.length) return r;
+    if (!lista.length) return Promise.resolve(docs);
     return Promise.all(lista.map(lerArquivo)).then(function (textos) {
       var conteudo = {};
       lista.forEach(function (h, i) { conteudo[h] = textos[i]; });
-      docs.forEach(function (d) { d.data = trocarMarcas(d.data, conteudo); });
-      return r;
+      return docs.map(function (d) { return { id: d.id, data: trocarMarcas(d.data, conteudo) }; });
     });
-  }
-
-  // leitura: insiste enquanto o servidor estiver dormindo/fora (Render grátis demora ~1 min a acordar)
-  function lerComInsistencia(caminho) {
-    var tentativa = 0;
-    caminho += (caminho.indexOf('?') >= 0 ? '&' : '?') + 'arq=1';
-    function vai() {
-      return http('GET', caminho).then(hidratar).catch(function (e) {
-        if (e.status && e.status < 500 && e.status !== 429) throw e;
-        tentativa++;
-        return esperar(esperaDaTentativa(tentativa, e)).then(vai);
-      });
-    }
-    return vai();
   }
 
   // ---- snapshots no formato que a página lê ----
@@ -130,46 +203,7 @@
     };
   }
 
-  // ---- ouvintes (onSnapshot) e acompanhamento de mudanças ----
-  // Quando um documento muda, a tela busca SÓ ele (uma vez, para todos os ouvintes) e cada lista
-  // se ajusta ali mesmo, com o mesmo filtro/ordem/limite do servidor. Baixar a lista inteira a
-  // cada mudança (romaneios com assinatura e desenho = vários MB) derrubava o servidor grátis.
-  var ouvintes = [];   // { col, docId?, rodar(), aplicar(mudados) }
-  var MAX_INCREMENTAL = 25;
-
-  var lendoDoc = {};
-  function lerDoc(col, id) {
-    var chave = col + '|' + id;
-    if (lendoDoc[chave]) return lendoDoc[chave];
-    var p = lerComInsistencia('/docs/' + encodeURIComponent(col) + '/' + encodeURIComponent(id)).then(function (r) {
-      return { id: id, data: r.data };
-    }, function (e) {
-      if (e.status === 404) return { id: id, data: null };
-      throw e;
-    });
-    lendoDoc[chave] = p;
-    p.then(function () { delete lendoDoc[chave]; }, function () { delete lendoDoc[chave]; });
-    return p;
-  }
-
-  // ids: os que mudaram; apagados: ids que já se sabe que sumiram (não precisa buscar)
-  function avisarColecao(col, ids, apagados) {
-    var alvo = ouvintes.filter(function (o) {
-      return o.col === col && (!o.docId || !ids || ids.indexOf(o.docId) >= 0);
-    });
-    if (!alvo.length) return;
-    if (!ids || ids.length > MAX_INCREMENTAL) { alvo.forEach(function (o) { o.rodar(); }); return; }
-    apagados = apagados || [];
-    Promise.all(ids.map(function (id) {
-      return apagados.indexOf(id) >= 0 ? { id: id, data: null } : lerDoc(col, id);
-    })).then(function (mudados) {
-      alvo.forEach(function (o) { o.aplicar(mudados); });
-    }, function () {
-      alvo.forEach(function (o) { o.rodar(); });
-    });
-  }
-
-  // regras do servidor (/api/romaneio/docs) repetidas aqui para ajustar a lista sem buscar tudo
+  // ---- buscas na cópia local, com as mesmas regras do servidor (/api/romaneio/docs) ----
   function textoOrdem(v) { return v === null || v === undefined ? null : typeof v === 'string' ? v : JSON.stringify(v); }
   function comparar(q) {
     var campo = q._ordem.campo, desc = q._ordem.dir === 'desc';
@@ -190,24 +224,85 @@
     if (q._ordem && !(q._ordem.campo in data)) return false;
     return true;
   }
-  // devolve a lista ajustada, ou null quando só buscando de novo dá para garantir o resultado
-  function ajustarLista(q, lista, mudados) {
-    var nova = lista.slice(), noLimite = q._limite && lista.length >= q._limite;
-    for (var i = 0; i < mudados.length; i++) {
-      var d = mudados[i], pos = -1;
-      for (var j = 0; j < nova.length; j++) { if (nova[j].id === d.id) { pos = j; break; } }
-      var entra = entraNaBusca(q, d.data);
-      if (pos >= 0) {
-        // saiu de uma lista cheia, ou mudou de posição nela: o próximo de fora pode ter que entrar
-        if (noLimite && (!entra || (q._ordem && textoOrdem(nova[pos].data[q._ordem.campo]) !== textoOrdem(d.data[q._ordem.campo])))) return null;
-        if (entra) nova[pos] = { id: d.id, data: d.data }; else nova.splice(pos, 1);
-      } else if (entra) {
-        nova.push({ id: d.id, data: d.data });
-      }
+  function avaliar(q) {
+    var todos = local[q.col] || {};
+    var lista = Object.keys(todos).map(function (id) { return { id: id, data: todos[id] }; })
+      .filter(function (d) { return entraNaBusca(q, d.data); });
+    lista.sort(q._ordem ? comparar(q) : function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+    return q._limite ? lista.slice(0, q._limite) : lista;
+  }
+
+  // resposta do servidor para uma busca: atualiza a cópia e tira dela o que o servidor não tem mais
+  // (o que ainda está na fila deste aparelho fica como está: é mais novo que o servidor)
+  function reconciliar(q, docs) {
+    var col = q.col, vistos = {};
+    docs.forEach(function (d) {
+      vistos[d.id] = true;
+      if (!pendentes[chave(col, d.id)]) guardarLocal(col, d.id, d.data);
+    });
+    var completo = !q._limite || docs.length < q._limite;
+    var ultimo = docs[docs.length - 1], cmp = q._ordem ? comparar(q) : null;
+    Object.keys(local[col] || {}).forEach(function (id) {
+      if (vistos[id] || pendentes[chave(col, id)]) return;
+      var d = { id: id, data: local[col][id] };
+      if (!entraNaBusca(q, d.data)) return;
+      if (completo || (cmp && ultimo && cmp(d, ultimo) < 0)) guardarLocal(col, id, null);
+    });
+    marcarConhecida(col);
+  }
+
+  function caminhoDoc(col, id) { return '/docs/' + encodeURIComponent(col) + '/' + encodeURIComponent(id); }
+
+  // busca um documento no servidor e atualiza a cópia; uma busca por vez para o mesmo doc
+  var lendoDoc = {};
+  function buscarDocServidor(col, id) {
+    var k = chave(col, id);
+    if (lendoDoc[k]) return lendoDoc[k];
+    var p = http('GET', caminhoDoc(col, id) + '?arq=1').then(function (r) { return r.data; }, function (e) {
+      if (e.status === 404) return null;
+      throw e;
+    }).then(function (data) {
+      if (!pendentes[k]) guardarLocal(col, id, data);
+    });
+    lendoDoc[k] = p;
+    p.then(function () { delete lendoDoc[k]; }, function () { delete lendoDoc[k]; });
+    return p;
+  }
+  function buscarQueryServidor(q) {
+    return http('GET', q._caminho() + (q._caminho().indexOf('?') >= 0 ? '&' : '?') + 'arq=1').then(function (r) {
+      reconciliar(q, (r && r.docs) || []);
+    });
+  }
+
+  // ---- ouvintes (onSnapshot) ----
+  var ouvintes = [];   // { col, docId?, entregar(), atualizar() }
+  var MAX_INCREMENTAL = 25;
+
+  // a cópia de uma coleção mudou: cada tela que mostra essa coleção refaz a conta localmente
+  var avisosPendentes = {};
+  function notificar(col) {
+    if (avisosPendentes[col]) return;
+    avisosPendentes[col] = true;
+    setTimeout(function () {
+      delete avisosPendentes[col];
+      ouvintes.forEach(function (o) { if (o.col === col) o.entregar(); });
+    }, 0);
+  }
+
+  // mudanças de outros aparelhos (long-poll): busca só os documentos que mudaram
+  function mudouNoServidor(col, ids, apagados) {
+    var alvo = ouvintes.filter(function (o) { return o.col === col; });
+    if (ids.length > MAX_INCREMENTAL) {
+      alvo.forEach(function (o) { o.atualizar(); });
+      return;
     }
-    if (q._ordem) nova.sort(comparar(q));
-    if (q._limite && nova.length > q._limite) nova = nova.slice(0, q._limite);
-    return nova;
+    Promise.all(ids.map(function (id) {
+      if (apagados.indexOf(id) >= 0) {
+        if (!pendentes[chave(col, id)]) guardarLocal(col, id, null);
+        return null;
+      }
+      return buscarDocServidor(col, id).catch(function () {});
+    })).then(function () { notificar(col); });
   }
 
   var cursor = null, acompanhando = false, falhasSeguidas = 0;
@@ -216,7 +311,8 @@
     acompanhando = true;
     (function laco() {
       var caminho = cursor === null ? '/changes' : '/changes?since=' + cursor;
-      http('GET', caminho).then(function (r) {
+      http('GET', caminho, null, 40000).then(function (r) {
+        var voltou = falhasSeguidas > 0;
         falhasSeguidas = 0;
         var porColecao = {}, apagados = {};
         (r.changes || []).forEach(function (c) {
@@ -224,7 +320,9 @@
           if (c.deleted) (apagados[c.collection] = apagados[c.collection] || []).push(c.id);
         });
         cursor = r.seq;
-        Object.keys(porColecao).forEach(function (col) { avisarColecao(col, porColecao[col], apagados[col]); });
+        Object.keys(porColecao).forEach(function (col) { mudouNoServidor(col, porColecao[col], apagados[col] || []); });
+        // o servidor voltou: manda o que ficou na fila e confere as telas
+        if (voltou) { enviarFila(); ouvintes.forEach(function (o) { o.atualizar(); }); }
         laco();
       }, function (e) {
         falhasSeguidas++;
@@ -233,89 +331,146 @@
     })();
   }
 
-  // q: a Query (para ajustar a lista sem buscar tudo); null para ouvinte de um documento só
-  function ouvir(col, docId, buscar, cb, errCb, q) {
-    var ativo = true, ultimo = null, rodando = false, deNovo = false, atual = null;
-    function entregar(raw, snap) {
-      var marca = JSON.stringify(raw);
-      if (ativo && marca !== ultimo) {
-        ultimo = marca;
-        try { cb(snap); } catch (e) { setTimeout(function () { throw e; }); }
-      }
-    }
+  // q: a Query; null para ouvinte de um documento só
+  function ouvir(col, docId, q, cb) {
+    var ativo = true, ultimo = null, confirmado = false, jaEntregou = false, falhas = 0, timer = null;
     var o = {
       col: col,
       docId: docId,
-      aplicar: function (mudados) {
+      entregar: function () {
         if (!ativo) return;
-        // ainda carregando, ou no meio de uma busca completa: busca de novo depois
-        if (rodando || (q && atual === null)) return o.rodar();
+        var docs;
         if (docId) {
-          var d = mudados.filter(function (m) { return m.id === docId; })[0];
-          if (!d) return;
-          return entregar(d.data, docSnap(docId, d.data, !!d.data));
+          var data = (local[col] || {})[docId];
+          // doc que este aparelho nunca viu: espera o servidor antes de dizer que não existe
+          if (data === undefined && !confirmado && !jaEntregou) return;
+          docs = data === undefined ? [] : [{ id: docId, data: data }];
+        } else {
+          docs = avaliar(q);
         }
-        var nova = ajustarLista(q, atual, mudados);
-        if (!nova) return o.rodar();
-        atual = nova;
-        entregar(nova, querySnap(nova));
+        var marca = JSON.stringify(docs);
+        if (marca === ultimo) return;
+        ultimo = marca;
+        hidratar(docs).then(function (h) {
+          if (!ativo || marca !== ultimo) return;
+          jaEntregou = true;
+          var snap = docId ? docSnap(docId, h.length ? h[0].data : undefined, h.length > 0) : querySnap(h);
+          try { cb(snap); } catch (e) { setTimeout(function () { throw e; }); }
+        });
       },
-      rodar: function () {
+      atualizar: function () {
         if (!ativo) return;
-        if (rodando) { deNovo = true; return; }
-        rodando = true;
-        buscar().then(function (resultado) {
-          if (q) atual = resultado.raw;
-          entregar(resultado.raw, resultado.snap);
+        clearTimeout(timer);
+        (docId ? buscarDocServidor(col, docId) : buscarQueryServidor(q)).then(function () {
+          falhas = 0;
+          confirmado = true;
+          notificar(col);
         }, function (e) {
-          if (ativo && errCb) { try { errCb(e); } catch (x) {} }
-        }).then(function () {
-          rodando = false;
-          if (deNovo) { deNovo = false; o.rodar(); }
+          // sem servidor: fica com a cópia local (lista vazia se este aparelho nunca viu a coleção)
+          if (!docId) { confirmado = true; o.entregar(); }
+          if (recusadoDeVez(e)) return;
+          falhas++;
+          timer = setTimeout(o.atualizar, esperaDaTentativa(falhas, e));
         });
       }
     };
     ouvintes.push(o);
-    acompanhar();
-    setTimeout(o.rodar, 0);
+    pronto.then(function () {
+      if (!ativo) return;
+      if (docId || conhecidas[col]) o.entregar();
+      o.atualizar();
+      acompanhar();
+    });
     return function () {
       ativo = false;
+      clearTimeout(timer);
       var i = ouvintes.indexOf(o);
       if (i >= 0) ouvintes.splice(i, 1);
     };
   }
 
+  // ---- gravações: na cópia na hora, no servidor pela fila ----
+  function gravar(op, col, id, data) {
+    return pronto.then(function () {
+      var atual = (local[col] || {})[id];
+      if (op === 'set') guardarLocal(col, id, copia(data));
+      else if (op === 'update' && atual !== undefined) guardarLocal(col, id, Object.assign({}, atual, copia(data)));
+      else if (op === 'delete') guardarLocal(col, id, null);
+      var registro = { op: op, col: col, id: id, data: op === 'delete' ? null : copia(data) };
+      var item = { op: registro.op, col: col, id: id, data: registro.data };
+      // salvo: o número da gravação no IndexedDB, para tirar de lá depois de enviada
+      item.salvo = idbFazer('fila', 'readwrite', function (s) { return s.add(registro); });
+      var k = chave(col, id);
+      pendentes[k] = (pendentes[k] || 0) + 1;
+      fila.push(item);
+      return item.salvo.then(function () {
+        notificar(col);
+        enviarFila();
+      });
+    });
+  }
+
+  var enviando = false, falhasFila = 0, timerFila = null;
+  function enviarFila() {
+    if (enviando) return;
+    clearTimeout(timerFila);
+    enviando = true;
+    (function proximo() {
+      var item = fila[0];
+      if (!item) { enviando = false; falhasFila = 0; return; }
+      var metodo = item.op === 'set' ? 'PUT' : item.op === 'update' ? 'PATCH' : 'DELETE';
+      http(metodo, caminhoDoc(item.col, item.id), item.op === 'delete' ? null : { data: item.data }, 60000).then(null, function (e) {
+        if (!recusadoDeVez(e)) throw e;
+        // recusado de vez (ex.: atualizar um doc que outro aparelho apagou): sai da fila
+      }).then(function () {
+        fila.shift();
+        var k = chave(item.col, item.id);
+        if (--pendentes[k] <= 0) delete pendentes[k];
+        item.salvo.then(function (n) { if (n !== undefined) idbFazer('fila', 'readwrite', function (s) { return s['delete'](n); }); });
+        falhasFila = 0;
+        proximo();
+      }, function (e) {
+        enviando = false;
+        falhasFila++;
+        timerFila = setTimeout(enviarFila, esperaDaTentativa(falhasFila, e));
+      });
+    })();
+  }
+  pronto.then(function () { if (fila.length) enviarFila(); });
+  window.addEventListener('online', function () { falhasFila = 0; enviarFila(); });
+
+  // mesmo formato dos ids automáticos do Firestore (20 caracteres), criado aqui para gravar sem servidor
+  function novoId() {
+    var letras = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', bytes = new Uint8Array(20), s = '';
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    for (var i = 0; i < 20; i++) s += letras[bytes[i] % letras.length];
+    return s;
+  }
+
   // ---- referências ----
   function DocRef(col, id) { this.col = col; this.id = id; }
-  DocRef.prototype._caminho = function () {
-    return '/docs/' + encodeURIComponent(this.col) + '/' + encodeURIComponent(this.id);
-  };
-  DocRef.prototype._ler = function () {
+  DocRef.prototype.get = function () {
     var self = this;
-    return lerComInsistencia(self._caminho()).then(function (r) {
-      return { snap: docSnap(self.id, r.data, true), raw: r.data };
-    }, function (e) {
-      if (e.status === 404) return { snap: docSnap(self.id, undefined, false), raw: null };
-      throw e;
+    return pronto.then(function () {
+      return buscarDocServidor(self.col, self.id).then(null, function (e) {
+        // sem servidor: responde com a cópia; doc nunca visto aqui fica sem resposta certa
+        if (!((local[self.col] || {}).hasOwnProperty(self.id))) {
+          var err = new Error('Sem conexão com o servidor');
+          err.code = 'unavailable';
+          throw err;
+        }
+      });
+    }).then(function () {
+      var data = (local[self.col] || {})[self.id];
+      return hidratar(data === undefined ? [] : [{ id: self.id, data: data }]).then(function (h) {
+        return docSnap(self.id, h.length ? h[0].data : undefined, h.length > 0);
+      });
     });
   };
-  DocRef.prototype.get = function () { return this._ler().then(function (r) { return r.snap; }); };
-  DocRef.prototype.set = function (data) {
-    var self = this;
-    return http('PUT', self._caminho(), { data: data }).then(function () { avisarColecao(self.col, [self.id]); });
-  };
-  DocRef.prototype.update = function (data) {
-    var self = this;
-    return http('PATCH', self._caminho(), { data: data }).then(function () { avisarColecao(self.col, [self.id]); });
-  };
-  DocRef.prototype['delete'] = function () {
-    var self = this;
-    return http('DELETE', self._caminho()).then(function () { avisarColecao(self.col, [self.id], [self.id]); });
-  };
-  DocRef.prototype.onSnapshot = function (cb, errCb) {
-    var self = this;
-    return ouvir(self.col, self.id, function () { return self._ler(); }, cb, errCb);
-  };
+  DocRef.prototype.set = function (data) { return gravar('set', this.col, this.id, data); };
+  DocRef.prototype.update = function (data) { return gravar('update', this.col, this.id, data); };
+  DocRef.prototype['delete'] = function () { return gravar('delete', this.col, this.id); };
+  DocRef.prototype.onSnapshot = function (cb) { return ouvir(this.col, this.id, null, cb); };
 
   function Query(col, filtro, ordem, limite) {
     this.col = col; this._filtro = filtro || null; this._ordem = ordem || null; this._limite = limite || null;
@@ -335,17 +490,13 @@
     if (this._limite) p.push('limit=' + this._limite);
     return '/docs/' + encodeURIComponent(this.col) + (p.length ? '?' + p.join('&') : '');
   };
-  Query.prototype._ler = function () {
-    return lerComInsistencia(this._caminho()).then(function (r) {
-      var docs = (r && r.docs) || [];
-      return { snap: querySnap(docs), raw: docs };
-    });
-  };
-  Query.prototype.get = function () { return this._ler().then(function (r) { return r.snap; }); };
-  Query.prototype.onSnapshot = function (cb, errCb) {
+  Query.prototype.get = function () {
     var self = this;
-    return ouvir(self.col, null, function () { return self._ler(); }, cb, errCb, self);
+    return pronto.then(function () {
+      return buscarQueryServidor(self).then(null, function () { /* sem servidor: vale a cópia */ });
+    }).then(function () { return hidratar(avaliar(self)); }).then(querySnap);
   };
+  Query.prototype.onSnapshot = function (cb) { return ouvir(this.col, null, this, cb); };
 
   function Collection(nome) { Query.call(this, nome); }
   Collection.prototype = Object.create(Query.prototype);
@@ -353,12 +504,10 @@
     if (!id) throw new Error('Romaneio: doc() precisa de id');
     return new DocRef(this.col, String(id));
   };
+  // o id nasce aqui (não no servidor), para o documento novo existir mesmo sem conexão
   Collection.prototype.add = function (data) {
-    var col = this.col;
-    return http('POST', '/docs/' + encodeURIComponent(col), { data: data }).then(function (r) {
-      avisarColecao(col, [r.id]);
-      return new DocRef(col, r.id);
-    });
+    var ref = new DocRef(this.col, novoId());
+    return gravar('set', ref.col, ref.id, data).then(function () { return ref; });
   };
 
   var db = { collection: function (nome) { return new Collection(nome); } };
