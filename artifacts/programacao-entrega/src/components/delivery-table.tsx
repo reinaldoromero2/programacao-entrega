@@ -25,7 +25,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { queueDelivery } from "@/lib/offline-deliveries";
 import { getOfflineSnapshot } from "@/lib/offline-snapshot";
 
 // ----------------------------------------------------------------------
@@ -65,13 +64,7 @@ const COL_LABELS = ["S", "#", "CLIENTE", "HRS", "OBS", "MOTORISTA • PLACA", "F
 
 const FRETE_OPTIONS = ["RIPACK", "TRANSPORTADORA", "3º", "COLETA"] as const;
 type FreteOption = typeof FRETE_OPTIONS[number];
-const DELIVERY_CACHE_PREFIX = "entregas-cache-";
 
-function saveDeliveryCache(date: string, deliveries: Entrega[]) {
-  try {
-    localStorage.setItem(`${DELIVERY_CACHE_PREFIX}${date}`, JSON.stringify(deliveries));
-  } catch {}
-}
 
 function loadWidths(): number[] {
   try {
@@ -365,18 +358,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
   const saveField = useCallback((field: keyof typeof localState, value: unknown) => {
     if (lastSavedRef.current[field] === value) return;
 
-    if (!navigator.onLine) {
-      const queryKey = getListEntregasQueryKey({ date });
-      queryClient.setQueryData<Entrega[]>(queryKey, (old) => {
-        const next = old?.map((item) => item.id === entrega.id ? { ...item, [field]: value === "" ? null : value } : item) ?? [];
-        saveDeliveryCache(date, next);
-        return next;
-      });
-      syncAgendaCache(field, value);
-      lastSavedRef.current = { ...lastSavedRef.current, [field]: value } as typeof localState;
-      return;
-    }
-
+    // sem internet ou com o servidor fora, o cliente da API guarda na fila e responde na hora
     setIsSaving(true);
     const updateData = { [field]: value === "" ? null : value };
     updateEntrega.mutate(
@@ -826,40 +808,7 @@ function NewDeliveryRow({ date, index, backgroundImageEnabled, acrylicEnabled }:
     const value = (validatedCliente ?? newCliente).trim();
     if (!value || isCreating) return;
 
-    if (!navigator.onLine) {
-      const queryKey = getListEntregasQueryKey({ date });
-      const offlineEntrega: Entrega = {
-        id: -Date.now(),
-        date,
-        agendamento: false,
-        cliente: value,
-        sortOrder: index,
-        checked: "none",
-        hrs: null,
-        obs: null,
-        motorista: null,
-        placa: null,
-        unidade: "MATRIZ",
-        nf: "none",
-        cg: "none",
-        v: null,
-        divergencias: null,
-        frete: null,
-        statusManual: null,
-      };
-      queueDelivery({
-        temporaryId: offlineEntrega.id,
-        data: { date, cliente: value, sortOrder: index, checked: "none", unidade: "MATRIZ", cg: "none" },
-      });
-      queryClient.setQueryData<Entrega[]>(queryKey, (old) => {
-        const next = [...(old ?? []), offlineEntrega];
-        saveDeliveryCache(date, next);
-        return next;
-      });
-      setNewCliente("");
-      return;
-    }
-
+    // sem internet ou com o servidor fora, o cliente da API guarda na fila e responde na hora
     setIsCreating(true);
     createEntrega.mutate(
       { data: { date, cliente: value, sortOrder: index, checked: "none", unidade: "MATRIZ", cg: "none" } },

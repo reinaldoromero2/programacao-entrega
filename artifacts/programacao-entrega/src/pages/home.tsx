@@ -236,6 +236,13 @@ export default function Home() {
     }
   }, [dateStr, entregas]);
 
+  // a fila do que foi feito com o servidor fora terminou de subir: busca tudo de novo
+  useEffect(() => {
+    const aoEnviar = () => { void queryClient.invalidateQueries(); };
+    window.addEventListener("api-fila-enviada", aoEnviar);
+    return () => window.removeEventListener("api-fila-enviada", aoEnviar);
+  }, [queryClient]);
+
   useEffect(() => {
     if (!isOnline || syncingRef.current) return;
     const pending = getPendingDeliveries();

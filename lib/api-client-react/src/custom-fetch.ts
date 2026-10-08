@@ -23,6 +23,8 @@ type QueuedRequest = {
   method: string;
   headers: [string, string][];
   body?: string;
+  /** id provisório (negativo) da entrega criada sem servidor; vira o id real no envio */
+  tempId?: number;
 };
 type OfflineSnapshot = {
   version: number;
@@ -107,44 +109,122 @@ async function removeQueuedRequest(id: number): Promise<void> {
   });
 }
 
-async function replayQueuedRequests(): Promise<void> {
-  if (!navigator.onLine) return;
-  for (const queued of await readQueuedRequests()) {
-    try {
-      const response = await fetch(queued.url, {
-        method: queued.method,
-        headers: Object.fromEntries(queued.headers),
-        body: queued.body,
-      });
-      if (!response.ok) break;
-      await removeQueuedRequest(queued.id);
-    } catch {
-      break;
-    }
+// ---------------------------------------------------------------------------
+// Servidor fora (sem internet, servidor caído/travado ou banco sem cota): o app continua
+// com a cópia local e guarda as gravações numa fila, que é reenviada sozinha.
+// ---------------------------------------------------------------------------
+
+const SERVIDOR_FORA_KEY = "api-servidor-fora-ate";
+const SERVIDOR_FORA_MS = 30_000;
+const TEMPO_LEITURA_MS = 30_000;
+// criar entrega espera mais: se desistir cedo e o servidor gravar mesmo assim, duplicaria no reenvio
+const TEMPO_GRAVACAO_MS = 60_000;
+const REENVIO_MS = 20_000;
+const IDS_TEMPORARIOS_KEY = "__ids_temporarios__";
+const ID_TEMPORARIO_NA_URL = /\/api\/entregas\/(-\d+)(?=$|[/?])/;
+
+function servidorMarcadoFora(): boolean {
+  try { return Date.now() < Number(localStorage.getItem(SERVIDOR_FORA_KEY) || 0); } catch { return false; }
+}
+
+function marcarServidorFora(): void {
+  try { localStorage.setItem(SERVIDOR_FORA_KEY, String(Date.now() + SERVIDOR_FORA_MS)); } catch { /* sem armazenamento */ }
+}
+
+function marcarServidorOk(): void {
+  try { localStorage.removeItem(SERVIDOR_FORA_KEY); } catch { /* sem armazenamento */ }
+}
+
+/** respostas que querem dizer "servidor indisponível agora", não "pedido errado" */
+function servidorIndisponivel(status: number): boolean {
+  return status >= 500 || status === 429 || status === 408;
+}
+
+/** fetch com tempo máximo; quem passa o próprio signal (ex.: React Query) controla o cancelamento */
+async function fetchComTempo(input: RequestInfo | URL, init: RequestInit, ms: number): Promise<Response> {
+  if (init.signal || typeof AbortController === "undefined") return fetch(input, init);
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), ms);
+  try {
+    return await fetch(input, { ...init, signal: controle.signal });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-async function invalidateCachedApiResponses(): Promise<void> {
-  const db = await openOfflineDb();
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(CACHE_STORE, "readwrite");
-    const store = transaction.objectStore(CACHE_STORE);
-    const request = store.openCursor();
-    request.onsuccess = () => {
-      const cursor = request.result as IDBCursorWithValue | null;
-      if (!cursor) return;
-      if (String(cursor.key).includes("/api/")) cursor.delete();
-      cursor.continue();
-    };
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-  });
+async function temFila(): Promise<boolean> {
+  return (await readQueuedRequests().catch(() => [])).length > 0;
 }
 
-async function applyOfflineDeliveryMutation(url: string, method: string, body: string | undefined): Promise<void> {
+function trocarIdsTemporarios(texto: string, mapa: Record<string, number>): string {
+  return texto.replace(ID_TEMPORARIO_NA_URL, (todo, temp: string) => (mapa[temp] ? `/api/entregas/${mapa[temp]}` : todo));
+}
+
+function trocarIdsNoCorpo(body: string | undefined, mapa: Record<string, number>): string | undefined {
+  if (!body) return body;
+  try {
+    const dados = JSON.parse(body) as Record<string, unknown>;
+    if (!Array.isArray(dados.ids)) return body;
+    return JSON.stringify({ ...dados, ids: (dados.ids as unknown[]).map((id) => (typeof id === "number" && id < 0 && mapa[id] ? mapa[id] : id)) });
+  } catch {
+    return body;
+  }
+}
+
+let reenviando = false;
+
+async function replayQueuedRequests(): Promise<void> {
+  if (reenviando || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+  reenviando = true;
+  let enviou = false;
+  try {
+    const mapa = ((await readCached(IDS_TEMPORARIOS_KEY).catch(() => undefined)) ?? {}) as Record<string, number>;
+    for (const queued of await readQueuedRequests()) {
+      const url = trocarIdsTemporarios(queued.url, mapa);
+      // a criação dessa entrega não foi aceita pelo servidor: não há o que alterar
+      if (ID_TEMPORARIO_NA_URL.test(url)) {
+        await removeQueuedRequest(queued.id);
+        continue;
+      }
+      let response: Response;
+      try {
+        response = await fetchComTempo(url, {
+          method: queued.method,
+          headers: Object.fromEntries(queued.headers),
+          body: trocarIdsNoCorpo(queued.body, mapa),
+        }, TEMPO_GRAVACAO_MS);
+      } catch {
+        marcarServidorFora();
+        break;
+      }
+      if (!response.ok && servidorIndisponivel(response.status)) {
+        marcarServidorFora();
+        break;
+      }
+      // aceito, ou recusado de vez (4xx: tentar de novo não adiantaria e travaria a fila)
+      if (response.ok && queued.tempId !== undefined) {
+        const criado = await response.json().catch(() => null) as { id?: number } | null;
+        if (criado && typeof criado.id === "number") {
+          mapa[queued.tempId] = criado.id;
+          await writeCached(IDS_TEMPORARIOS_KEY, mapa).catch(() => {});
+        }
+      }
+      await removeQueuedRequest(queued.id);
+      enviou = true;
+    }
+  } finally {
+    reenviando = false;
+  }
+  if (enviou && !(await temFila())) {
+    marcarServidorOk();
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("api-fila-enviada"));
+  }
+}
+
+async function applyOfflineDeliveryMutation(url: string, method: string, body: string | undefined, tempId?: number): Promise<void> {
   if (!url.includes("/api/entregas")) return;
   const payload = body ? JSON.parse(body) as Record<string, unknown> : {};
-  const idMatch = url.match(/\/api\/entregas\/(\d+)$/);
+  const idMatch = url.match(/\/api\/entregas\/(-?\d+)$/);
   const id = idMatch ? Number(idMatch[1]) : undefined;
   const db = await openOfflineDb();
 
@@ -156,10 +236,11 @@ async function applyOfflineDeliveryMutation(url: string, method: string, body: s
       const cursor = request.result as IDBCursorWithValue | null;
       if (!cursor) return;
       const cached = cursor.value as CachedResponse;
-      if (Array.isArray(cached.value)) {
+      // só listas de entregas (antes uma entrega nova entrava até na lista de motoristas guardada)
+      if (Array.isArray(cached.value) && /\/api\/entregas(\?|$)/.test(String(cached.key))) {
         let deliveries = cached.value as Array<Record<string, unknown>>;
         if (method === "POST" && url.endsWith("/api/entregas")) {
-          const newDelivery: Record<string, unknown> = { ...payload, id: -Date.now(), sortOrder: payload.sortOrder ?? deliveries.length, checked: payload.checked ?? "none", nf: payload.nf ?? "none", cg: payload.cg ?? "none" };
+          const newDelivery: Record<string, unknown> = { ...payload, id: tempId ?? -Date.now(), sortOrder: payload.sortOrder ?? deliveries.length, checked: payload.checked ?? "none", nf: payload.nf ?? "none", cg: payload.cg ?? "none" };
           const queryDate = new URL(cached.key).searchParams.get("date");
           if (!queryDate || queryDate === newDelivery.date) deliveries = [...deliveries, newDelivery];
         } else if (id !== undefined && method === "DELETE") {
@@ -187,9 +268,12 @@ let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
 
 if (typeof window !== "undefined") {
+  // a cópia local não é apagada depois do reenvio: se o servidor cair de novo, ainda há o que mostrar
   window.addEventListener("online", () => {
-    void replayQueuedRequests().then(invalidateCachedApiResponses).then(syncSnapshot).catch(() => {});
+    void replayQueuedRequests().then(syncSnapshot).catch(() => {});
   });
+  window.setInterval(() => { void replayQueuedRequests().catch(() => {}); }, REENVIO_MS);
+  void replayQueuedRequests().catch(() => {});
   void syncSnapshot();
 }
 
@@ -539,7 +623,7 @@ export async function customFetch<T = unknown>(
   const isApiRequest = requestInfo.url.includes("/api/");
   const isRead = method === "GET" || method === "HEAD";
 
-  if (isApiRequest && isRead && typeof navigator !== "undefined" && !navigator.onLine) {
+  const lerCopiaLocal = async (): Promise<T | undefined> => {
     const cached = await readCached(requestInfo.url).catch(() => undefined);
     if (cached !== undefined) return cached as T;
 
@@ -559,31 +643,62 @@ export async function customFetch<T = unknown>(
         return { mes, meta: meta ? Number((meta as Record<string, unknown>).meta) : null, dias: daily } as T;
       }
     }
+    return undefined;
+  };
+
+  // grava na fila e responde como se o servidor tivesse aceitado; a tela segue normal
+  const guardarNaFila = async (): Promise<T> => {
+    const body = typeof init.body === "string" ? init.body : undefined;
+    const criaEntrega = method === "POST" && requestInfo.url.endsWith("/api/entregas");
+    const tempId = criaEntrega ? -Date.now() : undefined;
+    await queueRequest({ url: requestInfo.url, method, headers: Array.from(headers.entries()), body, tempId });
+    await applyOfflineDeliveryMutation(requestInfo.url, method, body, tempId).catch(() => {});
+
+    if (method === "DELETE") return null as T;
+    if (criaEntrega) {
+      const dados = body ? JSON.parse(body) as Record<string, unknown> : {};
+      return { ...dados, id: tempId, sortOrder: dados.sortOrder ?? 0, checked: dados.checked ?? "none", nf: dados.nf ?? "none", cg: dados.cg ?? "none" } as T;
+    }
+    return {} as T;
+  };
+
+  const podeFicarOffline = isApiRequest && !offlineReplay && method !== "HEAD";
+  const semInternet = typeof navigator !== "undefined" && !navigator.onLine;
+  // com gravação ainda na fila, o servidor não tem tudo: a cópia local é a mais atual
+  const usarLocal = podeFicarOffline && (semInternet || servidorMarcadoFora() || await temFila());
+
+  if (usarLocal && isRead) {
+    const local = await lerCopiaLocal();
+    if (local !== undefined) return local;
   }
+  // gravações entram atrás das que já estão na fila, para manter a ordem
+  if (usarLocal && !isRead) return guardarNaFila();
 
   let response: Response;
   try {
-    response = await fetch(input, { ...init, method, headers });
+    response = await fetchComTempo(input, { ...init, method, headers }, isRead ? TEMPO_LEITURA_MS : TEMPO_GRAVACAO_MS);
   } catch (error) {
-    if (!isApiRequest || isRead || offlineReplay || method === "HEAD") throw error;
-
-    await queueRequest({
-      url: requestInfo.url,
-      method,
-      headers: Array.from(headers.entries()),
-      body: typeof init.body === "string" ? init.body : undefined,
-    });
-    await applyOfflineDeliveryMutation(requestInfo.url, method, typeof init.body === "string" ? init.body : undefined).catch(() => {});
-
-    if (method === "DELETE") return null as T;
-    if (method === "POST" && requestInfo.url.endsWith("/api/entregas")) {
-      const body = typeof init.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : {};
-      return { ...body, id: -Date.now(), sortOrder: body.sortOrder ?? 0, checked: body.checked ?? "none", nf: body.nf ?? "none", cg: body.cg ?? "none" } as T;
+    // cancelado por quem pediu (ex.: a tela fechou): não é problema do servidor
+    if (!podeFicarOffline || init.signal?.aborted) throw error;
+    marcarServidorFora();
+    if (isRead) {
+      const local = await lerCopiaLocal();
+      if (local !== undefined) return local;
+      throw error;
     }
-    return {} as T;
+    return guardarNaFila();
   }
 
   if (!response.ok) {
+    if (podeFicarOffline && servidorIndisponivel(response.status)) {
+      marcarServidorFora();
+      if (isRead) {
+        const local = await lerCopiaLocal();
+        if (local !== undefined) return local;
+      } else {
+        return guardarNaFila();
+      }
+    }
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
   }

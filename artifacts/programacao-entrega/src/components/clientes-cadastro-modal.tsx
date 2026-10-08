@@ -21,8 +21,11 @@ export const CLIENTES_CADASTRO_KEY = ["clientes-cadastro"];
 
 async function fetchClientesCadastro(): Promise<ClienteCadastroItem[]> {
   const res = await fetch(`${API_BASE}/api/clientes-cadastro`);
-  if (!res.ok) return [];
+  // servidor com problema: a busca falha e o app continua com a lista guardada (antes devolvia
+  // lista vazia, todo cliente virava "não cadastrado", com borda vermelha e o texto apagado)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const clientes = await res.json() as ClienteCadastroItem[];
+  if (!Array.isArray(clientes) || clientes.length === 0) throw new Error("lista de clientes vazia");
   localStorage.setItem("clientes-cadastro-cache", JSON.stringify(clientes));
   return clientes;
 }

@@ -95,7 +95,7 @@ export function ClienteAutocomplete({
   placeholder,
   ...rest
 }: ClienteAutocompleteProps) {
-  const { data: clientes = [], isError: isClientesError, isFetched: isClientesFetched } = useClientesCadastro();
+  const { data: clientes = [] } = useClientesCadastro();
   const [open, setOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<DropdownPos | null>(null);
   const [activeIdx, setActiveIdx] = useState(-1);
@@ -105,7 +105,8 @@ export function ClienteAutocomplete({
     () => new Set(clientes.map((c) => c.nome.toUpperCase())),
     [clientes]
   );
-  const canValidate = clientes.length > 0 || (isClientesFetched && !isClientesError);
+  // só confere o nome quando há uma lista de clientes de verdade; sem lista, aceita o que for digitado
+  const canValidate = clientes.length > 0;
 
   const segment = getCurrentSegment(value);
   const inParens = isInsideParens(segment);
