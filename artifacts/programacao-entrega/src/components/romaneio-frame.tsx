@@ -10,8 +10,6 @@ import { rqc008Disponivel, sincronizarRqc008 } from "@/lib/rqc008-sync";
 export const ROMANEIO_ROTA = "/romaneio";
 export const PROGRAMACAO_ROTA = "/programacao";
 const VERIFICA_MS = 60_000;
-const DESLIZE_MS = 450;
-const DESLIZE = `transform ${DESLIZE_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`;
 
 type Tela = "inicio" | "romaneio" | "programacao";
 
@@ -61,7 +59,7 @@ function aplicarZoomDaTela(tela: Tela) {
 
 const setaClasse =
   "fixed top-1/2 z-50 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/60 " +
-  "bg-white/70 text-slate-700 shadow-lg backdrop-blur transition-opacity duration-300 hover:bg-white hover:text-slate-900 print:hidden";
+  "bg-white/70 text-slate-700 shadow-lg backdrop-blur hover:bg-white hover:text-slate-900 print:hidden";
 
 function Seta({ lado, visivel, onClick, rotulo, testid }: {
   lado: "esquerda" | "direita"; visivel: boolean; onClick: () => void; rotulo: string; testid: string;
@@ -83,15 +81,13 @@ function Seta({ lado, visivel, onClick, rotulo, testid }: {
   );
 }
 
-// A tela inicial (Programação de Entrega): sai pela direita quando o Romaneio entra pela
-// esquerda, e pela esquerda quando a Programação RQ C 008 entra pela direita.
+// A tela inicial (Programação de Entrega): fica escondida enquanto o Romaneio ou a Programação
+// RQ C 008 estão na tela. Troca na hora, sem deslizar (o deslize deixava a troca lenta).
 export function TelaProgramacao({ children }: { children: ReactNode }) {
   const { tela, ir } = useTela();
-  const desloca = tela === "romaneio" ? "translateX(100%)" : tela === "programacao" ? "translateX(-100%)" : "none";
   return (
-    <div style={{ overflowX: "clip" }}>
-      {/* sem transform parado, para não mudar o posicionamento dos elementos fixos da tela */}
-      <div style={{ transform: desloca, transition: DESLIZE }} aria-hidden={tela !== "inicio"}>
+    <div>
+      <div style={{ visibility: tela === "inicio" ? "visible" : "hidden" }} aria-hidden={tela !== "inicio"}>
         {children}
       </div>
       <Seta lado="esquerda" visivel={tela === "inicio"} onClick={() => ir(ROMANEIO_ROTA)} rotulo="Romaneio" testid="seta-romaneio" />
@@ -108,10 +104,7 @@ export function RomaneioFrame() {
   useEffect(() => aplicarZoomDaTela(tela), [tela]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [montado, setMontado] = useState(tela !== "inicio");
-  // de que lado o painel está estacionado e se ele está na tela
-  const [lado, setLado] = useState<"esquerda" | "direita">(tela === "programacao" ? "direita" : "esquerda");
   const [naTela, setNaTela] = useState(false);
-  const [semTransicao, setSemTransicao] = useState(false);
 
   const carregado = useRef(false);
   const avisarPagina = (t: Tela) => {
@@ -128,25 +121,7 @@ export function RomaneioFrame() {
     }
     setMontado(true);
     avisarPagina(tela);
-    const novoLado = tela === "romaneio" ? "esquerda" : "direita";
-    // já na tela e só trocando entre grade e Romaneio (ex.: calculadora de carga):
-    // o painel fica parado, muda só o lado e as setas
-    if (naTela && novoLado !== lado) {
-      setLado(novoLado);
-      return;
-    }
-    // trocar de lado é um salto sem animação; depois o painel desliza para dentro
-    if (novoLado !== lado) {
-      setSemTransicao(true);
-      setNaTela(false);
-      setLado(novoLado);
-    }
-    // um instante para o navegador desenhar a posição de partida antes de deslizar
-    const id = setTimeout(() => {
-      setSemTransicao(false);
-      setNaTela(true);
-    }, 30);
-    return () => clearTimeout(id);
+    setNaTela(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tela]);
 
@@ -208,17 +183,13 @@ export function RomaneioFrame() {
 
   if (!montado) return null;
 
-  const fora = lado === "esquerda" ? "translateX(-100%)" : "translateX(100%)";
   return (
     <>
       <div
         className="fixed inset-0 z-40 bg-white"
         style={{
-          transform: naTela ? "translateX(0)" : fora,
-          // ao sair, só some de vez quando o deslize termina — mas para de pegar cliques na hora
           visibility: naTela ? "visible" : "hidden",
           pointerEvents: naTela ? "auto" : "none",
-          transition: semTransicao ? "none" : naTela ? DESLIZE : `${DESLIZE}, visibility 0s linear ${DESLIZE_MS}ms`,
         }}
         aria-hidden={!naTela}
       >
