@@ -512,7 +512,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         onContextMenu={(event) => {
           if (!localState.cliente.trim()) return;
           event.preventDefault();
-          abrirGradeComCliente(localState.cliente);
+          abrirGradeComCliente(localState.cliente, { motorista: localState.motorista, placa: localState.placa });
         }}
         title={localState.cliente ? "Botão direito: ver este cliente na RQ C 008" : undefined}
       >

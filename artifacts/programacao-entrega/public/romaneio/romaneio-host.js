@@ -553,6 +553,8 @@
         if (m.abrir && modal.hidden) { var b = document.getElementById('prog-abrir-btn'); if (b) b.click(); }
         if (!m.abrir && !modal.hidden) modal.hidden = true;
         // botão direito no cliente da Programação: a grade abre filtrada por ele
+        // e o motorista/placa daquela linha: a calculadora já abre com esse caminhão
+        if (m.abrir) window.__ripackCaminhaoProg = m.filtroCliente && m.caminhao ? m.caminhao : null;
         if (m.abrir && m.filtroCliente) window.dispatchEvent(new CustomEvent('ripack-filtro-cliente', { detail: m.filtroCliente }));
         // já está na tela certa: o app pode mostrar (antes aparecia a tela anterior por um instante)
         window.parent.postMessage({ ripack: 'tela-pronta', abrir: !!m.abrir }, '*');

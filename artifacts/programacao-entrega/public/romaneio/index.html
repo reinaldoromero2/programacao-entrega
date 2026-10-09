@@ -12937,10 +12937,18 @@ var SIGNATURES = {
     },
     preco: function(rp){ try { var k = rp ? findKeyCI(RP_MAP, rp) : null; return k ? RP_MAP[k] : null; } catch (e){ return null; } },
     cadastrosCarregados: function(){ try { return allFardosCadastroDocs.length > 0; } catch (e){ return false; } },
-    pedirPlacaECalculadora: function(cliente, itens, aoAbrir){
+    pedirPlacaECalculadora: function(cliente, itens, aoAbrir, caminhao){
       if (!wizOrigemCalcPlacaModal || !wizOrigemCalcPlacaInput) return false;
       wizProgPlaca = { cliente: cliente, itens: itens, aoAbrir: aoAbrir };
       wizMostrarPlacaModalOrigemCalc();
+      // veio pelo botão direito numa linha da Programação: a placa (ou, sem ela, o motorista) daquela
+      // linha já entra preenchida e, reconhecida, segue sozinha para a calculadora
+      var placa = wizPlacaDoCaminhaoProg(caminhao);
+      if (placa){
+        wizOrigemCalcPlacaInput.value = placa;
+        wizAtualizarPlacaVisual(placa);
+        wizAplicarOrigemCalcPlaca(wizResolverOrigemCalcPlaca(placa), true);
+      }
       return true;
     },
     abrirCalculadora: function(cliente, itens){
@@ -12953,6 +12961,21 @@ var SIGNATURES = {
       return true;
     }
   };
+  // placa a usar para {motorista, placa} da linha da Programação: a placa como está escrita (ou só
+  // letras e números, se assim bate no cadastro); sem placa, a do único caminhão daquele motorista
+  function wizPlacaDoCaminhaoProg(c){
+    if (!c) return '';
+    var placa = String(c.placa || '').trim().toUpperCase();
+    if (placa){
+      var limpa = placa.replace(/[^A-Z0-9]/g, '');
+      if (!wizResolverOrigemCalcPlaca(placa) && limpa && wizResolverOrigemCalcPlaca(limpa)) return limpa;
+      return placa;
+    }
+    var mot = String(c.motorista || '').trim().toUpperCase();
+    if (!mot) return '';
+    var doMotorista = wizTodosCaminhoesCadastrados().filter(function(d){ return d.motorista.trim().toUpperCase() === mot; });
+    return doMotorista.length === 1 ? doMotorista[0].placa.toUpperCase() : '';
+  }
   // guarda o caminhão já escolhido enquanto pergunta o cliente ANTES de abrir
   // a calculadora (ver wizPedirClienteAntesDaCalculadora) — null fora desse
   // meio-do-caminho.
@@ -19639,7 +19662,7 @@ var SIGNATURES = {
       if (p.pedirPlacaECalculadora){
         $('prog-enviar').disabled = false;
         st.textContent = '';
-        if (!p.pedirPlacaECalculadora(cliNome, itens, limpar)){ st.textContent = 'Não foi possível abrir a placa.'; st.style.color = 'var(--critical)'; }
+        if (!p.pedirPlacaECalculadora(cliNome, itens, limpar, window.__ripackCaminhaoProg)){ st.textContent = 'Não foi possível abrir a placa.'; st.style.color = 'var(--critical)'; }
         return;
       }
       modal.hidden = true;

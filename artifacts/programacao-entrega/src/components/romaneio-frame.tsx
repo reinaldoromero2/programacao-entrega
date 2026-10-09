@@ -25,11 +25,15 @@ export function rotaDaTelaInicial(location: string) {
 }
 
 // Botão direito no cliente da Programação: vai para a grade RQ C 008 filtrada por ele.
-// O nome fica guardado até a página do Romaneio estar pronta para receber.
+// O nome (e o motorista/placa da linha, para a calculadora já abrir com o caminhão) fica guardado
+// até a página do Romaneio estar pronta para receber.
 let filtroPendente: string | null = null;
-export function abrirGradeComCliente(cliente: string) {
+let caminhaoPendente: { motorista: string; placa: string } | null = null;
+export function abrirGradeComCliente(cliente: string, caminhao?: { motorista?: string; placa?: string }) {
   if (!cliente.trim()) return;
   filtroPendente = cliente.trim();
+  const motorista = (caminhao?.motorista || "").trim(), placa = (caminhao?.placa || "").trim();
+  caminhaoPendente = motorista || placa ? { motorista, placa } : null;
   window.location.hash = PROGRAMACAO_ROTA;
 }
 
@@ -114,8 +118,10 @@ export function RomaneioFrame() {
   const avisarPagina = (t: Tela) => {
     if (t === "inicio" || !carregado.current) return;
     const filtroCliente = t === "programacao" ? filtroPendente : null;
-    iframeRef.current?.contentWindow?.postMessage({ ripack: "programacao", abrir: t === "programacao", filtroCliente }, "*");
+    const caminhao = filtroCliente ? caminhaoPendente : null;
+    iframeRef.current?.contentWindow?.postMessage({ ripack: "programacao", abrir: t === "programacao", filtroCliente, caminhao }, "*");
     filtroPendente = null;
+    caminhaoPendente = null;
     // reserva, caso a página não avise (ex.: versão antiga em cache)
     window.clearTimeout(reservaRef.current);
     reservaRef.current = window.setTimeout(() => setConteudoPronto(true), 1500);
