@@ -30,11 +30,25 @@
   // o app responde se consegue falar com o Oracle (só o app instalado no PC)
   var disponivel = null;
   var aoSaberDisponivel = [];
-  oracle({ acao: 'disponivel' }).then(function (r) {
-    disponivel = !!(r && r.ok);
-    aoSaberDisponivel.forEach(function (f) { f(); });
-    aoSaberDisponivel = [];
-  });
+  // a pergunta pode se perder se a página carregar antes do app estar ouvindo: sem resposta em
+  // 8 s, pergunta de novo (antes ficava 150 s esperando e o botão e o lançamento sumiam de vez)
+  function perguntarDisponivel() {
+    var respondeu = false;
+    var id = proximo++;
+    pedidos[id] = function (r) {
+      respondeu = true;
+      disponivel = !!(r && r.ok);
+      aoSaberDisponivel.forEach(function (f) { f(); });
+      aoSaberDisponivel = [];
+    };
+    window.parent.postMessage({ ripack: 'ofs-oracle', id: id, entrada: { acao: 'disponivel' } }, '*');
+    setTimeout(function () {
+      if (respondeu) return;
+      delete pedidos[id];
+      perguntarDisponivel();
+    }, 8000);
+  }
+  perguntarDisponivel();
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -243,10 +257,27 @@
     if (!disponivel) return;
     oracle({ acao: 'status' }).then(function (todos) {
       situacao = todos && typeof todos === 'object' ? todos : {};
+      statusLido = true;
       Object.keys(botoesPorId).forEach(atualizarBotoes);
       desenharCardPendentes();
+      aVer.splice(0).forEach(function (x) { lancarSeNovo(x.id, x.d); });
     });
   });
+  // romaneio de hoje que este PC nunca tentou (feito no celular, em outro PC, ou com o app
+  // fechado): lança agora em segundo plano, do mesmo jeito que ao criar
+  var statusLido = false, aVer = [], jaPedido = {};
+  function deHoje(d) {
+    var hoje = new Date().toISOString().slice(0, 10);
+    return String(d.data || '').slice(0, 10) === hoje || String(d.criadoEm || '').slice(0, 10) === hoje;
+  }
+  function lancarSeNovo(id, d) {
+    if (!disponivel || jaPedido[id] || situacao[id] || !d || !d.clientes || !deHoje(d)) return;
+    if (!statusLido) { aVer.push({ id: id, d: d }); return; }
+    jaPedido[id] = true;
+    oracle({ acao: 'auto', id: id, romaneio: { clientes: d.clientes, cliente: d.cliente, data: d.data, criadoEm: d.criadoEm } }).then(function (st) {
+      if (st && typeof st === 'object' && !Array.isArray(st) && 'completo' in st) { situacao[id] = st; atualizarBotoes(id); desenharCardPendentes(); }
+    });
+  }
   // o app tenta de novo sozinho os pendentes (a cada 3 min): a cada 1 min a tela relê a situação
   // guardada neste PC (sem rede) e atualiza botões e card — o card some quando a OF é gravada
   var marcaSituacao = '';
@@ -344,7 +375,7 @@
     pintarBotao(b, situacao[docId]);
     (botoesPorId[docId] = botoesPorId[docId] || []).push(b);
     b.addEventListener('click', function () { abrir(docId, d, dbApi, nome); });
-    var mostrar = function () { b.hidden = !disponivel; };
+    var mostrar = function () { b.hidden = !disponivel; lancarSeNovo(docId, d); };
     if (disponivel === null) { b.hidden = true; aoSaberDisponivel.push(mostrar); } else mostrar();
     return b;
   }
