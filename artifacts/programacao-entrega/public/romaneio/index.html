@@ -16976,9 +16976,16 @@ var SIGNATURES = {
       : hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0') + '-' + String(hoje.getDate()).padStart(2, '0');
     fetch(base + '/api/entregas?date=' + dia, { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : []; }).then(function(lista){
       var linhas = (lista || []).slice().sort(function(a, b){ return (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id; });
-      var alvo = linhas.filter(function(e){
+      var doCliente = linhas.filter(function(e){
         return (e.cg || 'none') === 'none' && chaves(e.cliente).some(function(k){ return doRomaneio.indexOf(k) !== -1; });
-      })[0];
+      });
+      // cliente com mais de uma entrega no dia: vale a da mesma placa do romaneio; sem placa igual,
+      // uma ainda sem placa na Programação; senão, a primeira
+      var soLetras = function(t){ return String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+      var placaRom = soLetras(d.placa);
+      var alvo = (placaRom && doCliente.filter(function(e){ return soLetras(e.placa) === placaRom; })[0])
+        || (doCliente.length > 1 && doCliente.filter(function(e){ return !soLetras(e.placa); })[0])
+        || doCliente[0];
       if (!alvo) return;
       return fetch(base + '/api/entregas/' + alvo.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cg: 'check' }) }).then(function(r){
         if (r.ok) try { if (window.parent !== window) window.parent.postMessage({ ripack: 'entregas-mudaram' }, '*'); } catch (e){}
