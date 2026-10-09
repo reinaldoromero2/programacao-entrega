@@ -16932,6 +16932,7 @@ var SIGNATURES = {
     signStatusEl.style.color = '';
     signStatusEl.textContent = 'Salvando assinatura...';
     var dataUrl = signCanvas.toDataURL('image/png');
+    var docAssinado = currentSignDoc;
     dbApi.collection('romaneios').doc(currentSignDocId).update({
       docStatus: 'concluido',
       assinatura: dataUrl,
@@ -16941,6 +16942,7 @@ var SIGNATURES = {
     }).then(function(){
       signStatusEl.textContent = 'Romaneio assinado e concluído!';
       signStatusEl.style.color = 'var(--good)';
+      marcarCgDaEntrega(docAssinado);
       setTimeout(function(){ signPanel.hidden = true; }, 1200);
     }).catch(function(){
       signStatusEl.textContent = 'Não foi possível salvar a assinatura agora. Tente novamente.';
@@ -16948,6 +16950,41 @@ var SIGNATURES = {
       signConfirmBtn.disabled = false;
     });
   });
+
+  // assinou o romaneio: marca o ✔ da coluna CG na entrega desse cliente na Programação do dia.
+  // Só mexe em CG ainda vazio (um ✘ ou ✔ posto à mão fica como está) e só numa linha por cliente;
+  // depois dá para mudar à mão normalmente. Sem servidor agora, não marca (e não atrapalha a assinatura).
+  function marcarCgDaEntrega(d){
+    if (!d) return;
+    var base = window.__ripackApiBase;
+    if (!base) return;
+    var normCli = function(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\([^)]*\)/g, ' ').replace(/[^A-Z0-9]+/g, ' ').trim(); };
+    // cada cliente vira o código do começo do nome ("2019 BOSCH CAMPINAS" -> "2019") ou o nome inteiro
+    var chaves = function(texto){
+      return String(texto || '').split('+').map(function(parte){
+        var n = normCli(parte), m = n.match(/^(\d{3,})\b/);
+        return m ? 'C' + m[1] : n ? 'N' + n : '';
+      }).filter(Boolean);
+    };
+    var doRomaneio = [];
+    (d.clientes && d.clientes.length ? d.clientes.map(function(c){ return c.nome; }) : [d.cliente]).forEach(function(nome){
+      chaves(nome).forEach(function(k){ if (doRomaneio.indexOf(k) === -1) doRomaneio.push(k); });
+    });
+    if (!doRomaneio.length) return;
+    var hoje = new Date();
+    var dia = /^\d{4}-\d{2}-\d{2}/.test(String(d.data || '')) ? String(d.data).slice(0, 10)
+      : hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0') + '-' + String(hoje.getDate()).padStart(2, '0');
+    fetch(base + '/api/entregas?date=' + dia, { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : []; }).then(function(lista){
+      var linhas = (lista || []).slice().sort(function(a, b){ return (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id; });
+      var alvo = linhas.filter(function(e){
+        return (e.cg || 'none') === 'none' && chaves(e.cliente).some(function(k){ return doRomaneio.indexOf(k) !== -1; });
+      })[0];
+      if (!alvo) return;
+      return fetch(base + '/api/entregas/' + alvo.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cg: 'check' }) }).then(function(r){
+        if (r.ok) try { if (window.parent !== window) window.parent.postMessage({ ripack: 'entregas-mudaram' }, '*'); } catch (e){}
+      });
+    }).catch(function(){});
+  }
 
   function renderDoneRow(doc){
     var d = doc.data() || {};
