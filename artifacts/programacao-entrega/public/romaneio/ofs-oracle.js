@@ -240,9 +240,9 @@
     var lancadas = st && st.linhas && st.linhas.length;
     // o automático (electron/ofs-auto.js) conferiu e não conseguiu decidir tudo sozinho
     var faltaConferir = st && st.completo === false;
-    // OFs já lançadas e nada a conferir: o botão sai do card do romaneio
+    // OFs já lançadas e nada a conferir: o botão sai do card do romaneio (o de "Mais opções" fica)
     b._ofsConcluido = !!(lancadas && !faltaConferir);
-    b.hidden = !disponivel || b._ofsConcluido;
+    b.hidden = !disponivel || (b._ofsConcluido && !b._ofsSempre);
     b.className = 'add-btn ' + (lancadas && !faltaConferir ? 'btn-destaque-verde' : 'btn-destaque-branco');
     b.textContent = faltaConferir ? '⚠ Lançar OFs' : lancadas ? '✔ OFs no sistema' : '🧾 Lançar OFs';
     b.style.color = faltaConferir ? 'var(--warning, #b45309)' : '';
@@ -372,13 +372,15 @@
     if (cardCarreg && cardPend.previousElementSibling !== cardCarreg) cardCarreg.parentNode.insertBefore(cardPend, cardCarreg.nextSibling);
   }, 3000);
 
-  function botao(docId, d, dbApi, nome) {
+  // sempre=true: o botão de "Mais opções", que continua lá mesmo com as OFs já lançadas
+  function botao(docId, d, dbApi, nome, sempre) {
     var b = document.createElement('button');
     b.type = 'button';
+    b._ofsSempre = !!sempre;
     pintarBotao(b, situacao[docId]);
     (botoesPorId[docId] = botoesPorId[docId] || []).push(b);
     b.addEventListener('click', function () { abrir(docId, d, dbApi, nome); });
-    var mostrar = function () { b.hidden = !disponivel || b._ofsConcluido; lancarSeNovo(docId, d); };
+    var mostrar = function () { b.hidden = !disponivel || (b._ofsConcluido && !b._ofsSempre); lancarSeNovo(docId, d); };
     if (disponivel === null) { b.hidden = true; aoSaberDisponivel.push(mostrar); } else mostrar();
     return b;
   }

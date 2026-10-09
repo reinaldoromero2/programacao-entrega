@@ -16452,7 +16452,13 @@ var SIGNATURES = {
     btnWrap.appendChild(viewBtnPend);
     cfBotoesDesenho(d, false, doc.id).forEach(function(btn){ btnWrap.appendChild(btn); });
     // "Lançar OFs" no sistema (só no app do PC, ver ofs-oracle.js)
-    if (window.ripackOfs) btnWrap.appendChild(window.ripackOfs.botao(doc.id, d, dbApi, currentSessionNome));
+    // um no card (só enquanto a OF não foi lançada) e outro em "Mais opções" (sempre)
+    if (window.ripackOfs){
+      var ofsNoCard = window.ripackOfs.botao(doc.id, d, dbApi, currentSessionNome);
+      ofsNoCard.setAttribute('data-ofs-card', '1');
+      btnWrap.appendChild(ofsNoCard);
+      btnWrap.appendChild(window.ripackOfs.botao(doc.id, d, dbApi, currentSessionNome, true));
+    }
     if (!carregando && podeIniciarCarregamento()){
       var startBtn = document.createElement('button');
       startBtn.type = 'button';
@@ -16572,7 +16578,7 @@ var SIGNATURES = {
     // vai para um pop-up aberto pelo botão "+" no canto do cartão.
     (function(){
       var principal = /^Romaneio$|Desenho$|Iniciar Carregamento|^Assinar$|Definir quantidade final/;
-      var extras = Array.prototype.slice.call(btnWrap.children).filter(function(b){ return !principal.test(b.textContent); });
+      var extras = Array.prototype.slice.call(btnWrap.children).filter(function(b){ return !principal.test(b.textContent) && !b.hasAttribute('data-ofs-card'); });
       if (!extras.length) return;
       extras.forEach(function(b){
         if (b.textContent === 'R') b.textContent = '↩ Reverter p/ aguardando';
