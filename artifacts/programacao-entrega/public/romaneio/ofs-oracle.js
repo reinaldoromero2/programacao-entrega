@@ -241,7 +241,7 @@
     // o automático (electron/ofs-auto.js) conferiu e não conseguiu decidir tudo sozinho
     var faltaConferir = st && st.completo === false;
     // OFs já lançadas e nada a conferir: o botão sai do card do romaneio (o de "Mais opções" fica)
-    b._ofsConcluido = !!(lancadas && !faltaConferir);
+    b._ofsConcluido = !!(st && st.completo === true);
     b.hidden = !disponivel || (b._ofsConcluido && !b._ofsSempre);
     // no card (só aparece com OF pendente) é vermelho; em "Mais opções", branco pendente e verde lançado
     var noCard = !b._ofsSempre;
@@ -348,7 +348,7 @@
           '<div style="flex:1 1 220px; min-width:0;"><b>' + esc(nomes) + '</b>' +
             '<div class="foot-note" style="margin:2px 0 0;">' + esc(dataBr(r.data || r.criadoEm)) + (ofs.length ? ' · OF ' + esc(ofs.join(', ')) : '') + '</div></div>' +
           '<button type="button" class="add-btn btn-destaque-branco ofs-pend-abrir" data-id="' + esc(id) + '" style="flex:0 0 auto; margin-top:0;">⚠ Conferir e lançar</button>' +
-          '<button type="button" class="add-btn ofs-pend-ignorar" data-id="' + esc(id) + '" title="Não gravar nada no sistema para este romaneio e tirá-lo daqui" style="flex:0 0 auto; margin-top:0; color:var(--critical); border-color:var(--critical);">Não lançar</button>' +
+          '<button type="button" class="add-btn ofs-pend-ignorar" data-id="' + esc(id) + '" title="Tira este romaneio daqui sem gravar nada. Não apaga nada do sistema: o que já está na OS (Inclusor) continua lá" style="flex:0 0 auto; margin-top:0; color:var(--critical); border-color:var(--critical);">Cancelar</button>' +
         '</div>';
       }).join('');
     cardPend.querySelectorAll('.ofs-pend-abrir').forEach(function (b) {
