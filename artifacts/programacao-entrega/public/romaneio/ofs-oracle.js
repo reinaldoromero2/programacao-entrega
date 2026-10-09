@@ -120,6 +120,18 @@
       };
       desenhar();
       if (aviso) status(aviso.texto, aviso.cor);
+      // tudo já está no sistema (lançado no Inclusor ou em outro PC): anota como resolvido neste PC,
+      // e o "⚠ Lançar OFs" vermelho sai do card do romaneio e do card de pendentes
+      var tudoLancado = !atual.erros.length && atual.clientes.every(function (c) {
+        var ls = linhasDoPlano(c.plano);
+        return c.plano.completo && ls.length && ls.every(function (l) { return l.situacao === 'igual'; });
+      });
+      var st = situacao[docId];
+      if (tudoLancado && !(st && st.completo === true)) {
+        oracle({ acao: 'registrar', id: docId, linhas: [], completo: true }).then(function (novo) {
+          if (novo && typeof novo === 'object' && 'completo' in novo) { situacao[docId] = novo; atualizarBotoes(docId); desenharCardPendentes(); }
+        });
+      }
     });
   }
 
