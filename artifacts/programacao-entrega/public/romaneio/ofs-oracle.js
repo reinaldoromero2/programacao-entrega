@@ -243,9 +243,11 @@
     // OFs já lançadas e nada a conferir: o botão sai do card do romaneio (o de "Mais opções" fica)
     b._ofsConcluido = !!(lancadas && !faltaConferir);
     b.hidden = !disponivel || (b._ofsConcluido && !b._ofsSempre);
-    b.className = 'add-btn ' + (lancadas && !faltaConferir ? 'btn-destaque-verde' : 'btn-destaque-branco');
+    // no card (só aparece com OF pendente) é vermelho; em "Mais opções", branco pendente e verde lançado
+    var noCard = !b._ofsSempre;
+    b.className = 'add-btn ' + (noCard ? 'btn-destaque-vermelho' : lancadas && !faltaConferir ? 'btn-destaque-verde' : 'btn-destaque-branco');
     b.textContent = faltaConferir ? '⚠ Lançar OFs' : lancadas ? '✔ OFs no sistema' : '🧾 Lançar OFs';
-    b.style.color = faltaConferir ? 'var(--warning, #b45309)' : '';
+    b.style.color = faltaConferir && !noCard ? 'var(--warning, #b45309)' : '';
     b.title = faltaConferir
       ? 'O lançamento automático não conseguiu decidir tudo sozinho (mais de uma ordem possível, OS ainda não emitida ou ordem com outro texto) — clique para conferir'
       : lancadas
