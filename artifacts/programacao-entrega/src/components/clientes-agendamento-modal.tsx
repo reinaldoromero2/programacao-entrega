@@ -406,7 +406,7 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
                 <Camera className="h-4 w-4" />
                 Criar pelas fotos dos tickets
               </Button>
-              <span className="text-xs text-slate-600">Escolha o cliente acima, cole as fotos dos tickets e o app lê a data e o horário de cada um.</span>
+              <span className="text-xs text-slate-600">Cole as fotos dos tickets: o app reconhece o cliente pelo modelo e lê a data e o horário de cada um.</span>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
@@ -658,9 +658,10 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
         <AgendamentoFotosLote
           open={loteAberto}
           cliente={cliente}
+          clientes={clientesCadastrados.map((item) => item.nome)}
           onOpenChange={setLoteAberto}
-          criar={({ date, hrs }) => createEntrega.mutateAsync({
-            data: { date, cliente: cliente.trim().toUpperCase(), hrs, unidade: "MATRIZ", agendamento: true },
+          criar={({ date, hrs, cliente: nome }) => createEntrega.mutateAsync({
+            data: { date, cliente: nome, hrs, unidade: "MATRIZ", agendamento: true },
           })}
           onCriados={(datas) => void atualizarDepois(Array.from(new Set(datas)))}
         />

@@ -93,17 +93,38 @@ function obterLeitor(): Promise<Leitor> {
   return leitor;
 }
 
+// Cliente pelo modelo do ticket: trechos que só aparecem no ticket daquele cliente. Vence o modelo
+// com mais trechos achados; empate ou nenhum, fica para escolher à mão. Os nomes são os do cadastro.
+const MODELOS: { cliente: string; sinais: RegExp[] }[] = [
+  { cliente: "3M SUMARÉ", sinais: [/SUM-\d{6,}/i, /3M\s*-\s*Sumar/i, /Data\s+agendamento/i] },
+  { cliente: "3M ITAPETININGA", sinais: [/Rodovi[aá]rio/i, /\bModal\b/i, /\bTurno\b/i] },
+  { cliente: "3M RIBEIRÃO", sinais: [/(^|\s)[I1l|]\.?\s?D\s*:\s*\d{6,}/m, /\bItem\s*:/i] },
+  { cliente: "OURO FINO", sinais: [/Agendamento\s+confirmado\s+para/i] },
+  { cliente: "PERFETTI VAN MELLE", sinais: [/\bagv\b/i, /Cajamar/i, /GRADE\s+AGENDA/i, /Medvedenk/i] },
+  { cliente: "CHEVRON", sinais: [/Chevron/i, /Oronite/i, /AGENDAMENTO\s+IMPRESSO/i] },
+];
+
+export function identificarCliente(texto: string): string | null {
+  const pontos = MODELOS
+    .map((m) => ({ cliente: m.cliente, n: m.sinais.filter((r) => r.test(texto)).length }))
+    .sort((a, b) => b.n - a.n);
+  if (!pontos[0].n || pontos[1].n === pontos[0].n) return null;
+  return pontos[0].cliente;
+}
+
 /** lê a foto do ticket: a imagem original e a tratada; "conferir" quando ficou dúvida */
-export async function lerTicket(arquivo: Blob): Promise<DataHora & { conferir: boolean }> {
+export async function lerTicket(arquivo: Blob): Promise<DataHora & { conferir: boolean; cliente: string | null }> {
   const w = await obterLeitor();
   const img = await carregar(arquivo);
   // a original vai como arquivo (o leitor não reabre a imagem pelo endereço, já descartado)
-  const a = lerDataHora((await w.recognize(arquivo)).data.text);
+  const textoA = (await w.recognize(arquivo)).data.text;
+  const a = lerDataHora(textoA);
+  const textoB = (await w.recognize(tratar(img))).data.text;
+  const b = lerDataHora(textoB);
+  const cliente = identificarCliente(`${textoA}\n${textoB}`);
   if (a.data && a.hora) {
-    const b = lerDataHora((await w.recognize(tratar(img))).data.text);
     const iguais = !b.data || !b.hora || (b.data === a.data && b.hora === a.hora);
-    return { ...a, conferir: !iguais };
+    return { ...a, cliente, conferir: !iguais };
   }
-  const b = lerDataHora((await w.recognize(tratar(img))).data.text);
-  return { data: a.data || b.data, hora: a.hora || b.hora, conferir: !(a.data || b.data) || !(a.hora || b.hora) };
+  return { data: a.data || b.data, hora: a.hora || b.hora, cliente, conferir: !(a.data || b.data) || !(a.hora || b.hora) };
 }

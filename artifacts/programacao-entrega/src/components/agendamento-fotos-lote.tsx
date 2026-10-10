@@ -18,21 +18,26 @@ interface Linha {
   lendo: boolean;
   data: string;
   hora: string;
+  cliente: string;
+  /** o cliente veio do modelo do ticket (e não do campo Cliente nem escolhido à mão) */
+  clienteDoModelo: boolean;
   conferir: boolean;
   erro?: string;
 }
 
 interface Props {
   open: boolean;
+  /** o do campo Cliente da agenda: vale para a foto em que o modelo não for reconhecido */
   cliente: string;
+  clientes: string[];
   onOpenChange: (open: boolean) => void;
-  criar: (dados: { date: string; hrs: string }) => Promise<Entrega>;
+  criar: (dados: { date: string; hrs: string; cliente: string }) => Promise<Entrega>;
   onCriados: (datas: string[]) => void;
 }
 
 let proximaChave = 1;
 
-export function AgendamentoFotosLote({ open, cliente, onOpenChange, criar, onCriados }: Props) {
+export function AgendamentoFotosLote({ open, cliente, clientes, onOpenChange, criar, onCriados }: Props) {
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [salvando, setSalvando] = useState(false);
   const arquivoRef = useRef<HTMLInputElement>(null);
@@ -48,16 +53,19 @@ export function AgendamentoFotosLote({ open, cliente, onOpenChange, criar, onCri
 
   const adicionar = (arquivos: Blob[]) => {
     const novas = arquivos.map((arquivo) => ({
-      chave: proximaChave++, arquivo, miniatura: URL.createObjectURL(arquivo), lendo: true, data: "", hora: "", conferir: false,
+      chave: proximaChave++, arquivo, miniatura: URL.createObjectURL(arquivo), lendo: true, data: "", hora: "", cliente: "", clienteDoModelo: false, conferir: false,
     }));
     setLinhas((atuais) => [...atuais, ...novas]);
     for (const l of novas) {
       fila.current = fila.current.then(async () => {
         try {
           const r = await lerTicket(l.arquivo);
-          atualizar(l.chave, { lendo: false, data: r.data ?? "", hora: r.hora ?? "", conferir: r.conferir });
+          atualizar(l.chave, {
+            lendo: false, data: r.data ?? "", hora: r.hora ?? "", conferir: r.conferir,
+            cliente: r.cliente ?? cliente.trim().toUpperCase(), clienteDoModelo: !!r.cliente,
+          });
         } catch {
-          atualizar(l.chave, { lendo: false, conferir: true, erro: "Não consegui ler esta foto: preencha a data e o horário." });
+          atualizar(l.chave, { lendo: false, conferir: true, cliente: cliente.trim().toUpperCase(), erro: "Não consegui ler esta foto: preencha o que faltar." });
         }
       });
     }
@@ -94,8 +102,8 @@ export function AgendamentoFotosLote({ open, cliente, onOpenChange, criar, onCri
   };
 
   const lendo = linhas.some((l) => l.lendo);
-  const prontas = linhas.filter((l) => !l.lendo && l.data && l.hora);
-  const podeCriar = !!cliente.trim() && linhas.length > 0 && !lendo && prontas.length === linhas.length && !salvando;
+  const prontas = linhas.filter((l) => !l.lendo && l.data && l.hora && l.cliente.trim());
+  const podeCriar = linhas.length > 0 && !lendo && prontas.length === linhas.length && !salvando;
 
   const criarTodos = async () => {
     if (!podeCriar) return;
@@ -104,7 +112,7 @@ export function AgendamentoFotosLote({ open, cliente, onOpenChange, criar, onCri
     const falharam: Linha[] = [];
     for (const l of linhas) {
       try {
-        const entrega = await criar({ date: l.data, hrs: l.hora });
+        const entrega = await criar({ date: l.data, hrs: l.hora, cliente: l.cliente.trim().toUpperCase() });
         criados.push(l.data);
         // a foto vai junto; se falhar, o agendamento já está criado (dá para colar depois)
         try { await salvarFoto(entrega.id, await reduzir(l.arquivo)); } catch { /* segue */ }
@@ -115,7 +123,8 @@ export function AgendamentoFotosLote({ open, cliente, onOpenChange, criar, onCri
     setSalvando(false);
     onCriados(criados);
     if (!falharam.length) {
-      toast({ title: `${criados.length} agendamento${criados.length !== 1 ? "s" : ""} criado${criados.length !== 1 ? "s" : ""}`, description: cliente.trim().toUpperCase() });
+      const nomes = Array.from(new Set(linhas.map((l) => l.cliente.trim().toUpperCase()))).join(", ");
+      toast({ title: `${criados.length} agendamento${criados.length !== 1 ? "s" : ""} criado${criados.length !== 1 ? "s" : ""}`, description: nomes });
       onOpenChange(false);
     } else {
       setLinhas(falharam);
@@ -127,13 +136,13 @@ export function AgendamentoFotosLote({ open, cliente, onOpenChange, criar, onCri
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-slate-800">Criar pelas fotos · {cliente.trim().toUpperCase() || "escolha o cliente"}</DialogTitle>
+          <DialogTitle className="text-slate-800">Criar agendamentos pelas fotos</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-600">
           <ClipboardPaste className="h-6 w-6 text-blue-600" />
           <p><b>Copie a imagem de cada ticket no e-mail</b> e aperte <b>Ctrl+V</b> aqui, uma atrás da outra.</p>
-          <p className="text-xs text-slate-500">O app lê a data e o horário de cada foto. Confira antes de criar.</p>
+          <p className="text-xs text-slate-500">O app reconhece o cliente pelo modelo do ticket e lê a data e o horário. Confira antes de criar.</p>
         </div>
 
         {linhas.length > 0 && (
@@ -147,6 +156,16 @@ export function AgendamentoFotosLote({ open, cliente, onOpenChange, criar, onCri
                   <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin text-blue-600" /> Lendo a foto…</span>
                 ) : (
                   <>
+                    <div className="flex flex-col gap-0.5">
+                      <Input
+                        list="lote-clientes" value={l.cliente} placeholder="Escolha o cliente"
+                        onChange={(e) => atualizar(l.chave, { cliente: e.target.value.toUpperCase(), clienteDoModelo: false })}
+                        className={`h-9 w-[210px] bg-white text-sm uppercase ${l.cliente.trim() ? "" : "border-red-400"}`} aria-label="Cliente do agendamento"
+                      />
+                      <span className={`text-[10px] ${l.clienteDoModelo ? "text-green-700" : l.cliente.trim() ? "text-slate-500" : "text-red-600"}`}>
+                        {l.clienteDoModelo ? "reconhecido pelo modelo do ticket" : l.cliente.trim() ? "do campo Cliente / escolhido" : "não reconheci: escolha o cliente"}
+                      </span>
+                    </div>
                     <Input type="date" value={l.data} onChange={(e) => atualizar(l.chave, { data: e.target.value })} className="h-9 w-[150px] bg-white text-sm" aria-label="Data do agendamento" />
                     <Input type="time" value={l.hora} onChange={(e) => atualizar(l.chave, { hora: e.target.value })} className="h-9 w-[110px] bg-white text-sm" aria-label="Horário do agendamento" />
                     {(l.conferir || l.erro || !l.data || !l.hora) && (
@@ -182,7 +201,7 @@ export function AgendamentoFotosLote({ open, cliente, onOpenChange, criar, onCri
             {linhas.length ? `Criar ${linhas.length} agendamento${linhas.length !== 1 ? "s" : ""}` : "Criar agendamentos"}
           </Button>
         </div>
-        {!cliente.trim() && <p className="text-xs text-red-600">Escolha o cliente no campo "Cliente" antes de criar.</p>}
+        <datalist id="lote-clientes">{clientes.map((n) => <option key={n} value={n} />)}</datalist>
       </DialogContent>
     </Dialog>
   );
