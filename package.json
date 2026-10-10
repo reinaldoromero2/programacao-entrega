@@ -32,11 +32,14 @@
     },
     "win": {
       "target": "nsis",
+      "icon": "build/icon.ico",
       "artifactName": "ProgramacaoEntrega-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Programação de Entrega"
