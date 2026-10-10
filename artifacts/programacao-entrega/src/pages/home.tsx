@@ -15,7 +15,6 @@ import { RelatorioModal } from "@/components/relatorio-modal";
 import { OpcoesMenu } from "@/components/opcoes-menu";
 import { ClientesAgendamentoModal } from "@/components/clientes-agendamento-modal";
 import { LembretesModal } from "@/components/lembretes-modal";
-import { RomaneioButton } from "@/components/romaneio-button";
 import { useSavePdf } from "@/hooks/use-save-pdf";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { useBgColor } from "@/hooks/use-bg-color";
@@ -596,8 +595,6 @@ export default function Home() {
               {movingDeliveries ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarIcon className="w-4 h-4" />}
             </Button>
           )}
-
-          <RomaneioButton />
 
           <RelatorioModal onNavigateDate={(d) => setDate(new Date(d + "T12:00:00"))} />
 

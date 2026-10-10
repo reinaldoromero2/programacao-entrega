@@ -91,7 +91,11 @@ export function AgendamentoDetalheDialog<T extends ItemDetalhe>({ item, temFoto,
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => onFoto(item)} className="gap-1.5">
+                <Button
+                  type="button" size="sm" onClick={() => onFoto(item)}
+                  className="gap-1.5 border border-yellow-500 bg-yellow-400 font-semibold text-slate-900 hover:bg-yellow-500"
+                  style={{ background: "#facc15", color: "#0f172a" }}
+                >
                   <Paperclip className="h-4 w-4" /> {temFoto ? "Ver ticket" : "Colar ticket"}
                 </Button>
                 {onIrParaDia && (
