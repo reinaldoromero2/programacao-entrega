@@ -78,8 +78,8 @@ function configureAutoUpdates() {
     console.error('[autoUpdater] Falha ao verificar ou baixar atualização:', error);
   });
 
-  // Uma pergunta só: aceitou, aparece só a barra "Atualizando…"; baixa, instala sem as telas do
-  // instalador (/S, na mesma pasta de antes) e o app abre de novo sozinho.
+  // Uma pergunta só: aceitou, aparece só a barra "Atualizando…"; baixa, o instalador mostra só a
+  // barra "Instalando…" (sem perguntas, na mesma pasta de antes) e o app abre de novo sozinho.
   let instalarAoBaixar = false;
 
   autoUpdater.on('update-available', async (info) => {
@@ -123,9 +123,9 @@ function configureAutoUpdates() {
   autoUpdater.on('update-downloaded', () => {
     if (!instalarAoBaixar) return;
     mostrarProgresso(100, 'Instalando… o app vai abrir de novo sozinho.');
-    // instalação silenciosa (sem as telas do instalador) e reabre o app
-    // a janelinha não fecha pelo X: some antes de o app sair para instalar
-    setTimeout(() => { fecharJanelaAtualizando(); autoUpdater.quitAndInstall(true, true); }, 1200);
+    // a janelinha não fecha pelo X: some antes de o app sair para instalar. O instalador "um clique"
+    // mostra só a tela "Instalando, por favor aguarde…" com a barra, na mesma pasta, e reabre o app.
+    setTimeout(() => { fecharJanelaAtualizando(); autoUpdater.quitAndInstall(false, true); }, 1200);
   });
 
   const checkForUpdates = () => {
