@@ -59,7 +59,7 @@ export function AgendaCalendario<T extends ItemCalendario>({ month, itens, hojeI
           return (
             <div
               key={iso}
-              className={`group relative flex min-w-0 flex-col gap-1 border-b border-r border-slate-200 p-1.5 ${!doMes ? "bg-slate-50/70" : fimDeSemana ? "bg-slate-50/40" : ""} ${destaque ? "z-[1] outline outline-2 -outline-offset-2 outline-blue-600" : ""}`}
+              className={`group relative flex min-w-0 flex-col gap-1 border-b border-r border-slate-200 p-1.5 ${destaque ? "bg-blue-100" : !doMes ? "bg-slate-50/70" : fimDeSemana ? "bg-slate-50/40" : ""}`}
             >
               <div className="flex items-center justify-between">
                 <span
@@ -90,7 +90,8 @@ export function AgendaCalendario<T extends ItemCalendario>({ month, itens, hojeI
                       type="button"
                       onClick={() => onAbrir(item)}
                       title={`${item.hrs || "sem horário"} · ${item.cliente} · ${st.label}`}
-                      className="flex w-full min-w-0 items-center gap-1.5 rounded border-l-[3px] border-blue-500 bg-blue-50 px-1.5 py-1 text-left text-[11.5px] leading-tight text-slate-800 hover:bg-blue-100"
+                      // no dia em destaque (fundo azul) o agendamento fica branco, para não sumir no fundo
+                      className={`flex w-full min-w-0 items-center gap-1.5 rounded border-l-[3px] border-blue-500 px-1.5 py-1 text-left text-[11.5px] leading-tight text-slate-800 ${destaque ? "bg-white hover:bg-blue-50" : "bg-blue-50 hover:bg-blue-100"}`}
                     >
                       <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${st.color}`} />
                       <span className="shrink-0 font-semibold tabular-nums text-slate-600">{item.hrs || "—"}</span>
