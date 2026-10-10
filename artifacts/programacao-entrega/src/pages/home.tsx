@@ -520,7 +520,11 @@ export default function Home() {
           >
             <span className="text-sm font-bold">A</span>
           </Button>
-          <ClientesAgendamentoModal open={agendamentoOpen} onOpenChange={setAgendamentoOpen} />
+          <ClientesAgendamentoModal
+            open={agendamentoOpen}
+            onOpenChange={setAgendamentoOpen}
+            onIrParaDia={(dia) => { setDate(new Date(`${dia}T12:00:00`)); setAgendamentoOpen(false); }}
+          />
 
           {selectionMode && selectedIds.size > 0 ? (
             <Popover>
