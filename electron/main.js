@@ -9,7 +9,7 @@ const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 let updatePromptOpen = false;
 
 function getUpdateWindow() {
-  return BrowserWindow.getAllWindows().find((win) => !win.isDestroyed());
+  return BrowserWindow.getAllWindows().find((win) => !win.isDestroyed() && win !== janelaAtualizando);
 }
 
 async function showUpdateDialog(options) {
@@ -25,6 +25,49 @@ async function showUpdateDialog(options) {
   }
 }
 
+// janelinha "Atualizando…" com a barra de progresso (também na barra de tarefas)
+let janelaAtualizando = null;
+function abrirJanelaAtualizando(versao) {
+  if (janelaAtualizando && !janelaAtualizando.isDestroyed()) return;
+  const pai = getUpdateWindow();
+  janelaAtualizando = new BrowserWindow({
+    width: 420, height: 150, resizable: false, minimizable: false, maximizable: false, closable: false,
+    frame: false, alwaysOnTop: true, skipTaskbar: true, show: false, parent: pai || undefined, modal: !!pai,
+    backgroundColor: '#ffffff', webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#fff;color:#1e293b;border:1px solid #cbd5e1;height:148px;box-sizing:border-box;padding:22px 24px}
+    h1{font-size:15px;margin:0 0 4px} p{font-size:12px;color:#64748b;margin:0 0 14px}
+    .barra{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden}
+    .cheio{height:100%;width:0;background:#2563eb}
+    .num{font-size:12px;color:#334155;margin-top:8px;text-align:right}
+  </style></head><body>
+    <h1>Atualizando para a versão ${String(versao || '').replace(/[^0-9.]/g, '')}…</h1>
+    <p id="msg">Baixando a atualização. Não feche o app.</p>
+    <div class="barra"><div class="cheio" id="cheio"></div></div>
+    <div class="num" id="num">0%</div>
+  </body></html>`;
+  janelaAtualizando.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  janelaAtualizando.once('ready-to-show', () => janelaAtualizando && !janelaAtualizando.isDestroyed() && janelaAtualizando.show());
+}
+function mostrarProgresso(pct, mensagem) {
+  const pai = getMainWindowParaProgresso();
+  if (pai) pai.setProgressBar(pct >= 100 ? -1 : pct / 100);
+  if (!janelaAtualizando || janelaAtualizando.isDestroyed()) return;
+  const js = `document.getElementById('cheio').style.width='${pct.toFixed(0)}%';document.getElementById('num').textContent='${pct.toFixed(0)}%';` +
+    (mensagem ? `document.getElementById('msg').textContent=${JSON.stringify(mensagem)};` : '');
+  janelaAtualizando.webContents.executeJavaScript(js).catch(() => {});
+}
+function fecharJanelaAtualizando() {
+  const pai = getMainWindowParaProgresso();
+  if (pai) pai.setProgressBar(-1);
+  if (janelaAtualizando && !janelaAtualizando.isDestroyed()) janelaAtualizando.destroy();
+  janelaAtualizando = null;
+}
+function getMainWindowParaProgresso() {
+  return BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && w !== janelaAtualizando) || null;
+}
+
 function configureAutoUpdates() {
   if (!app.isPackaged) return;
 
@@ -35,52 +78,54 @@ function configureAutoUpdates() {
     console.error('[autoUpdater] Falha ao verificar ou baixar atualização:', error);
   });
 
+  // Uma pergunta só: aceitou, aparece só a barra "Atualizando…"; baixa, instala sem as telas do
+  // instalador (/S, na mesma pasta de antes) e o app abre de novo sozinho.
+  let instalarAoBaixar = false;
+
   autoUpdater.on('update-available', async (info) => {
     const result = await showUpdateDialog({
       type: 'info',
       title: 'Atualização disponível',
       message: `A versão ${info.version} está disponível.`,
-      detail: 'Deseja baixar e instalar agora? O aplicativo pedirá para reiniciar quando o download terminar.',
-      buttons: ['Baixar atualização', 'Depois'],
+      detail: 'Atualizar agora? O app baixa, instala sozinho e abre de novo em seguida.',
+      buttons: ['Atualizar agora', 'Depois'],
       defaultId: 0,
       cancelId: 1,
       noLink: true,
     });
+    if (result?.response !== 0) return;
 
-    if (result?.response === 0) {
-      try {
-        await autoUpdater.downloadUpdate();
-      } catch (error) {
-        console.error('[autoUpdater] Falha ao baixar atualização:', error);
-        const win = getUpdateWindow();
-        if (win) {
-          await dialog.showMessageBox(win, {
-            type: 'error',
-            title: 'Erro na atualização',
-            message: 'Não foi possível baixar a atualização.',
-            detail: 'Verifique sua conexão e tente novamente ao abrir o aplicativo.',
-            buttons: ['OK'],
-          });
-        }
+    instalarAoBaixar = true;
+    abrirJanelaAtualizando(info.version);
+    try {
+      await autoUpdater.downloadUpdate();
+    } catch (error) {
+      console.error('[autoUpdater] Falha ao baixar atualização:', error);
+      instalarAoBaixar = false;
+      fecharJanelaAtualizando();
+      const win = getUpdateWindow();
+      if (win) {
+        await dialog.showMessageBox(win, {
+          type: 'error',
+          title: 'Erro na atualização',
+          message: 'Não foi possível baixar a atualização.',
+          detail: 'Verifique sua conexão e tente novamente ao abrir o aplicativo.',
+          buttons: ['OK'],
+        });
       }
     }
   });
 
-  autoUpdater.on('update-downloaded', async (info) => {
-    const result = await showUpdateDialog({
-      type: 'info',
-      title: 'Atualização pronta',
-      message: `A versão ${info.version} foi baixada.`,
-      detail: 'Reinicie o aplicativo para concluir a instalação.',
-      buttons: ['Reiniciar agora', 'Depois'],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true,
-    });
+  autoUpdater.on('download-progress', (p) => {
+    mostrarProgresso(Math.max(0, Math.min(100, p.percent || 0)));
+  });
 
-    if (result?.response === 0) {
-      autoUpdater.quitAndInstall(false, true);
-    }
+  autoUpdater.on('update-downloaded', () => {
+    if (!instalarAoBaixar) return;
+    mostrarProgresso(100, 'Instalando… o app vai abrir de novo sozinho.');
+    // instalação silenciosa (sem as telas do instalador) e reabre o app
+    // a janelinha não fecha pelo X: some antes de o app sair para instalar
+    setTimeout(() => { fecharJanelaAtualizando(); autoUpdater.quitAndInstall(true, true); }, 1200);
   });
 
   const checkForUpdates = () => {
