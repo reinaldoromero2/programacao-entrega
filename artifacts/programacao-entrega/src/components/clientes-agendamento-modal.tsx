@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarDays, CalendarPlus, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, ListPlus, Loader2, Paperclip, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, List, ListPlus, Loader2, Paperclip, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getListEntregasQueryKey, useCreateEntrega, useDeleteEntrega, useUpdateEntrega, type Entrega } from "@workspace/api-client-react";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 import { toast } from "@/hooks/use-toast";
 import { AgendamentoFotoDialog, buscarIdsComFoto } from "@/components/agendamento-foto-dialog";
 import { AgendamentoFotosLote } from "@/components/agendamento-fotos-lote";
+import { AgendaCalendario } from "@/components/agenda-calendario";
+import { AgendamentoDetalheDialog } from "@/components/agendamento-detalhe-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -141,36 +143,64 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
 
   const dataBr = (iso: string) => iso.split("-").reverse().join("/");
 
-  const salvarEdicao = async (item: AgendamentoMensalItem) => {
-    if (!editando || !editando.date || !editando.hrs) return;
-    const novo = editando;
+  // muda data e horário (lista e calendário); true se gravou
+  const salvarDataHora = async (item: AgendamentoMensalItem, date: string, hrs: string): Promise<boolean> => {
+    if (!date || !hrs) return false;
     setOcupadoId(item.id);
     try {
-      await updateEntrega.mutateAsync({ id: item.id, data: { date: novo.date, hrs: novo.hrs } });
-      setEditando(null);
-      await atualizarDepois([item.date, novo.date]);
-      toast({ title: "Agendamento alterado", description: `${item.cliente} · ${dataBr(novo.date)} · ${novo.hrs}` });
+      await updateEntrega.mutateAsync({ id: item.id, data: { date, hrs } });
+      await atualizarDepois([item.date, date]);
+      toast({ title: "Agendamento alterado", description: `${item.cliente} · ${dataBr(date)} · ${hrs}` });
+      return true;
     } catch (error) {
       toast({ title: "Não foi possível alterar o agendamento.", description: error instanceof Error ? error.message : "Tente de novo.", variant: "destructive" });
+      return false;
     } finally {
       setOcupadoId(null);
     }
   };
 
-  const excluirAgendamento = async (item: AgendamentoMensalItem) => {
+  const salvarEdicao = async (item: AgendamentoMensalItem) => {
+    if (!editando) return;
+    if (await salvarDataHora(item, editando.date, editando.hrs)) setEditando(null);
+  };
+
+  const excluirAgendamento = async (item: AgendamentoMensalItem): Promise<boolean> => {
     setOcupadoId(item.id);
     try {
       await deleteEntrega.mutateAsync({ id: item.id });
       setConfirmarExclusao(null);
+      setDetalheId(null);
       await atualizarDepois([item.date]);
       toast({ title: "Agendamento excluído", description: `${item.cliente} · ${dataBr(item.date)}` });
+      return true;
     } catch (error) {
       toast({ title: "Não foi possível excluir o agendamento.", description: error instanceof Error ? error.message : "Tente de novo.", variant: "destructive" });
+      return false;
     } finally {
       setOcupadoId(null);
     }
   };
+
+  // calendário ou lista: fica a última escolha neste aparelho
+  const [vista, setVista] = useState<"calendario" | "lista">(() => {
+    try { return localStorage.getItem("agenda-vista") === "lista" ? "lista" : "calendario"; } catch { return "calendario"; }
+  });
+  const escolherVista = (v: "calendario" | "lista") => {
+    setVista(v);
+    try { localStorage.setItem("agenda-vista", v); } catch { /* sem armazenamento: vale só agora */ }
+  };
+  const [formAberto, setFormAberto] = useState(false);
+  const [detalheId, setDetalheId] = useState<number | null>(null);
+  const abrirInserir = (date?: string) => {
+    if (date) {
+      setDrafts([{ id: nextDraftId, date, hrs: "" }]);
+      setNextDraftId((n) => n + 1);
+    }
+    setFormAberto(true);
+  };
   const monthlyAgendamentos = monthlyDeliveries.filter((item) => item.agendamento);
+  const detalhe = detalheId != null ? monthlyAgendamentos.find((item) => item.id === detalheId) ?? null : null;
   const availableImportDates = Array.from(new Set(
     monthlyDeliveries.filter((item) => !item.agendamento).map((item) => item.date)
   )).sort();
@@ -295,6 +325,7 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
       toast({ title: "Agendamentos incluídos na programação", description: `${nome} · ${drafts.length} data${drafts.length !== 1 ? "s" : ""}` });
       const nextId = nextDraftId;
       setDrafts([{ id: nextId, date: format(new Date(), "yyyy-MM-dd"), hrs: "" }]);
+      setFormAberto(false);
       setNextDraftId(nextId + 1);
     } else {
       const firstFailure = results.find((result) => result.status === "rejected");
@@ -316,6 +347,8 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
       // com a foto do ticket aberta, fechar só volta para a agenda
       if (!aberto && fotoDe) { setFotoDe(null); return; }
       if (!aberto && loteAberto) { setLoteAberto(false); return; }
+      if (!aberto && detalheId != null) { setDetalheId(null); return; }
+      if (!aberto && formAberto) { setFormAberto(false); return; }
       onOpenChange(aberto);
     }}>
       {/* tela cheia pelas bordas (inset-0): com o zoom do app, 100vw/100dvh ficariam menores que a tela */}
@@ -327,7 +360,15 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(360px,1.2fr)]">
+        {/* "Inserir agendamento": janela à parte, por cima da agenda */}
+        <Dialog open={formAberto} onOpenChange={setFormAberto}>
+          <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-slate-800">
+                <CalendarPlus className="h-5 w-5 text-blue-600" />
+                Inserir agendamento
+              </DialogTitle>
+            </DialogHeader>
           <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-4">
             <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">
               Cliente
@@ -421,12 +462,33 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
               </Button>
             </div>
           </form>
+          </DialogContent>
+        </Dialog>
 
-          <section className="flex min-h-[340px] min-w-0 flex-col rounded-md border border-slate-200 bg-white" aria-label="Agendamentos salvos do mês">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <CalendarDays className="h-4 w-4 text-blue-600" />
-                Agenda do mês
+          <section className="flex min-h-[340px] min-w-0 flex-1 flex-col rounded-md border border-slate-200 bg-white" aria-label="Agendamentos salvos do mês">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
+                <Button type="button" size="sm" onClick={() => abrirInserir()} className="h-8 gap-1.5 bg-blue-600 text-white hover:bg-blue-700">
+                  <Plus className="h-4 w-4" /> Inserir agendamento
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setLoteAberto(true)} className="h-8 gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
+                  <Camera className="h-4 w-4" /> Criar pelas fotos
+                </Button>
+                {/* calendário ou lista */}
+                <div role="group" aria-label="Forma de ver a agenda" className="ml-1 flex overflow-hidden rounded-md border border-slate-200">
+                  <button
+                    type="button" aria-pressed={vista === "calendario"} onClick={() => escolherVista("calendario")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold ${vista === "calendario" ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" /> Calendário
+                  </button>
+                  <button
+                    type="button" aria-pressed={vista === "lista"} onClick={() => escolherVista("lista")}
+                    className={`flex items-center gap-1.5 border-l border-slate-200 px-2.5 py-1 text-xs font-semibold ${vista === "lista" ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                  >
+                    <List className="h-3.5 w-3.5" /> Lista
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <Button type="button" variant="ghost" size="icon" aria-label="Mês anterior" onClick={() => setMonth((current) => subMonths(current, 1))} className="h-7 w-7">
@@ -445,7 +507,11 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
                   aria-label="Importar carga da programação"
                   aria-expanded={showImportPicker}
                   title="Importar carga da programação"
-                  onClick={() => setShowImportPicker((current) => !current)}
+                  onClick={() => {
+                    // a importação aparece na lista
+                    if (vista === "calendario") { escolherVista("lista"); setShowImportPicker(true); return; }
+                    setShowImportPicker((current) => !current);
+                  }}
                   className="h-7 w-7"
                 >
                   <ListPlus className="h-4 w-4" />
@@ -457,13 +523,24 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2">
+            <div className={`flex flex-1 flex-col p-2 ${vista === "calendario" ? "min-h-[640px]" : "overflow-y-auto"}`}>
               {isLoadingMonth ? (
                 <div className="flex h-full min-h-40 items-center justify-center">
                   <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                 </div>
               ) : isMonthError ? (
                 <p className="py-8 text-center text-sm text-red-600">Não foi possível carregar a agenda deste mês.</p>
+              ) : vista === "calendario" ? (
+                <AgendaCalendario
+                  month={month}
+                  itens={monthlyAgendamentos}
+                  hojeIso={hojeIso}
+                  destaqueIso={destaqueIso}
+                  idsComFoto={idsComFoto}
+                  corDoStatus={getAppointmentStatus}
+                  onAbrir={(item) => setDetalheId(item.id)}
+                  onNovoNoDia={(date) => abrirInserir(date)}
+                />
               ) : (
                 <div className="flex flex-col gap-2">
                   {monthlyAgendamentos.length === 0 && !showImportPicker ? (
@@ -647,7 +724,18 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
               {monthlyAgendamentos.length} agendamento{monthlyAgendamentos.length !== 1 ? "s" : ""} no mês
             </div>
           </section>
-        </div>
+        <AgendamentoDetalheDialog
+          item={detalhe}
+          temFoto={detalhe ? idsComFoto.includes(detalhe.id) : false}
+          status={detalhe ? getAppointmentStatus(detalhe) : null}
+          ocupado={detalhe ? ocupadoId === detalhe.id : false}
+          onOpenChange={(aberto) => { if (!aberto) setDetalheId(null); }}
+          onStatus={handleStatusClick}
+          onFoto={(item) => setFotoDe(item)}
+          onSalvar={salvarDataHora}
+          onExcluir={excluirAgendamento}
+          onIrParaDia={onIrParaDia}
+        />
         {/* dentro do modal da agenda: fechar a foto volta para a agenda, sem fechar tudo */}
         <AgendamentoFotoDialog
           entrega={fotoDe}
