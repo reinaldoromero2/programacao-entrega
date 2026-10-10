@@ -47,7 +47,9 @@ export function AgendaCalendario<T extends ItemCalendario>({ month, itens, hojeI
           <div key={nome} className={`px-2 py-1.5 text-xs font-semibold capitalize ${i === 0 || i === 6 ? "text-slate-400" : "text-slate-600"}`}>{nome}</div>
         ))}
       </div>
-      <div className="grid flex-1 grid-cols-7" style={{ gridTemplateRows: `repeat(${semanas}, minmax(110px, 1fr))` }}>
+      {/* cada dia é um quadrado separado (espaço entre eles e fundo cinza claro). As cores vão no
+          style: o tema "vidro" deixa as classes de fundo transparentes e os dias se misturavam */}
+      <div className="grid flex-1 grid-cols-7 gap-1.5 p-1.5" style={{ gridTemplateRows: `repeat(${semanas}, minmax(110px, 1fr))` }}>
         {dias.map((dia) => {
           const iso = format(dia, "yyyy-MM-dd");
           const doMes = isSameMonth(dia, month);
@@ -59,7 +61,11 @@ export function AgendaCalendario<T extends ItemCalendario>({ month, itens, hojeI
           return (
             <div
               key={iso}
-              className={`group relative flex min-w-0 flex-col gap-1 border-b border-r border-slate-200 p-1.5 ${destaque ? "bg-blue-100" : !doMes ? "bg-slate-50/70" : fimDeSemana ? "bg-slate-50/40" : ""}`}
+              className="group relative flex min-w-0 flex-col gap-1 rounded-lg p-1.5"
+              style={{
+                background: destaque ? "#dbeafe" : !doMes ? "rgba(241,245,249,0.35)" : fimDeSemana ? "#f8fafc" : "#eef2f6",
+                border: `1px solid ${destaque ? "#93c5fd" : doMes ? "#dde3ea" : "rgba(221,227,234,0.5)"}`,
+              }}
             >
               <div className="flex items-center justify-between">
                 <span
@@ -90,8 +96,9 @@ export function AgendaCalendario<T extends ItemCalendario>({ month, itens, hojeI
                       type="button"
                       onClick={() => onAbrir(item)}
                       title={`${item.hrs || "sem horário"} · ${item.cliente} · ${st.label}`}
-                      // no dia em destaque (fundo azul) o agendamento fica branco, para não sumir no fundo
-                      className={`flex w-full min-w-0 items-center gap-1.5 rounded border-l-[3px] border-blue-500 px-1.5 py-1 text-left text-[11.5px] leading-tight text-slate-800 ${destaque ? "bg-white hover:bg-blue-50" : "bg-blue-50 hover:bg-blue-100"}`}
+                      // agendamento em branco sobre o cinza do dia
+                      className="flex w-full min-w-0 items-center gap-1.5 rounded border-l-[3px] border-blue-500 px-1.5 py-1 text-left text-[11.5px] leading-tight text-slate-800 shadow-sm hover:brightness-95"
+                      style={{ background: "#ffffff" }}
                     >
                       <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${st.color}`} />
                       <span className="shrink-0 font-semibold tabular-nums text-slate-600">{item.hrs || "—"}</span>
