@@ -3614,6 +3614,10 @@ var SIGNATURES = {
     perguntarTipoEntregaSeNecessario(nomeCliente, clienteInput);
   }
 
+  // OF com mais de uma linha (feita na calculadora com o "+"): nos campos de uma linha só aparece
+  // separada por " // ", e volta a ser uma linha embaixo da outra ao salvar
+  function ofParaCampo(of){ return String(of || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean).join(' // '); }
+  function ofDoCampo(valor){ return String(valor || '').split(/\s*\/\/\s*/).map(function(s){ return s.trim(); }).filter(Boolean).join('\n'); }
   function addItemRow(itemsWrap, rpVal, qtdVal, ofobsVal){
     var rowCount = itemsWrap.querySelectorAll('.item-row').length + 1;
     var row = document.createElement('div');
@@ -3635,7 +3639,7 @@ var SIGNATURES = {
       '</div>' +
       '<div class="field">' +
         (rowCount === 1 ? '<label>OF/OBS</label>' : '') +
-        '<input type="text" class="ofobs-input" placeholder="opcional" autocomplete="off" value="' + (ofobsVal||'') + '">' +
+        '<input type="text" class="ofobs-input" placeholder="opcional" autocomplete="off" value="' + escapeHtml(ofParaCampo(ofobsVal)) + '">' +
       '</div>' +
       '<button type="button" class="remove-btn"' + (rowCount === 1 ? ' style="margin-top:19px;"' : '') + ' title="Remover item">&times;</button>';
     itemsWrap.appendChild(row);
@@ -4138,7 +4142,7 @@ var SIGNATURES = {
         var qtdCampo = parseQtdCampo(row.querySelector('.qtd-input').value);
         var qtd = qtdCampo.valor;
         var qtdLabel = qtdCampo.label;
-        var ofobs = row.querySelector('.ofobs-input').value.trim();
+        var ofobs = ofDoCampo(row.querySelector('.ofobs-input').value);
         var priceHint = row.querySelector('.price-hint');
         var rpResolvido = rp ? resolverCodigoRpCompleto(rp) : '';
         var rpKey = rpResolvido ? findKeyCI(RP_MAP, rpResolvido) : null;
@@ -4400,7 +4404,7 @@ var SIGNATURES = {
         var rp = (row.querySelector('.rp-input') || {}).value || '';
         rp = rp.trim();
         var qtdCampo = parseQtdCampo((row.querySelector('.qtd-input') || {}).value || '');
-        var ofobs = ((row.querySelector('.ofobs-input') || {}).value || '').trim();
+        var ofobs = ofDoCampo((row.querySelector('.ofobs-input') || {}).value);
         if (!rp && !qtdCampo.valor && !ofobs) return;
         itens.push({ rp: rp, qtdLabel: qtdCampo.label || qtdCampo.valor || '', ofobs: ofobs });
       });
@@ -9151,6 +9155,8 @@ var SIGNATURES = {
       // vez de limpar, senão um re-render (ex.: ao adicionar outro item)
       // apagaria o que a pessoa digitou.
       var valorFardoAtual = fardoAtual ? cfFardoLabel(fardoAtual) : (it.codigoSemFardo || '');
+      // OF em mais de uma linha (ex.: dois lotes/datas): cada linha num campo; no romaneio, uma embaixo da outra
+      var linhasOf = String(it.ofobs || '').split('\n');
       // painéis de "Cliente" e "Opções de carregamento" ficam recolhidos por
       // padrão (pra não poluir a tela) — só abrem sozinhos quando o item já
       // tem algo preenchido ali (ex. veio de um rascunho salvo); depois
@@ -9176,8 +9182,21 @@ var SIGNATURES = {
           '</div></div>' +
           '<div class="field" style="flex:0.8; min-width:44px; margin-bottom:0;"><label style="margin-bottom:3px;">Qtd</label><input type="text" inputmode="decimal" class="cf-item-qtd' + (it.qtdLabel ? ' qtd-input-calculado' : '') + '" placeholder="0"' + (it.semQtd ? ' disabled' : '') + ' value="' + escapeHtml(String(it.qtdLabel || it.qtd || '')) + '"></div>' +
           '<button type="button" class="add-btn btn-destaque-azul cf-item-preencher"' + (it.semQtd ? ' disabled' : '') + ' title="Preenche com o máximo que ainda cabe no caminhão (o espaço restante, depois dos outros itens)" style="flex:0 0 auto; margin:0 0 1px; padding:8px 10px; white-space:nowrap;">⚡</button>' +
-          '<div class="field" style="flex:1; min-width:50px; margin-bottom:0;"><label style="margin-bottom:3px;">OF</label><input type="text" class="cf-item-of" placeholder="opcional" value="' + escapeHtml(it.ofobs || '') + '"></div>' +
+          '<div class="field" style="flex:1; min-width:50px; margin-bottom:0;"><label style="margin-bottom:3px;">OF</label>' +
+            '<div style="display:flex; gap:4px; align-items:center;">' +
+              '<input type="text" class="cf-item-of" data-linha-of="0" placeholder="opcional" value="' + escapeHtml(linhasOf[0]) + '" style="flex:1 1 auto; min-width:0;">' +
+              '<button type="button" class="cf-item-of-mais" title="Mais uma linha de OF (outro lote ou data), embaixo desta" aria-label="Mais uma linha de OF" style="flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid var(--accent-blue, #2563eb); background:none; color:var(--accent-blue, #2563eb); cursor:pointer; font-size:18px; font-weight:700; line-height:1;">+</button>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
+        // linhas extras da OF, uma por linha, logo abaixo
+        linhasOf.slice(1).map(function(txt, k){
+          return '<div style="display:flex; gap:4px; align-items:center; margin-top:6px;">' +
+            '<span class="foot-note" style="margin:0; flex:0 0 auto; min-width:52px;">OF ' + (k + 2) + 'ª linha</span>' +
+            '<input type="text" class="cf-item-of" data-linha-of="' + (k + 1) + '" placeholder="outro lote / data" value="' + escapeHtml(txt) + '" style="flex:1 1 auto; min-width:0;">' +
+            '<button type="button" class="cf-item-of-tirar" data-linha-of="' + (k + 1) + '" title="Tirar esta linha de OF" aria-label="Tirar esta linha de OF" style="flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid var(--border); background:none; color:var(--critical); cursor:pointer; font-size:16px; line-height:1;">×</button>' +
+          '</div>';
+        }).join('') +
         // "Cliente" e "Opções de carregamento" viram 2 botões compactos —
         // cada um só abre o campo/checkboxes correspondentes quando clicado,
         // em vez de mostrar tudo sempre. O botão já mostra o nome do
@@ -9216,13 +9235,37 @@ var SIGNATURES = {
       var remBtn = row.querySelector('.cf-item-remover');
       var preencherBtn = row.querySelector('.cf-item-preencher');
       var chkModoTras = row.querySelector('.cf-item-modo-tras');
-      var inpOf = row.querySelector('.cf-item-of');
-      if (inpOf){
-        inpOf.addEventListener('input', function(){
+      // OF: as linhas viram um texto só, separadas por quebra de linha
+      var camposOf = Array.prototype.slice.call(row.querySelectorAll('.cf-item-of'));
+      var juntarOf = function(){
+        var item = cfItens.filter(function(i){ return i.id === id; })[0];
+        if (item) item.ofobs = camposOf.map(function(c){ return c.value; }).join('\n');
+      };
+      camposOf.forEach(function(c){ c.addEventListener('input', juntarOf); });
+      var maisOf = row.querySelector('.cf-item-of-mais');
+      if (maisOf){
+        maisOf.addEventListener('click', function(){
+          juntarOf();
           var item = cfItens.filter(function(i){ return i.id === id; })[0];
-          if (item) item.ofobs = inpOf.value;
+          if (!item) return;
+          item.ofobs = String(item.ofobs || '') + '\n';
+          renderCfItens();
+          // a linha nova é a última do item
+          var nova = Array.prototype.slice.call(cfItensListaEl.querySelectorAll('.cf-item-row[data-cf-item-id="' + id + '"] .cf-item-of')).pop();
+          if (nova) nova.focus();
         });
       }
+      row.querySelectorAll('.cf-item-of-tirar').forEach(function(b){
+        b.addEventListener('click', function(){
+          juntarOf();
+          var item = cfItens.filter(function(i){ return i.id === id; })[0];
+          if (!item) return;
+          var ls = String(item.ofobs || '').split('\n');
+          ls.splice(parseInt(b.getAttribute('data-linha-of'), 10), 1);
+          item.ofobs = ls.join('\n');
+          renderCfItens();
+        });
+      });
       var inpCliente = row.querySelector('.cf-item-cliente');
       if (inpCliente){
         // reconheceu um cliente já cadastrado — já troca pro nome completo
@@ -14152,7 +14195,7 @@ var SIGNATURES = {
         '</button>' +
       '</div></div>' +
       '<div style="flex:0 0 90px;"><label>Qtd.</label><input type="text" inputmode="decimal" class="wiz-item-qtd" placeholder="0" autocomplete="off" value="' + escapeHtml(qtdLabel || '') + '"></div>' +
-      '<div style="flex:1 1 120px;"><label>OF/OBS</label><input type="text" class="wiz-item-ofobs" placeholder="opcional" autocomplete="off" value="' + escapeHtml(ofobs || '') + '"></div>' +
+      '<div style="flex:1 1 120px;"><label>OF/OBS</label><input type="text" class="wiz-item-ofobs" placeholder="opcional" autocomplete="off" value="' + escapeHtml(ofParaCampo(ofobs)) + '"></div>' +
       '<p class="foot-note" style="margin:0 0 6px; flex:1 1 100%;">' + escapeHtml(precoTxt) + '</p>' +
       '<p class="foot-note wiz-item-regra-nota" style="margin:0 0 6px; flex:1 1 100%; display:none;"></p>' +
       (rp ? '' : '<button type="button" class="add-btn wiz-item-remover" style="flex:0 0 auto;">&times;</button>') +
@@ -14326,7 +14369,7 @@ var SIGNATURES = {
       if (!rp || !qtdInput) return;
       var qtdCampo = parseQtdCampo(qtdInput.value);
       if (!semQtd && (!qtdCampo.valor || qtdCampo.valor <= 0)) return;
-      itens.push({ rp: rp, qtd: qtdCampo.valor || 0, qtdLabel: qtdCampo.label || qtdCampo.valor || '', ofobs: ofobsInput ? ofobsInput.value.trim() : '' });
+      itens.push({ rp: rp, qtd: qtdCampo.valor || 0, qtdLabel: qtdCampo.label || qtdCampo.valor || '', ofobs: ofobsInput ? ofDoCampo(ofobsInput.value) : '' });
     });
     if (!itens.length){
       wizItensStatus.textContent = semQtd ? 'Adicione ao menos 1 item (mesmo sem quantidade).' : 'Adicione ao menos 1 item com quantidade.';
@@ -14882,7 +14925,8 @@ var SIGNATURES = {
         '<td style="border:1px solid #000;padding:4px 6px;height:20px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + esc(String(l.cliente||'')) + '</td>' +
         '<td style="border:1px solid #000;padding:4px 6px;text-align:center;white-space:nowrap;">' + esc(String(l.rp||'')) + '</td>' +
         '<td style="border:1px solid #000;padding:4px 6px;text-align:center;white-space:normal;word-break:break-word;">' + esc(l.qtd === '' ? '' : String(l.qtd)) + '</td>' +
-        '<td style="' + ofobsStyle + '">' + esc(ofobsTxt) + '</td>' +
+        // OF em mais de uma linha (lotes/datas diferentes): uma embaixo da outra
+        '<td style="' + ofobsStyle + '">' + ofobsTxt.split('\n').map(function(s){ return s.trim(); }).filter(Boolean).map(esc).join('<br>') + '</td>' +
       '</tr>';
     }).join('');
 

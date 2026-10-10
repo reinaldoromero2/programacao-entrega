@@ -56,7 +56,7 @@
     });
   }
   var R = window.ripackOfsRegras;
-  var norm = R.norm, dataBr = R.dataBr, diasEntre = R.diasEntre, ofsDoTexto = R.ofsDoTexto, textoOfs = R.textoOfs;
+  var dataBr = R.dataBr, diasEntre = R.diasEntre, ofsDoTexto = R.ofsDoTexto;
   var clientesDoRomaneio = R.clientesDoRomaneio, planejar = R.planejar, linhasDoPlano = R.linhasDoPlano;
 
   // ---- janela ----
@@ -399,142 +399,6 @@
     return b;
   }
 
-  // ---- direto na calculadora: botão ⇪ ao lado do OF/OBS de cada linha ----
-  // Um clique grava a OF daquela linha na ordem de separação do produto (mesma quantidade, data
-  // mais perto de hoje; no par Matriz/Filial, a Filial). Com dúvida, ou se a ordem já tiver outro
-  // texto, mostra a escolha ali mesmo. Não grava sozinho ao digitar (OF pela metade iria junto).
-  // as duas telas com OF por linha: o formulário "Gerar romaneio" e a Carga Fácil
-  var TIPOS = [
-    { linha: '.item-row', of: '.ofobs-input', rp: '.rp-input', qtd: '.qtd-input' },
-    { linha: '.cf-item-row', of: '.cf-item-of', rp: '.cf-item-fardo', qtd: '.cf-item-qtd', avisoAntes: '.cf-item-total' }
-  ];
-  // na Carga Fácil o RP vem como "0143-002/26 — 38 pçs/fardo": fica só o código
-  function lerRp(row, tipo) { return String(((row.querySelector(tipo.rp) || {}).value) || '').split(' — ')[0].split(' (')[0].trim(); }
-  function lerQtd(row, tipo) { return parseFloat(String(((row.querySelector(tipo.qtd) || {}).value) || '').replace(/\./g, '').replace(',', '.')) || 0; }
-  // a Carga Fácil redesenha as linhas a cada mudança: lembra o que já foi gravado
-  var lembrados = {};
-  function chaveLembrar(rp, of) { return norm(rp) + '|' + String(of || '').trim(); }
-
-  function prepararLinha(row, tipo) {
-    var input = row && row.querySelector(tipo.of);
-    if (!input || input.getAttribute('data-ofs')) return;
-    input.setAttribute('data-ofs', '1');
-    var caixa = document.createElement('div');
-    caixa.style.cssText = 'display:flex; gap:4px; align-items:center;';
-    input.parentNode.insertBefore(caixa, input);
-    caixa.appendChild(input);
-    input.style.flex = '1 1 auto';
-    input.style.minWidth = '0';
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = '⇪';
-    btn.title = 'Gravar esta OF no sistema (ordem de separação)';
-    btn.style.cssText = 'flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid var(--accent-blue, #2563eb); background:none; color:var(--accent-blue, #2563eb); cursor:pointer; font-size:16px; line-height:1;';
-    caixa.appendChild(btn);
-    var aviso = document.createElement('div');
-    aviso.style.cssText = 'font-size:11px; margin-top:3px; line-height:1.35;';
-    var antesDe = tipo.avisoAntes && row.querySelector(tipo.avisoAntes);
-    if (antesDe) antesDe.parentNode.insertBefore(aviso, antesDe); else caixa.parentNode.insertBefore(aviso, caixa.nextSibling);
-    input._ofsAviso = aviso;
-    input._ofsTipo = tipo;
-    var mostrar = function () { btn.hidden = !disponivel; if (!disponivel) aviso.innerHTML = ''; };
-    if (disponivel === null) { btn.hidden = true; aoSaberDisponivel.push(mostrar); } else mostrar();
-
-    function dizer(html, cor) { aviso.innerHTML = html; aviso.style.color = cor || ''; }
-    function marcarGravado(html) {
-      aviso.setAttribute('data-gravado', input.value);
-      lembrados[chaveLembrar(lerRp(row, tipo), input.value)] = html;
-      dizer(html, 'var(--good)');
-    }
-    var lembrado = lembrados[chaveLembrar(lerRp(row, tipo), input.value)];
-    if (lembrado && input.value.trim()) marcarGravado(lembrado);
-    // mudou a OF depois de gravar: volta a oferecer o botão
-    input.addEventListener('input', function () { if (aviso.getAttribute('data-gravado') !== input.value) dizer(''); });
-
-    btn.addEventListener('click', function () {
-      var rp = lerRp(row, tipo);
-      var qtd = lerQtd(row, tipo);
-      var ofs = ofsDoTexto(input.value);
-      if (!rp) return dizer('Preencha o RP do produto.', 'var(--critical)');
-      if (!ofs.length) return dizer('Digite o número da OF.', 'var(--critical)');
-      btn.disabled = true;
-      dizer('Procurando a ordem de separação…', 'var(--text-secondary, #666)');
-      oracle({ acao: 'buscar', codpros: [rp], agrupas: [], dias: 10 }).then(function (r) {
-        btn.disabled = false;
-        var linhas = ((r && r.linhas) || []).filter(function (l) { return norm(l.codpro) === norm(rp); });
-        if (!linhas.length) {
-          var erro = r && r.erros && r.erros.length ? ' (' + esc(r.erros.join('; ')) + ')' : '';
-          return dizer('Nenhuma ordem de separação deste produto nos últimos 10 dias' + erro + '. Se a ordem ainda não foi emitida, tente depois — ou use "🧾 Lançar OFs" no romaneio.', 'var(--critical)');
-        }
-        var cliente = { nome: '', itens: [{ rp: rp, qtd: qtd, ofs: ofs }] };
-        var plano = planejar(cliente, linhas, new Date().toISOString().slice(0, 10));
-        var x = plano.itens[0];
-        if (x.escolhidas.length) return conferirEGravar(null);
-        escolher(x.opcoes);
-        function escolher(opcoes) {
-          var sel = '<select style="max-width:100%; font-size:11px; padding:2px;">' + opcoes.map(function (g, i) {
-            return '<option value="' + i + '">' + esc((g.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + g.agrupa + ' — ' + dataBr(g.data) +
-              ' — ' + g.qtd + ' pç' + (g.mesmaQtd ? ' (mesma qtd)' : ' (qtd diferente)')) + '</option>';
-          }).join('') + '</select>';
-          dizer('Mais de uma ordem possível — escolha: ' + sel + ' <button type="button" class="ofs-ok" style="font-size:11px;">Gravar</button>', 'var(--warning, #b45309)');
-          aviso.querySelector('.ofs-ok').addEventListener('click', function () {
-            conferirEGravar(opcoes[Number(aviso.querySelector('select').value)]);
-          });
-        }
-        function conferirEGravar(g) {
-          if (g) x.escolhidas = [g];
-          var paraGravar = linhasDoPlano(plano);
-          var iguais = paraGravar.filter(function (l) { return l.situacao === 'igual'; });
-          var outras = paraGravar.filter(function (l) { return l.situacao === 'outra'; });
-          var nome = x.escolhidas.map(function (o) { return (o.empresa === 'matriz' ? 'Matriz' : 'Filial') + ' ' + o.agrupa; }).join(' + ');
-          if (iguais.length === paraGravar.length) {
-            return marcarGravado('✔ Já está no sistema (' + esc(nome) + ').');
-          }
-          if (outras.length) {
-            dizer('A ordem ' + esc(nome) + ' já tem "' + esc(outras[0].antes) + '". ' +
-              '<button type="button" class="ofs-sub" style="font-size:11px;">Substituir</button> ' +
-              '<button type="button" class="ofs-junta" style="font-size:11px;">Juntar as duas</button> ' +
-              '<button type="button" class="ofs-nao" style="font-size:11px;">Cancelar</button>', 'var(--warning, #b45309)');
-            aviso.querySelector('.ofs-sub').addEventListener('click', function () { enviar(paraGravar, nome); });
-            aviso.querySelector('.ofs-junta').addEventListener('click', function () {
-              paraGravar.forEach(function (l) {
-                if (l.situacao !== 'outra') return;
-                var todas = ofsDoTexto(l.antes);
-                l.ofs.forEach(function (o) { if (todas.indexOf(o) < 0) todas.push(o); });
-                l.novo = textoOfs(todas);
-              });
-              enviar(paraGravar, nome);
-            });
-            aviso.querySelector('.ofs-nao').addEventListener('click', function () { dizer(''); });
-            return;
-          }
-          enviar(paraGravar, nome);
-        }
-        function enviar(lista, nome) {
-          lista = lista.filter(function (l) { return l.situacao !== 'igual'; });
-          btn.disabled = true;
-          dizer('Gravando no sistema…', 'var(--text-secondary, #666)');
-          oracle({ acao: 'gravar', linhas: lista.map(function (l) {
-            return { chave: l.chave, empresa: l.empresa, agrupa: l.agrupa, codigo: l.codigo, codpro: l.codpro, pedido: l.pedido, antes: l.antes, novo: l.novo };
-          }) }).then(function (res) {
-            btn.disabled = false;
-            var porChave = {};
-            ((res && res.resultados) || []).forEach(function (x) { porChave[x.chave] = x; });
-            var ok = lista.filter(function (l) { return porChave[l.chave] && porChave[l.chave].gravadas > 0; });
-            var erro = lista.map(function (l) { return porChave[l.chave] && porChave[l.chave].erro; }).filter(Boolean)[0] || ((res && res.erros) || [])[0];
-            if (ok.length === lista.length) {
-              marcarGravado('✔ Gravado no sistema (' + esc(nome) + '): ' + esc(ok.map(function (l) { return l.novo.trim(); }).join(' ')));
-            } else if (erro) {
-              dizer('Não gravou: ' + esc(erro), 'var(--critical)');
-            } else {
-              dizer('Não gravou: a ordem mudou no sistema agora há pouco. Clique em ⇪ de novo para conferir.', 'var(--critical)');
-            }
-          });
-        }
-      });
-    });
-  }
-
   // ---- romaneio criado (ou editado mudando produtos/OFs): o app lança as OFs sozinho ----
   // (electron/ofs-auto.js). Vai direto para o app neste PC, que fala só com o Oracle: não usa o
   // servidor nem o Neon.
@@ -547,23 +411,6 @@
       if (st && typeof st === 'object' && !Array.isArray(st) && 'completo' in st) { situacao[g.id] = st; atualizarBotoes(g.id); desenharCardPendentes(); }
     });
   });
-
-  // linhas da calculadora: as que já existem e as que forem criadas
-  function vigiarCalculadora() {
-    if (!document.body) return setTimeout(vigiarCalculadora, 200);
-    var varrer = function () {
-      TIPOS.forEach(function (tipo) {
-        document.querySelectorAll(tipo.linha).forEach(function (row) { if (row.querySelector(tipo.of)) prepararLinha(row, tipo); });
-      });
-    };
-    varrer();
-    var agendado = null;
-    new MutationObserver(function () {
-      if (agendado) return;
-      agendado = setTimeout(function () { agendado = null; varrer(); }, 150);
-    }).observe(document.body, { childList: true, subtree: true });
-  }
-  vigiarCalculadora();
 
   window.ripackOfs = { botao: botao };
 })();
