@@ -1,6 +1,7 @@
 import { addDays, endOfMonth, endOfWeek, format, isSameMonth, startOfMonth, startOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Paperclip, Plus } from "lucide-react";
+import { feriado } from "@/lib/feriados";
 
 // Agenda do mês em calendário (como o do Outlook): uma célula por dia, de domingo a sábado, com os
 // agendamentos do dia em ordem de horário. Hoje fica em azul; o próximo dia útil, com borda.
@@ -52,7 +53,8 @@ export function AgendaCalendario<T extends ItemCalendario>({ month, itens, hojeI
           const doMes = isSameMonth(dia, month);
           const hoje = iso === hojeIso;
           const destaque = iso === destaqueIso && doMes;
-          const fimDeSemana = dia.getDay() === 0 || dia.getDay() === 6;
+          const nomeFeriado = feriado(dia);
+          const fimDeSemana = dia.getDay() === 0 || dia.getDay() === 6 || !!nomeFeriado;
           const lista = doMes ? porDia[iso] || [] : [];
           return (
             <div
@@ -66,6 +68,7 @@ export function AgendaCalendario<T extends ItemCalendario>({ month, itens, hojeI
                   {dia.getDate() === 1 ? format(dia, "d 'de' MMM", { locale: ptBR }) : dia.getDate()}
                 </span>
                 {destaque && <span className="text-[10px] font-semibold text-blue-700">próximo dia útil</span>}
+                {nomeFeriado && doMes && <span className="min-w-0 truncate text-[10px] font-semibold text-red-600" title={nomeFeriado}>feriado · {nomeFeriado}</span>}
                 {doMes && (
                   <button
                     type="button"

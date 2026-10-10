@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { AgendamentoFotoDialog, buscarIdsComFoto } from "@/components/agendamento-foto-dialog";
 import { AgendamentoFotosLote } from "@/components/agendamento-fotos-lote";
 import { AgendaCalendario } from "@/components/agenda-calendario";
+import { ehDiaUtil } from "@/lib/feriados";
 import { AgendamentoDetalheDialog } from "@/components/agendamento-detalhe-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,10 +85,10 @@ interface ClientesAgendamentoModalProps {
   onIrParaDia?: (date: string) => void;
 }
 
-// próximo dia útil depois de hoje (segunda a sexta; feriado não entra na conta)
+// próximo dia útil depois de hoje (segunda a sexta, pulando feriado nacional)
 function proximoDiaUtil(hoje: Date): string {
   const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  while (!ehDiaUtil(d)) d.setDate(d.getDate() + 1);
   return format(d, "yyyy-MM-dd");
 }
 
