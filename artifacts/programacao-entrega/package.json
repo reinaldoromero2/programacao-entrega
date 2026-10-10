@@ -79,6 +79,7 @@
     "idb-keyval": "^6.2.5",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "tesseract.js": "5.1.1",
     "xlsx": "^0.18.5"
   }
 }

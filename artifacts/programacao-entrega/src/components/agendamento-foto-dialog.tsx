@@ -7,7 +7,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 // Foto do ticket de agendamento: cola (Ctrl+V) a imagem copiada do e-mail. A imagem é reduzida
 // aqui antes de subir e fica numa tabela separada no servidor, apagada quando passa o dia.
 
-const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
+export const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
+
+/** guarda a foto (já reduzida) no agendamento */
+export async function salvarFoto(entregaId: number, conteudo: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/agendamento-fotos/${entregaId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conteudo }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => null))?.error || `HTTP ${r.status}`);
+}
 const LADO_MAX = 1600;
 const QUALIDADE = 0.72;
 
@@ -18,7 +28,7 @@ export async function buscarIdsComFoto(from: string, to: string): Promise<number
 }
 
 // reduz para no máximo 1600 px no lado maior, em JPEG (um print de e-mail cai de MB para ~100-300 KB)
-function reduzir(arquivo: Blob): Promise<string> {
+export function reduzir(arquivo: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(arquivo);
     const img = new Image();
@@ -72,12 +82,7 @@ export function AgendamentoFotoDialog({ entrega, temFoto, onOpenChange, onMudou 
     setSalvando(true);
     try {
       const conteudo = await reduzir(arquivo);
-      const r = await fetch(`${API_BASE}/api/agendamento-fotos/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conteudo }),
-      });
-      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error || `HTTP ${r.status}`);
+      await salvarFoto(id, conteudo);
       setFoto(conteudo);
       onMudou();
       toast({ title: "Foto do ticket salva", description: entrega?.cliente });

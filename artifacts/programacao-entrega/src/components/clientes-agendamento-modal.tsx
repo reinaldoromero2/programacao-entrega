@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarDays, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, ListPlus, Loader2, Paperclip, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, ListPlus, Loader2, Paperclip, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getListEntregasQueryKey, useCreateEntrega, useDeleteEntrega, useUpdateEntrega, type Entrega } from "@workspace/api-client-react";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 import { toast } from "@/hooks/use-toast";
 import { AgendamentoFotoDialog, buscarIdsComFoto } from "@/components/agendamento-foto-dialog";
+import { AgendamentoFotosLote } from "@/components/agendamento-fotos-lote";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -123,6 +124,7 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
   });
   const [fotoDe, setFotoDe] = useState<AgendamentoMensalItem | null>(null);
   const [mostrarAnteriores, setMostrarAnteriores] = useState(false);
+  const [loteAberto, setLoteAberto] = useState(false);
   const [editando, setEditando] = useState<{ id: number; date: string; hrs: string } | null>(null);
   const [confirmarExclusao, setConfirmarExclusao] = useState<number | null>(null);
   const [ocupadoId, setOcupadoId] = useState<number | null>(null);
@@ -313,6 +315,7 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
     <Dialog open={open} onOpenChange={(aberto) => {
       // com a foto do ticket aberta, fechar só volta para a agenda
       if (!aberto && fotoDe) { setFotoDe(null); return; }
+      if (!aberto && loteAberto) { setLoteAberto(false); return; }
       onOpenChange(aberto);
     }}>
       {/* tela cheia pelas bordas (inset-0): com o zoom do app, 100vw/100dvh ficariam menores que a tela */}
@@ -391,6 +394,19 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
                   </Button>
                 </div>
               ))}
+            </div>
+
+            <div className="flex flex-col gap-1.5 rounded-md border border-blue-200 bg-blue-50 p-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLoteAberto(true)}
+                className="gap-2 border-blue-300 bg-white text-blue-700 hover:bg-blue-100"
+              >
+                <Camera className="h-4 w-4" />
+                Criar pelas fotos dos tickets
+              </Button>
+              <span className="text-xs text-slate-600">Escolha o cliente acima, cole as fotos dos tickets e o app lê a data e o horário de cada um.</span>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
@@ -638,6 +654,15 @@ export function ClientesAgendamentoModal({ open, onOpenChange, onIrParaDia }: Cl
           temFoto={fotoDe ? idsComFoto.includes(fotoDe.id) : false}
           onOpenChange={(aberto) => { if (!aberto) setFotoDe(null); }}
           onMudou={() => void queryClient.invalidateQueries({ queryKey: ["agendamento-fotos", monthKey] })}
+        />
+        <AgendamentoFotosLote
+          open={loteAberto}
+          cliente={cliente}
+          onOpenChange={setLoteAberto}
+          criar={({ date, hrs }) => createEntrega.mutateAsync({
+            data: { date, cliente: cliente.trim().toUpperCase(), hrs, unidade: "MATRIZ", agendamento: true },
+          })}
+          onCriados={(datas) => void atualizarDepois(Array.from(new Set(datas)))}
         />
       </DialogContent>
     </Dialog>
