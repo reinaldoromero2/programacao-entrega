@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, ListPlus, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, ListPlus, Loader2, Paperclip, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getListEntregasQueryKey, useCreateEntrega, useUpdateEntrega, type Entrega } from "@workspace/api-client-react";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 import { toast } from "@/hooks/use-toast";
+import { AgendamentoFotoDialog, buscarIdsComFoto } from "@/components/agendamento-foto-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -103,6 +104,14 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
+  // quais agendamentos do mês têm foto do ticket (só os ids; a imagem desce ao abrir)
+  const { data: idsComFoto = [] } = useQuery({
+    queryKey: ["agendamento-fotos", monthKey],
+    queryFn: () => buscarIdsComFoto(format(startOfMonth(month), "yyyy-MM-dd"), format(endOfMonth(month), "yyyy-MM-dd")),
+    enabled: open,
+    staleTime: 60_000,
+  });
+  const [fotoDe, setFotoDe] = useState<AgendamentoMensalItem | null>(null);
   const monthlyAgendamentos = monthlyDeliveries.filter((item) => item.agendamento);
   const availableImportDates = Array.from(new Set(
     monthlyDeliveries.filter((item) => !item.agendamento).map((item) => item.date)
@@ -411,7 +420,15 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
                                 >
                                   <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${getAppointmentStatus(item).color}`} />
                                 </button>
-                                <span className="truncate">{item.cliente}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setFotoDe(item)}
+                                  title={idsComFoto.includes(item.id) ? "Ver a foto do ticket" : "Colar a foto do ticket"}
+                                  className="flex min-w-0 items-center gap-1.5 rounded text-left hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                >
+                                  <span className="truncate">{item.cliente}</span>
+                                  {idsComFoto.includes(item.id) && <Paperclip aria-label="tem foto do ticket" className="h-3.5 w-3.5 shrink-0 text-blue-600" />}
+                                </button>
                               </span>
                               <span className="flex items-center justify-end gap-1 whitespace-nowrap text-xs font-semibold text-slate-600">
                                 <Clock3 className="h-3.5 w-3.5 text-blue-600" />
@@ -478,6 +495,12 @@ export function ClientesAgendamentoModal({ open, onOpenChange }: ClientesAgendam
           </section>
         </div>
       </DialogContent>
+      <AgendamentoFotoDialog
+        entrega={fotoDe}
+        temFoto={fotoDe ? idsComFoto.includes(fotoDe.id) : false}
+        onOpenChange={(aberto) => { if (!aberto) setFotoDe(null); }}
+        onMudou={() => void queryClient.invalidateQueries({ queryKey: ["agendamento-fotos", monthKey] })}
+      />
     </Dialog>
   );
 }

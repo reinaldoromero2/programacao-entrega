@@ -58,6 +58,14 @@ async function assertSchema(): Promise<void> {
         criado_em timestamptz NOT NULL DEFAULT NOW()
       )
     `);
+    // foto do ticket de cada agendamento (ver routes/agendamento-fotos.ts); apagada quando o dia passa
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agendamento_fotos (
+        entrega_id integer PRIMARY KEY,
+        conteudo text NOT NULL,
+        criado_em timestamptz NOT NULL DEFAULT NOW()
+      )
+    `);
 
     const result = await client.query<{ table_name: string }>(
       `SELECT table_name
