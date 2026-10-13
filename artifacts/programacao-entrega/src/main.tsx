@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { ErroNaTela } from "./components/erro-na-tela";
 import "./index.css";
 import { setBaseUrl } from "@workspace/api-client-react";
 
@@ -7,4 +8,8 @@ import { setBaseUrl } from "@workspace/api-client-react";
 // VITE_API_URL overrides the default; falls back to the production Render URL.
 setBaseUrl(import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com");
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <ErroNaTela>
+    <App />
+  </ErroNaTela>,
+);

@@ -299,7 +299,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
   const { data: motivos } = useMotivosCancelamento();
   const [localState, setLocalState] = useState({
     checked: entrega.checked,
-    cliente: entrega.cliente,
+    cliente: entrega.cliente ?? "",
     hrs: entrega.hrs || "",
     obs: entrega.obs || "",
     motorista: entrega.motorista || "",
@@ -338,7 +338,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       initRef.current = entrega.id;
       const newState = {
         checked: entrega.checked,
-        cliente: entrega.cliente,
+        cliente: entrega.cliente ?? "",
         hrs: entrega.hrs || "",
         obs: entrega.obs || "",
         motorista: entrega.motorista || "",
@@ -360,7 +360,9 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
     // sem internet ou com o servidor fora, o cliente da API guarda na fila e responde na hora
     setIsSaving(true);
-    const updateData = { [field]: value === "" ? null : value };
+    // cliente apagado vai como texto vazio: o banco não aceita entrega sem cliente (null dava erro 500
+    // e o envio ficava preso na fila, travando a tela daquele PC)
+    const updateData = { [field]: field === "cliente" ? String(value ?? "") : value === "" ? null : value };
     updateEntrega.mutate(
       { id: entrega.id, data: updateData },
       {

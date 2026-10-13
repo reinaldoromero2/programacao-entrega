@@ -88,13 +88,15 @@ function validateValue(value: string, clienteNames: Set<string>): string {
 }
 
 export function ClienteAutocomplete({
-  value,
+  value: valorRecebido,
   onChange,
   onBlur,
   className,
   placeholder,
   ...rest
 }: ClienteAutocompleteProps) {
+  // uma entrega sem cliente (vazio, de uma alteração ainda na fila de envio) não pode derrubar a tela
+  const value = typeof valorRecebido === "string" ? valorRecebido : valorRecebido == null ? "" : String(valorRecebido);
   const { data: clientes = [] } = useClientesCadastro();
   const [open, setOpen] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<DropdownPos | null>(null);

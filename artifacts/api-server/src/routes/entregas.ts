@@ -756,6 +756,9 @@ router.patch("/entregas/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  // cliente apagado chega como null; a coluna não aceita null (era erro 500 e o envio ficava preso na
+  // fila do PC): grava texto vazio
+  if (parsed.data.cliente === null) parsed.data.cliente = "";
 
   const [entrega] = await db
     .update(entregasTable)
