@@ -3433,6 +3433,11 @@ var SIGNATURES = {
   function getLocalCarregado(){
     return romLocalFilialCb.checked ? 'Filial' : 'Matriz';
   }
+  // local carregado padrão de quem está logado: o Cleiton carrega sempre na Filial
+  var LOCAL_PADRAO_POR_USUARIO = { cleiton: 'Filial' };
+  function localPadrao(){
+    return (typeof currentUserKey !== 'undefined' && currentUserKey && LOCAL_PADRAO_POR_USUARIO[currentUserKey]) || 'Matriz';
+  }
   function setLocalCarregado(v){
     var isFilial = (v || '').trim().toLowerCase() === 'filial';
     romLocalFilialCb.checked = isFilial;
@@ -4181,6 +4186,9 @@ var SIGNATURES = {
 
     var limite = total * 0.05;
     document.getElementById('out-valor').textContent = fmtBRL(total);
+    // item com quantidade mas RP de preço zero (ainda sem preço cadastrado): o romaneio vale do mesmo
+    // jeito — antes o total R$ 0,00 fazia a página tratar como vazio (sem produtos e sem enviar)
+    var temItens = clientesDetalhe.some(function(c){ return c.itens && c.itens.some(function(it){ return it.qtd > 0; }); });
 
     var pill = document.getElementById('status-pill');
     var pillText = document.getElementById('status-text');
@@ -4200,7 +4208,7 @@ var SIGNATURES = {
       limiteEl.textContent = fmtBRL(0);
 
       var clienteDisplay = nomesPreenchidos.join(' + ');
-      if (!clienteDisplay || (total <= 0 && !qtdPendente)){
+      if (!clienteDisplay || (total <= 0 && !qtdPendente && !temItens)){
         pill.className = 'status-pill neutral';
         pillText.textContent = 'Preencha ao menos um cliente e um item';
         freteEl.textContent = '\u2014';
@@ -4210,7 +4218,7 @@ var SIGNATURES = {
         return null;
       }
 
-      if (total <= 0 && qtdPendente){
+      if (total <= 0 && qtdPendente && !temItens){
         pill.className = 'status-pill info';
         pillText.textContent = 'QTD PENDENTE \u2014 quantidade final ainda ser\u00e1 definida';
         freteEl.textContent = '\u2014';
@@ -4237,7 +4245,7 @@ var SIGNATURES = {
     lblSaldo.textContent = 'Saldo';
     limiteEl.textContent = fmtBRL(limite);
 
-    if (!baseClienteNome || (total <= 0 && !qtdPendente)){
+    if (!baseClienteNome || (total <= 0 && !qtdPendente && !temItens)){
       pill.className = 'status-pill neutral';
       pillText.textContent = 'Preencha ao menos um cliente e um item';
       freteEl.textContent = '\u2014';
@@ -4247,7 +4255,7 @@ var SIGNATURES = {
       return null;
     }
 
-    if (total <= 0 && qtdPendente){
+    if (total <= 0 && qtdPendente && !temItens){
       pill.className = 'status-pill info';
       pillText.textContent = 'QTD PENDENTE \u2014 quantidade final ainda ser\u00e1 definida';
       freteEl.textContent = '\u2014';
@@ -4255,6 +4263,17 @@ var SIGNATURES = {
       saveBtn.disabled = false;
       saveBtn.style.opacity = 1;
       return { cliente: baseClienteNome, total: 0, frete: null, saldo: null, status: 'QTD PENDENTE', modo: modo, clientes: clientesDetalhe, qtdPendente: true, ts: Date.now() };
+    }
+
+    // sem preço não dá para comparar o frete com os 5%: fica marcado à parte (não conta no resumo de frete)
+    if (total <= 0 && temItens){
+      pill.className = 'status-pill neutral';
+      pillText.textContent = 'PRE\u00c7O N\u00c3O CADASTRADO \u2014 o romaneio sai com os itens';
+      freteEl.textContent = baseFound ? fmtBRL(baseFreteMatch) : '\u2014';
+      saldoEl.textContent = '\u2014';
+      saveBtn.disabled = false;
+      saveBtn.style.opacity = 1;
+      return { cliente: baseClienteNome, total: 0, frete: baseFound ? baseFreteMatch : null, saldo: null, status: 'PRE\u00c7O N\u00c3O CADASTRADO', modo: modo, clientes: clientesDetalhe, qtdPendente: !!qtdPendente, ts: Date.now() };
     }
 
     if (!baseFound){
@@ -4331,14 +4350,19 @@ var SIGNATURES = {
     var limite = total * 0.05;
     if (modo !== 'frete'){
       var clienteDisplay = nomesPreenchidos.join(' + ');
-      if (!clienteDisplay || (total <= 0 && !qtdPendente)) return null;
-      if (total <= 0 && qtdPendente){
+      var temItensPuro = clientesDetalhe.some(function(c){ return c.itens && c.itens.some(function(it){ return it.qtd > 0; }); });
+      if (!clienteDisplay || (total <= 0 && !qtdPendente && !temItensPuro)) return null;
+      if (total <= 0 && qtdPendente && !temItensPuro){
         return { cliente: clienteDisplay, total: 0, frete: null, saldo: null, status: 'QTD PENDENTE', modo: modo, clientes: clientesDetalhe, qtdPendente: true, ts: Date.now() };
       }
       var statusModo = modo === 'sem_frete' ? 'SEM FRETE' : 'COLETA';
       return { cliente: clienteDisplay, total: total, frete: null, saldo: total, status: statusModo, modo: modo, clientes: clientesDetalhe, ts: Date.now() };
     }
-    if (!baseClienteNome || (total <= 0 && !qtdPendente)) return null;
+    var temItensP = clientesDetalhe.some(function(c){ return c.itens && c.itens.some(function(it){ return it.qtd > 0; }); });
+    if (!baseClienteNome || (total <= 0 && !qtdPendente && !temItensP)) return null;
+    if (total <= 0 && temItensP){
+      return { cliente: baseClienteNome, total: 0, frete: baseFound ? baseFreteMatch : null, saldo: null, status: 'PRE\u00c7O N\u00c3O CADASTRADO', modo: modo, clientes: clientesDetalhe, qtdPendente: !!qtdPendente, ts: Date.now() };
+    }
     if (total <= 0 && qtdPendente){
       return { cliente: baseClienteNome, total: 0, frete: null, saldo: null, status: 'QTD PENDENTE', modo: modo, clientes: clientesDetalhe, qtdPendente: true, ts: Date.now() };
     }
@@ -11720,6 +11744,29 @@ var SIGNATURES = {
     });
     return boxes;
   }
+  // aviso no desenho: itens com fardo "sem medida" (sem comprimento/largura no cadastro) vão no
+  // romaneio com tudo o que foi digitado, mas não dá para desenhá-los no caminhão
+  function cfAvisoSemMedidaHtml(lista){
+    if (!lista || !lista.length) return '';
+    return '<div style="background:var(--warning-bg); border:1px solid var(--warning); border-radius:8px; padding:10px 12px; margin-bottom:10px; font-size:12.5px; color:var(--text-primary);">' +
+      '<div style="font-weight:700; color:var(--warning); letter-spacing:0.04em;">SEM MEDIDA</div>' +
+      '<div style="margin-top:2px;">' + escapeHtml(lista.map(function(x){ return x.codigo + ' (' + x.qtd + ' pçs)'; }).join(', ')) + '</div>' +
+      '<div style="margin-top:4px; color:var(--text-secondary);">Fardo sem medida cadastrada: não aparece no desenho, mas vai no romaneio normalmente.</div>' +
+    '</div>';
+  }
+  function cfMetrosSemMedidaHtml(lista, semTitulo){
+    if (!lista || !lista.length) return '';
+    var html = semTitulo ? '' : '<div style="font-size:11px; letter-spacing:0.04em; color:var(--text-secondary); margin-bottom:6px;">METROS POR ITEM</div>';
+    html += '<div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">';
+    lista.forEach(function(x){
+      html += '<div style="border:1px dashed var(--warning); border-radius:8px; padding:7px 10px; font-size:12.5px; display:flex; align-items:center; gap:8px;">' +
+        '<span style="flex:1; color:var(--text-primary);">' + escapeHtml(x.codigo) + '</span>' +
+        '<span style="color:var(--text-secondary);">' + x.qtd + ' pçs</span>' +
+        '<strong style="color:var(--warning);">sem medida</strong>' +
+      '</div>';
+    });
+    return html + '</div>';
+  }
   function cfCalcular(){
     cfSincronizarPlacaVisualCaminhao();
     if (!cfResultadoEl) return;
@@ -11772,10 +11819,13 @@ var SIGNATURES = {
 
     var itensCarga = [];
     var cfNotasRegras = [];
+    // fardo cadastrado sem comprimento/largura: entra no romaneio normalmente, só não é desenhado
+    var cfSemMedida = [];
     cfItens.forEach(function(it, idx){
       var fardo = fardosMapa[it.fardoId];
       var qtd = parseFloat(it.qtd) || 0;
       if (!fardo || qtd <= 0) return;
+      if (!(fardo.comprimento > 0 && fardo.largura > 0)){ cfSemMedida.push({ codigo: fardo.codigo, qtd: qtd }); return; }
       // regra de "quantidade fechada" (tela Configurações → Regras): quando
       // esse RP tem regra aplicada, a quantidade digitada é fechada em
       // grupos de N peças (ex.: 280 digitado, fechamento 26 -> 260 peças
@@ -11818,7 +11868,7 @@ var SIGNATURES = {
       var alturaVaziaPx = Math.min(escVazio.maxH, Math.max(24, (caminhao.comprimento || 0) * escVazio.escala));
       var htmlVazio = '<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; font-size:12.5px; color:var(--text-secondary);">Comprimento do caminhão: <strong style="color:var(--text-primary);">' + (caminhao.comprimento || 0).toFixed(2) + 'm</strong> &nbsp;·&nbsp; Largura: <strong style="color:var(--text-primary);">' + (caminhao.largura || 0).toFixed(2) + 'm</strong></div>';
       htmlVazio += '<div id="cf-desenho-caminhao" style="background:var(--surface-2); border:2px dashed var(--border); border-radius:6px; margin:0 auto; width:' + escVazio.containerWpx.toFixed(1) + 'px; height:' + alturaVaziaPx.toFixed(1) + 'px; max-height:' + escVazio.maxH + 'px;"></div>';
-      htmlVazio += '<p class="foot-note" style="text-align:center; margin-top:8px;">Adicione ao menos um item com quantidade pra ver os fardos dentro do caminhão.</p>';
+      if (!cfSemMedida.length) htmlVazio += '<p class="foot-note" style="text-align:center; margin-top:8px;">Adicione ao menos um item com quantidade pra ver os fardos dentro do caminhão.</p>';
       if (cfIncompatibilidades.length){
         htmlVazio += '<div style="background:var(--critical-bg); border:1px solid var(--critical); border-radius:8px; padding:10px 12px; margin-top:10px; font-size:12.5px; color:var(--critical);">' +
           '🚫 <strong>Não cabe nesse caminhão (regra cadastrada):</strong> ' + escapeHtml(cfIncompatibilidades.join(', ')) +
@@ -11830,8 +11880,8 @@ var SIGNATURES = {
           cfNotasRegras.map(function(n){ return '<div>' + escapeHtml(n) + '</div>'; }).join('') +
         '</div>';
       }
-      cfResultadoEl.innerHTML = htmlVazio;
-      if (cfMetrosItemEl) cfMetrosItemEl.innerHTML = '';
+      cfResultadoEl.innerHTML = cfAvisoSemMedidaHtml(cfSemMedida) + htmlVazio;
+      if (cfMetrosItemEl) cfMetrosItemEl.innerHTML = cfMetrosSemMedidaHtml(cfSemMedida);
       var infoElVazio = document.getElementById('cf-info-lateral');
       if (infoElVazio) infoElVazio.innerHTML = '';
       cfUltimoCompativel = null;
@@ -12054,7 +12104,7 @@ var SIGNATURES = {
     // colunas de verdade lado a lado (cf-calc-middle/cf-calc-right no
     // HTML), não mais espremidos dentro do mesmo cf-resultado — assim o
     // desenho pode usar TODA a largura da sua própria coluna.
-    cfResultadoEl.innerHTML = htmlDesenho;
+    cfResultadoEl.innerHTML = cfAvisoSemMedidaHtml(cfSemMedida) + htmlDesenho;
     var infoEl = document.getElementById('cf-info-lateral');
     if (infoEl) infoEl.innerHTML = htmlInfo;
     var cfReorganizarLink = document.getElementById('cf-reorganizar-auto');
@@ -12089,6 +12139,7 @@ var SIGNATURES = {
         '</div>';
       });
       metrosHtml += '</div>';
+      metrosHtml += cfMetrosSemMedidaHtml(cfSemMedida, true);
       if (espacoRestanteReal > 0){
         metrosHtml += '<div style="background:var(--good-bg); border-radius:8px; padding:8px 12px; font-size:12.5px; color:var(--good); font-weight:600;">Espaço restante: ' + espacoRestanteReal.toFixed(2) + 'm</div>';
       }
@@ -12729,7 +12780,7 @@ var SIGNATURES = {
       placa: '',
       motorista: '',
       empilhadeiristas: [],
-      localCarregado: 'Matriz',
+      localCarregado: localPadrao(),
       cargaExtraMatriz: false,
       cargaExtraFilial: false,
       clientes: [],
@@ -14785,7 +14836,7 @@ var SIGNATURES = {
     document.getElementById('rom-motorista').value = wizState.motorista || '';
     if (romMotoristaManualCheckbox) romMotoristaManualCheckbox.checked = false;
     setEmpSelecionados((wizState.empilhadeiristas || []).join(', '));
-    setLocalCarregado(wizState.localCarregado || 'Matriz');
+    setLocalCarregado(wizState.localCarregado || localPadrao());
     document.getElementById('rom-extra-matriz').checked = !!wizState.cargaExtraMatriz;
     document.getElementById('rom-extra-filial').checked = !!wizState.cargaExtraFilial;
     while (clientsWrap.firstChild) clientsWrap.removeChild(clientsWrap.firstChild);
@@ -15170,7 +15221,7 @@ var SIGNATURES = {
     document.getElementById('rom-placa').value = '';
     document.getElementById('rom-motorista').value = '';
     if (romMotoristaManualCheckbox) romMotoristaManualCheckbox.checked = false;
-    setLocalCarregado('Matriz');
+    setLocalCarregado(localPadrao());
     setEmpSelecionados('');
     document.getElementById('rom-extra-matriz').checked = false;
     document.getElementById('rom-extra-filial').checked = false;
@@ -17376,6 +17427,9 @@ var SIGNATURES = {
     currentRole = session.role;
     currentSessionNome = session.nome;
     currentUserKey = session.user;
+    // formulário já aberto ao entrar: assume o local padrão de quem entrou
+    setLocalCarregado(localPadrao());
+    if (typeof wizState !== 'undefined' && wizState && !(wizState.clientes && wizState.clientes.length)) wizState.localCarregado = localPadrao();
     applyRole(session.role);
     if (typeof aplicarVisualModoRomaneio === 'function') aplicarVisualModoRomaneio();
     // a lista de pendentes/concluídos pode já ter sido renderizada antes do
