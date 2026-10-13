@@ -73,16 +73,29 @@ function bareSegment(seg: string): string {
   return seg.replace(/\([^)]*\)/g, "").trim().toUpperCase();
 }
 
+/**
+ * O segmento é de um cliente cadastrado? Há cliente com parênteses no próprio nome
+ * ("SIEMENS DS NOVA(MS)"), então tenta o texto inteiro e vai tirando as anotações entre parênteses
+ * do fim, uma a uma ("SIEMENS DS NOVA(MS) (025)" → "SIEMENS DS NOVA(MS)"); por último, sem nenhuma.
+ */
+function segmentoCadastrado(seg: string, clienteNames: Set<string>): boolean {
+  let s = seg.trim().toUpperCase();
+  while (s) {
+    if (clienteNames.has(s)) return true;
+    const semUltima = s.replace(/\s*\([^()]*\)\s*$/, "").trim();
+    if (semUltima === s) break;
+    s = semUltima;
+  }
+  const bare = bareSegment(seg);
+  return !!bare && clienteNames.has(bare);
+}
+
 /** Keep only segments that match a registered client. Returns cleaned value. */
 function validateValue(value: string, clienteNames: Set<string>): string {
   if (!value.trim()) return "";
   const segments = splitByPlusOutsideParens(value);
   const valid = segments
-    .map((seg) => {
-      const bare = bareSegment(seg);
-      if (!bare) return null;
-      return clienteNames.has(bare) ? seg.trim() : null;
-    })
+    .map((seg) => (bareSegment(seg) && segmentoCadastrado(seg, clienteNames) ? seg.trim() : null))
     .filter((s): s is string => s !== null);
   return valid.join(" + ");
 }
@@ -129,7 +142,7 @@ export function ClienteAutocomplete({
     canValidate &&
     !inParens &&
     segment.trim().length > 0 &&
-    !clienteNames.has(bareSegment(segment));
+    !segmentoCadastrado(segment, clienteNames);
 
   const updatePos = useCallback(() => {
     if (!inputRef.current) return;
