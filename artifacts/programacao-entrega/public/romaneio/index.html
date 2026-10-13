@@ -1551,6 +1551,7 @@
           <label class="qa-radio"><input type="checkbox" class="assinatura-check" data-key="cristian"><span>Cristian</span></label>
           <label class="qa-radio"><input type="checkbox" class="assinatura-check" data-key="reinaldo"><span>Reinaldo</span></label>
           <label class="qa-radio"><input type="checkbox" class="assinatura-check" data-key="rinaldo"><span>Rinaldo</span></label>
+          <label class="qa-radio"><input type="checkbox" class="assinatura-check" data-key="cleiton"><span>Cleiton</span></label>
         </div>
         <p class="foot-note" style="margin-top:4px;">Nenhum marcado = sem assinatura. Marcar um desmarca os outros.</p>
       </div>
@@ -14496,7 +14497,8 @@ var SIGNATURES = {
   var WIZ_ASSINATURAS = [
     { key: 'cristian', label: 'Cristian' },
     { key: 'reinaldo', label: 'Reinaldo' },
-    { key: 'rinaldo', label: 'Rinaldo' }
+    { key: 'rinaldo', label: 'Rinaldo' },
+    { key: 'cleiton', label: 'Cleiton' }
   ];
   function wizAbrirAssinatura(){
     if (!wizAssinaturaModal) return;
@@ -14874,6 +14876,8 @@ var SIGNATURES = {
     var assinaturaKey = ('assinaturaKey' in extra) ? extra.assinaturaKey : getAssinaturaKey();
     var assinaturaImgHtml = (assinaturaKey && SIGNATURES[assinaturaKey])
       ? '<img src="' + SIGNATURES[assinaturaKey] + '" style="max-height:55px;max-width:95%;">'
+      // sem a imagem da assinatura (ex.: Cleiton, até chegar a dele), sai o nome escrito
+      : assinaturaKey ? '<span style="font-family:Segoe Script,Brush Script MT,cursive;font-size:24px;color:#1f3a8a;">' + escapeHtml(assinaturaKey.charAt(0).toUpperCase() + assinaturaKey.slice(1)) + '</span>'
       : '';
     // assinatura do empilhadeirista (2ª conferência) — entra sozinha assim
     // que ele assina pelo celular, sem precisar fazer mais nada aqui (ou,
