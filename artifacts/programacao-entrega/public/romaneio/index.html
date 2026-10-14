@@ -2226,6 +2226,8 @@
               </div>
               <div id="cf-lm-requisitos-resultado" hidden style="margin:-2px 0 14px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; line-height:1.4;"></div>
               <p class="foot-note" id="cf-criar-romaneio-status" style="margin:-2px 0 14px;"></p>
+              <div id="cf-complemento-aviso" hidden style="margin:-4px 0 14px; padding:10px 12px; border:1px solid var(--accent-blue); border-radius:8px; background:var(--surface-2); font-size:12.5px; line-height:1.45;"></div>
+              <style>.cf-item-row.cf-item-original{ opacity:.6; } .cf-item-row.cf-item-original input, .cf-item-row.cf-item-original button{ pointer-events:none; }</style>
 
               <h3 style="font-size:14px; margin:0 0 8px; display:flex; align-items:center; justify-content:space-between;">1. Selecione o Caminhão <button type="button" id="cf-caminhao-limpar" title="Apagar o caminhão selecionado" style="background:none; border:none; color:var(--critical); font-size:15px; font-weight:700; cursor:pointer; line-height:1; padding:0 2px;">✕</button></h3>
               <div id="cf-caminhao-selos" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:8px;"></div>
@@ -4185,7 +4187,14 @@ var SIGNATURES = {
       }
     });
 
-    var limite = total * 0.05;
+    // "Completar carga": o caminhão já leva a carga de outro romaneio — os 5% valem sobre as
+    // duas cargas somadas, contra o frete da carga original (é a mesma viagem, um frete só)
+    var complComFrete = !!(romComplementoInfo && typeof romComplementoInfo.origFrete === 'number');
+    if (complComFrete){
+      baseFound = true;
+      baseFreteMatch = romComplementoInfo.origFrete;
+    }
+    var limite = (total + (complComFrete ? romComplementoInfo.origTotal : 0)) * 0.05;
     document.getElementById('out-valor').textContent = fmtBRL(total);
     // item com quantidade mas RP de preço zero (ainda sem preço cadastrado): o romaneio vale do mesmo
     // jeito — antes o total R$ 0,00 fazia a página tratar como vazio (sem produtos e sem enviar)
@@ -4241,8 +4250,8 @@ var SIGNATURES = {
     }
 
     // ---- modo "frete cadastrado" (padrao) ----
-    lblLimite.textContent = 'Limite permitido (5%)';
-    lblFrete.textContent = 'Frete cadastrado';
+    lblLimite.textContent = complComFrete ? ('Limite (5% desta carga + ' + fmtBRL(romComplementoInfo.origTotal) + ' já no caminhão)') : 'Limite permitido (5%)';
+    lblFrete.textContent = complComFrete ? 'Frete da carga original' : 'Frete cadastrado';
     lblSaldo.textContent = 'Saldo';
     limiteEl.textContent = fmtBRL(limite);
 
@@ -4673,6 +4682,9 @@ var SIGNATURES = {
       criadoPor: currentSessionNome || null
     };
     if (romId) payload.romaneioId = romId;
+    // complemento de carga: o frete já está na verificação da carga original (somada) —
+    // esta fica registrada, mas fora da conta do Resumo de Frete
+    if (extraSafe.complementoDe) payload.complementoDe = extraSafe.complementoDe;
     // marca otimisticamente antes da resposta do banco, pra dois cliques
     // seguidos (Imprimir + Enviar p/ assinatura) não gerarem 2 registros
     if (!romId) lastRegisteredSignature = sig;
@@ -9193,10 +9205,10 @@ var SIGNATURES = {
       var qtdOpcoesMarcadas = (it.modoDoisTras ? 1 : 0) + (it.semQtd ? 1 : 0) + (it.ladoFixo ? 1 : 0);
       var clienteAberto = it._uiClienteOpen != null ? it._uiClienteOpen : !!it.cliente;
       var opcoesAberto = it._uiOpcoesOpen != null ? it._uiOpcoesOpen : (qtdOpcoesMarcadas > 0);
-      return '<div class="cf-item-row" data-cf-item-id="' + it.id + '" style="border:1px solid ' + cor + '; border-radius:8px; padding:10px;">' +
+      return '<div class="cf-item-row' + (it.doOriginal ? ' cf-item-original' : '') + '" data-cf-item-id="' + it.id + '" style="border:1px solid ' + cor + '; border-radius:8px; padding:10px;">' +
         '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">' +
           '<span style="width:10px; height:10px; border-radius:50%; background:' + cor + '; flex:0 0 auto;"></span>' +
-          '<span style="font-size:12.5px; color:var(--text-secondary); flex:1;">Linha ' + (idx + 1) + '</span>' +
+          '<span style="font-size:12.5px; color:var(--text-secondary); flex:1;">Linha ' + (idx + 1) + (it.doOriginal ? ' · <b>já no caminhão</b> (não entra no romaneio novo)' : '') + '</span>' +
           '<button type="button" class="cf-item-remover" title="Apagar este item" style="background:none; border:none; color:var(--critical); font-size:15px; font-weight:700; cursor:pointer; line-height:1; padding:0 2px;">✕</button>' +
         '</div>' +
         // linha única: RP (prioridade de espaço, nunca cortado) + Qtd +
@@ -9630,6 +9642,7 @@ var SIGNATURES = {
   // selecionado) — usado toda vez que a calculadora é aberta ou fechada,
   // pra nunca abrir com o preenchimento de uma carga anterior.
   function cfResetCalculadora(){
+    if (typeof cfComplementoOrigem !== 'undefined' && cfComplementoOrigem){ cfComplementoOrigem = null; if (typeof cfMostrarAvisoComplemento === 'function') cfMostrarAvisoComplemento(); }
     cfItens = [{ id: cfProximoItemId++, fardoId: '', qtd: '', ofobs: '', orientacaoOverride: null, unitFlips: {}, modoDoisTras: false, semQtd: false, ladoFixo: null, codigoSemFardo: '' }];
     cfManualPos = {};
     cfComboFlips = {};
@@ -10011,6 +10024,17 @@ var SIGNATURES = {
     }
     var montado = cfMontarItensAtuais();
     var fardosMapa = montado.fardosMapa, itensValidos = montado.itensValidos;
+    // completando a carga de outro romaneio: o que já estava no caminhão fica só no desenho
+    if (cfComplementoOrigem){
+      itensValidos = itensValidos.filter(function(it){ return !it.doOriginal; });
+      if (!itensValidos.length){
+        if (cfCriarRomaneioStatusEl){
+          cfCriarRomaneioStatusEl.textContent = 'Adicione ao menos 1 item novo (com quantidade) pra completar a carga.';
+          cfCriarRomaneioStatusEl.style.color = 'var(--critical)';
+        }
+        return;
+      }
+    }
     if (!itensValidos.length){
       var codigoNaoReconhecidoCriar = cfPrimeiroCodigoNaoReconhecido();
       if (codigoNaoReconhecidoCriar){
@@ -10114,6 +10138,12 @@ var SIGNATURES = {
         // esse rascunho virou romaneio de verdade — remove ele da lista.
         if (rascunhoIdParaApagar && dbApi) dbApi.collection('cargas_rascunho').doc(rascunhoIdParaApagar).delete();
         resetWizState();
+        // completar carga: passa a carga original pro cálculo dos 5% do romaneio novo
+        if (cfComplementoOrigem){
+          romComplementoInfo = Object.assign({}, cfComplementoOrigem);
+          cfComplementoOrigem = null;
+          cfMostrarAvisoComplemento();
+        }
         wizFecharTodos();
         wizState.freteEscolhido = cd.categoria || '';
         wizState.placa = cd.placa || '';
@@ -10142,6 +10172,67 @@ var SIGNATURES = {
   // true enquanto o assistente (aberto pelo "Criar romaneio" da
   // calculadora) está rodando por cima da Carga Fácil.
   var cfWizardSobreCalc = false;
+
+  // ---- "Completar carga" ----
+  // cfComplementoOrigem: romaneio cujo desenho foi aberto pra receber mais itens (fase da
+  // calculadora). romComplementoInfo: o mesmo, já com os números pro cálculo dos 5% (fase do
+  // assistente/formulário, até o romaneio novo ser enviado).
+  var cfComplementoOrigem = null;
+  var romComplementoInfo = null;
+  // verificação (histórico/Resumo de Frete) do romaneio: pelo id fixo "rom_<id>" ou, nos
+  // mais antigos, pelo mesmo conteúdo registrado no mesmo dia
+  function acharVerificacaoDoRomaneio(romId, d){
+    var porId = allHistDocs.filter(function(h){ return h.id === 'rom_' + romId; })[0];
+    if (porId) return porId;
+    var sig = signatureFor(d), dia = dateKeyLocal(d.criadoEm);
+    return allHistDocs.filter(function(h){
+      var hd = h.data() || {};
+      return signatureFor(hd) === sig && dateKeyLocal(hd.criadoEm) === dia;
+    })[0] || null;
+  }
+  function cfAbrirCompletarCarga(romId, d){
+    var snapshot = null;
+    try { snapshot = JSON.parse(d.cfDesenho || ''); } catch (e){ snapshot = null; }
+    if (!snapshot) return;
+    var hDoc = acharVerificacaoDoRomaneio(romId, d);
+    var hd = hDoc ? (hDoc.data() || {}) : null;
+    var origFrete = hd && typeof hd.frete === 'number' ? hd.frete : (typeof d.frete === 'number' ? d.frete : null);
+    var origTotal = hd && typeof hd.total === 'number' ? hd.total : (typeof d.total === 'number' ? d.total : 0);
+    if (typeof cfOrigemWizard !== 'undefined') cfOrigemWizard = false;
+    if (typeof cfRascunhoEditandoId !== 'undefined') cfRascunhoEditandoId = null;
+    if (typeof cfEditandoRomaneioId !== 'undefined') cfEditandoRomaneioId = null;
+    if (typeof cfEditandoRomaneioDocData !== 'undefined') cfEditandoRomaneioDocData = null;
+    var origemCompl = {
+      id: romId,
+      cliente: resumoClientesTxt(d.clientes, d.cliente),
+      origFrete: (d.modo || 'frete') === 'frete' ? origFrete : null,
+      origTotal: origTotal,
+      verificacaoId: hDoc ? hDoc.id : null,
+      verificacaoTotalProprio: hd && typeof hd.totalAntesComplemento === 'number' ? hd.totalAntesComplemento : origTotal
+    };
+    // os itens que já estão no caminhão continuam no desenho, mas marcados — não entram no romaneio novo
+    var snap = Object.assign({}, snapshot, {
+      itens: (snapshot.itens || []).map(function(it){ return Object.assign({}, it, { doOriginal: true }); })
+    });
+    cfAbrirDesenhoSalvo(snap);
+    cfComplementoOrigem = origemCompl;
+    // já deixa uma linha vazia pronta pro primeiro item novo
+    cfItens.push({ id: cfProximoItemId++, fardoId: '', qtd: '', ofobs: '', orientacaoOverride: null, unitFlips: {}, modoDoisTras: false, semQtd: false, ladoFixo: null, codigoSemFardo: '' });
+    renderCfItens();
+    if (typeof cfAtualizarBotoesSalvarOuCriar === 'function') cfAtualizarBotoesSalvarOuCriar();
+    cfMostrarAvisoComplemento();
+  }
+  function cfMostrarAvisoComplemento(){
+    var el = document.getElementById('cf-complemento-aviso');
+    if (!el) return;
+    if (!cfComplementoOrigem){ el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    el.innerHTML = '<b>Completando a carga de ' + escapeHtml(cfComplementoOrigem.cliente) + '</b><br>' +
+      'Os itens que já estão no caminhão aparecem no desenho, mas não entram no romaneio novo — ele sai só com os itens que você colocar agora.' +
+      (typeof cfComplementoOrigem.origFrete === 'number'
+        ? ' Os 5% do frete são calculados sobre as duas cargas juntas (' + fmtBRL(cfComplementoOrigem.origTotal) + ' já no caminhão), com o frete da carga original.'
+        : ' A carga original não tem frete cadastrado: os 5% ficam só com esta carga.');
+  }
   // "Voltar" no 1º pop-up do assistente aberto pela calculadora: fecha os
   // pop-ups e deixa a calculadora como estava (nada é zerado).
   function cfVoltarParaCalculadora(){
@@ -10189,7 +10280,7 @@ var SIGNATURES = {
       return;
     }
     var montado = cfMontarItensAtuais();
-    var fardosMapa = montado.fardosMapa, itensValidos = montado.itensValidos;
+    var fardosMapa = montado.fardosMapa, itensValidos = montado.itensValidos.filter(function(it){ return !it.doOriginal; });
     if (!itensValidos.length){
       var codigoNaoReconhecidoSalvar = cfPrimeiroCodigoNaoReconhecido();
       if (codigoNaoReconhecidoSalvar){
@@ -10347,7 +10438,8 @@ var SIGNATURES = {
       });
     });
     if (!itensNovos.length){ onPronto(null, null); return; }
-    var oldItensDisponiveis = (oldSnapshot.itens || []).slice();
+    // itens "já no caminhão" (completar carga) não fazem parte deste romaneio: ficam no desenho como estão
+    var oldItensDisponiveis = (oldSnapshot.itens || []).filter(function(it){ return !it.doOriginal; });
     var novosCfItens = [];
     var proximoId = oldItensDisponiveis.reduce(function(m, it){ return Math.max(m, (it.id || 0) + 1); }, 1);
     itensNovos.forEach(function(itNovo){
@@ -10368,6 +10460,7 @@ var SIGNATURES = {
       // (fora do escopo do desenho) fica com o item certo mesmo assim.
     });
     if (!novosCfItens.length){ onPronto(null, null); return; }
+    novosCfItens = (oldSnapshot.itens || []).filter(function(it){ return it.doOriginal; }).concat(novosCfItens);
     var idsRestantes = {};
     novosCfItens.forEach(function(it){ idsRestantes[it.id] = true; });
     var manualPosNovo = {};
@@ -10782,6 +10875,8 @@ var SIGNATURES = {
   // na lista de Carregamentos, pra religar o romaneio com a imagem da carga.
   function cfAbrirDesenhoSalvo(snapshot){
     if (!snapshot || !cfFardosModal) return;
+    // abrir outro desenho encerra um "Completar carga" que estivesse em andamento
+    if (cfComplementoOrigem){ cfComplementoOrigem = null; cfMostrarAvisoComplemento(); }
     cfFardosModal.hidden = false;
     cfCaminhaoSelecionadoId = snapshot.caminhaoId || '';
     cfAtualizarSelectCaminhao();
@@ -12749,6 +12844,8 @@ var SIGNATURES = {
   // (ver cfExecutarCriarRomaneio).
   if (cfCloseBtn && cfFardosModal) cfCloseBtn.addEventListener('click', function(){
     cfFardosModal.hidden = true;
+    // fechar no meio de um "Completar carga" desiste dele (não deixa a carga original na calculadora)
+    if (cfComplementoOrigem) cfResetCalculadora();
     cfWizardSobreCalc = false;
     document.documentElement.classList.remove('cf-wiz-ativo');
     cfFecharSlotMenu();
@@ -12776,6 +12873,7 @@ var SIGNATURES = {
   var wizPendenteDesenho = null;
   var wizPendenteDesenhoImagem = null;
   function resetWizState(){
+    romComplementoInfo = null;
     wizState = {
       freteEscolhido: '',
       placa: '',
@@ -15218,6 +15316,7 @@ var SIGNATURES = {
   // pelo "Gerar novo romaneio" quanto, automaticamente, logo depois de
   // "ENVIAR PARA CARREGAMENTOS" dar certo.
   function limparCamposFormulario(){
+    romComplementoInfo = null;
     document.getElementById('rom-data').value = dataHojeISO();
     document.getElementById('rom-placa').value = '';
     document.getElementById('rom-motorista').value = '';
@@ -16155,6 +16254,10 @@ var SIGNATURES = {
     };
 
     if (editandoId){
+      if (editandoDocAntigo && editandoDocAntigo.complementoDe){
+        camposComuns.complementoDe = editandoDocAntigo.complementoDe;
+        camposComuns.complementoDeCliente = editandoDocAntigo.complementoDeCliente || '';
+      }
       enviarAssinaturaBtn.disabled = true;
       romStatus.textContent = 'Salvando alterações...';
       romStatus.style.color = '';
@@ -16187,6 +16290,11 @@ var SIGNATURES = {
       return;
     }
 
+    var complEnvio = (romComplementoInfo && typeof romComplementoInfo.origFrete === 'number') ? romComplementoInfo : null;
+    if (complEnvio){
+      camposComuns.complementoDe = complEnvio.id;
+      camposComuns.complementoDeCliente = complEnvio.cliente;
+    }
     var payload = Object.assign({}, camposComuns, {
       docStatus: 'pendente',
       carregStatus: 'aguardando',
@@ -16209,6 +16317,18 @@ var SIGNATURES = {
       enviarAssinaturaBtn.disabled = false;
       lastSentDocId = ref.id;
       if (!result.qtdPendente) addToHistory(result, camposComuns, ref.id);
+      // completar carga: a verificação da carga original passa a valer pelas duas cargas
+      // somadas (uma carga só no Resumo de Frete, com o frete uma vez)
+      if (complEnvio && complEnvio.verificacaoId && !result.qtdPendente && typeof result.saldo === 'number'){
+        dbApi.collection('verificacoes').doc(complEnvio.verificacaoId).update({
+          total: complEnvio.origTotal + result.total,
+          saldo: result.saldo,
+          status: result.status,
+          totalAntesComplemento: complEnvio.verificacaoTotalProprio,
+          complementadoPor: ref.id
+        }).catch(function(err){ console.error('Falha ao somar o complemento na carga original:', err); });
+      }
+      romComplementoInfo = null;
       // abate na Programação de Entrega o que acabou de ir para carregamentos
       try { if (window.__ripackProgConsumir) window.__ripackProgConsumir(result.clientes); } catch (e){}
       wizPendenteDesenho = null; wizPendenteDesenhoImagem = null;
@@ -16637,6 +16757,16 @@ var SIGNATURES = {
       editarBtnAguardando.title = 'Alterar qualquer campo deste romaneio (cliente, itens, placa, motorista etc.) antes de assinar';
       editarBtnAguardando.addEventListener('click', function(){ carregarRomaneioParaEdicao(doc.id, d); });
       btnWrap.appendChild(editarBtnAguardando);
+    }
+    // completar carga: só quem monta romaneio (admin)
+    if (d.cfDesenho && currentRole === 'admin'){
+      var completarBtnPend = document.createElement('button');
+      completarBtnPend.type = 'button';
+      completarBtnPend.className = 'add-btn btn-destaque-azul';
+      completarBtnPend.textContent = '➕ Completar carga';
+      completarBtnPend.title = 'Abrir o desenho desta carga na calculadora e completar o caminhão com outros itens (sai um romaneio novo só com os itens novos)';
+      completarBtnPend.addEventListener('click', function(){ cfAbrirCompletarCarga(doc.id, d); });
+      btnWrap.appendChild(completarBtnPend);
     }
     if (currentRole === 'admin'){
       var qaBtnPend = document.createElement('button');
@@ -17125,6 +17255,16 @@ var SIGNATURES = {
       btn.style.cssText += 'flex:0 0 auto;';
       topRow.appendChild(btn);
     });
+    if (d.cfDesenho && currentRole === 'admin'){
+      var completarBtnDone = document.createElement('button');
+      completarBtnDone.type = 'button';
+      completarBtnDone.className = 'add-btn btn-destaque-azul';
+      completarBtnDone.style.cssText = 'flex:0 0 auto;';
+      completarBtnDone.textContent = '➕ Completar carga';
+      completarBtnDone.title = 'Abrir o desenho desta carga na calculadora e completar o caminhão com outros itens (sai um romaneio novo só com os itens novos)';
+      completarBtnDone.addEventListener('click', function(){ cfAbrirCompletarCarga(doc.id, d); });
+      topRow.appendChild(completarBtnDone);
+    }
     // botão amarelo "N" — aparece em TODOS os romaneios finalizados (não só
     // nos de clientes cadastrados no Nathan, já que ele pode acompanhar uma
     // carga fora do padrão dele); some sozinho depois que todo cliente do
@@ -17826,7 +17966,8 @@ var SIGNATURES = {
     claude.use('db').then(function(db){
       if (!db) return;
       db.collection('verificacoes').orderBy('criadoEm', 'desc').limit(1000).onSnapshot(function(snap){
-        liveRecords = (snap.docs || []).map(normalizeLiveDoc);
+        // complemento de carga já está somado na verificação da carga original
+        liveRecords = (snap.docs || []).filter(function(doc){ return !((doc.data() || {}).complementoDe); }).map(normalizeLiveDoc);
         recompute();
       }, function(){ /* mant\u00e9m a base est\u00e1tica se der erro ao carregar o compartilhado */ });
     }).catch(function(){});
