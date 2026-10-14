@@ -2227,7 +2227,7 @@
               <div id="cf-lm-requisitos-resultado" hidden style="margin:-2px 0 14px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; line-height:1.4;"></div>
               <p class="foot-note" id="cf-criar-romaneio-status" style="margin:-2px 0 14px;"></p>
               <div id="cf-complemento-aviso" hidden style="margin:-4px 0 14px; padding:10px 12px; border:1px solid var(--accent-blue); border-radius:8px; background:var(--surface-2); font-size:12.5px; line-height:1.45;"></div>
-              <style>.cf-item-row.cf-item-original{ opacity:.6; } .cf-item-row.cf-item-original input, .cf-item-row.cf-item-original button{ pointer-events:none; }</style>
+              <style>.cf-box.cf-box-original{ cursor:not-allowed !important; } .cf-item-row.cf-item-original{ opacity:.6; } .cf-item-row.cf-item-original input, .cf-item-row.cf-item-original button{ pointer-events:none; }</style>
 
               <h3 style="font-size:14px; margin:0 0 8px; display:flex; align-items:center; justify-content:space-between;">1. Selecione o Caminhão <button type="button" id="cf-caminhao-limpar" title="Apagar o caminhão selecionado" style="background:none; border:none; color:var(--critical); font-size:15px; font-weight:700; cursor:pointer; line-height:1; padding:0 2px;">✕</button></h3>
               <div id="cf-caminhao-selos" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:8px;"></div>
@@ -12181,7 +12181,7 @@ var SIGNATURES = {
         var baseStyle = 'position:absolute; left:' + leftPx.toFixed(1) + 'px; top:' + topPx.toFixed(1) + 'px; width:' + wPx.toFixed(1) + 'px; height:' + hPx.toFixed(1) + 'px; box-sizing:border-box; cursor:grab; touch-action:none; user-select:none;';
         if (b.slot.tipo === 'combo'){
           var slotC = b.slot;
-          return '<div class="cf-box cf-box-combo" data-cf-box-key="' + escapeHtml(b.key) + '" title="' + (slotC.travouAltura ? 'Sobra maior que meia pilha — não cabe mais nada em cima' : 'Clique pra completar/excluir — clique e segure pra mover') + '" style="' + baseStyle + ' border:2px dashed #f59e0b; border-radius:3px; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-1);">' +
+          return '<div class="cf-box cf-box-combo' + (cfSlotEhOriginal(slotC) ? ' cf-box-original' : '') + '" data-cf-box-key="' + escapeHtml(b.key) + '" title="' + (slotC.travouAltura ? 'Sobra maior que meia pilha — não cabe mais nada em cima' : 'Clique pra completar/excluir — clique e segure pra mover') + '" style="' + baseStyle + ' border:2px dashed #f59e0b; border-radius:3px; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-1);">' +
             (slotC.partes.length > 1 ? '<span style="position:absolute; top:1px; right:2px; background:#f59e0b; color:#1a1a1a; font-size:8px; font-weight:700; border-radius:8px; padding:0 4px; z-index:1; pointer-events:none;">×' + slotC.partes.length + '</span>' : '') +
             (slotC.travouAltura ? '<span style="position:absolute; bottom:1px; right:2px; font-size:9px; z-index:1; pointer-events:none;">🔒</span>' : '') +
             slotC.partes.map(function(p){
@@ -12190,7 +12190,7 @@ var SIGNATURES = {
           '</div>';
         }
         var slotF = b.slot;
-        return '<div class="cf-box cf-slot-full" data-cf-box-key="' + escapeHtml(b.key) + '" data-cf-slot-item="' + (slotF.itemId == null ? '' : slotF.itemId) + '" data-cf-slot-unit="' + slotF.unitIndex + '" title="Clique pra duplicar/excluir/virar — clique e segure pra mover" style="' + baseStyle + ' background:' + slotF.cor + '; color:#fff; font-size:' + slotFonte + '; font-weight:600; display:flex; align-items:center; justify-content:center; text-align:center; overflow:hidden; padding:1px; border:1px solid rgba(255,255,255,0.2); border-radius:3px;">' + slotF.pecas + 'pçs</div>';
+        return '<div class="cf-box cf-slot-full' + (cfSlotEhOriginal(slotF) ? ' cf-box-original' : '') + '" data-cf-box-key="' + escapeHtml(b.key) + '" data-cf-slot-item="' + (slotF.itemId == null ? '' : slotF.itemId) + '" data-cf-slot-unit="' + slotF.unitIndex + '" title="Clique pra duplicar/excluir/virar — clique e segure pra mover" style="' + baseStyle + ' background:' + slotF.cor + '; color:#fff; font-size:' + slotFonte + '; font-weight:600; display:flex; align-items:center; justify-content:center; text-align:center; overflow:hidden; padding:1px; border:1px solid rgba(255,255,255,0.2); border-radius:3px;">' + slotF.pecas + 'pçs</div>';
       }).join('') +
       '</div>' +
     '</div>';
@@ -12717,10 +12717,19 @@ var SIGNATURES = {
     });
     return melhor;
   }
+  // completar carga: fardo de um item "já no caminhão" (cheio, ou sobra com alguma parte dele)
+  function cfSlotEhOriginal(slot){
+    function orig(itemId){ return itemId != null && cfItens.some(function(it){ return it.id === itemId && it.doOriginal; }); }
+    if (!slot) return false;
+    if (slot.tipo === 'combo') return (slot.partes || []).some(function(p){ return orig(p.itemId); });
+    return orig(slot.itemId);
+  }
   function cfBoxPointerDown(ev){
     if (ev.button != null && ev.button !== 0) return;
     var el = ev.target.closest ? ev.target.closest('.cf-box') : null;
     if (!el || !cfResultadoEl.contains(el)) return;
+    // carga que já estava no caminhão (completar carga): não move, não abre menu
+    if (el.classList.contains('cf-box-original')){ ev.preventDefault(); return; }
     var key = el.getAttribute('data-cf-box-key');
     if (!key) return;
     ev.preventDefault();
@@ -12758,6 +12767,8 @@ var SIGNATURES = {
       el.style.zIndex = '';
       if (moved){
         var caixaAlvoEl = cfAcharCaixaAlvo(el);
+        // não junta um fardo novo com um que já estava no caminhão
+        if (caixaAlvoEl && caixaAlvoEl.classList.contains('cf-box-original')) caixaAlvoEl = null;
         var refOrigem = caixaAlvoEl ? cfResolveRefDeBoxEl(el) : null;
         var refAlvo = caixaAlvoEl ? cfResolveRefDeBoxEl(caixaAlvoEl) : null;
         if (refOrigem && refAlvo && !(refOrigem.itemId === refAlvo.itemId && refOrigem.ref === refAlvo.ref)){
