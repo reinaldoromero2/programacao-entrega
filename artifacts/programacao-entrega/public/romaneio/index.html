@@ -2621,7 +2621,7 @@
     </div>
 
     <div class="card" style="margin-top:16px;">
-      <h2 style="margin:0 0 2px;">Saldo acumulado &mdash; lucro menos impacto financeiro</h2>
+      <h2 style="margin:0 0 2px;">Saldo acumulado &mdash; indicador atingido menos indicador não atingido</h2>
       <p class="card-sub" style="margin:0;">Não é faturamento: é a soma de quanto cada carga sobrou (dentro do limite) ou faltou (ultrapassou os 5%) no frete &mdash; o saldo zera a cada início de mês e recomeça a somar do zero.</p>
 
 <div style="margin-top:14px;" id="pf-saldo-mes-grid"></div>
@@ -17621,19 +17621,29 @@ var SIGNATURES = {
     }).join('');
   }
 
-  function buildMonthBar(lucro, impactoFinanceiro){
+  // barra do mês: verde = indicador atingido, vermelho = não atingido; embaixo de cada parte,
+  // o valor (grande, na cor da parte) e quantas cargas entram nela
+  function buildMonthBar(lucro, impactoFinanceiro, qtdOk, qtdFora){
     var impactoAbs = Math.abs(impactoFinanceiro);
     var total = lucro + impactoAbs;
     var pctGood = total ? (lucro / total * 100) : 100;
     var pctCritical = total ? (impactoAbs / total * 100) : 0;
-    return '<div class="bridge-wrap" style="padding-top:40px;">' +
+    function plural(n){ return n + (n === 1 ? ' carga' : ' cargas'); }
+    function bloco(cor, rotulo, valor, qtd, alinha){
+      return '<div style="text-align:' + alinha + ';min-width:0;">' +
+        '<div style="font-size:12px;color:var(--text-secondary);">' + rotulo + '</div>' +
+        '<div style="font-family:var(--font-num);font-size:22px;font-weight:700;color:' + cor + ';line-height:1.2;">' + valor + '</div>' +
+        '<div style="font-size:16px;font-weight:700;color:' + cor + ';">' + plural(qtd) + '</div>' +
+      '</div>';
+    }
+    return '<div class="bridge-wrap" style="padding-top:4px;">' +
       '<div class="bridge-track">' +
         '<div class="bridge-fill good" style="width:' + pctGood.toFixed(2) + '%"></div>' +
         '<div class="bridge-fill critical" style="width:' + pctCritical.toFixed(2) + '%"></div>' +
       '</div>' +
-      '<div class="bridge-callout" style="left:' + pctGood.toFixed(2) + '%">' +
-        '<div class="callout-line"></div>' +
-        '<div class="callout-box">Impacto financeiro: ' + pfFmtBRL(impactoAbs) + '<br><span>' + pctCritical.toFixed(1).replace('.', ',') + '% do total do m\u00eas</span></div>' +
+      '<div style="display:flex;justify-content:space-between;gap:16px;margin-top:8px;">' +
+        bloco('var(--good)', 'Indicador atingido', pfFmtBRL(lucro), qtdOk, 'left') +
+        bloco('var(--critical)', 'Indicador n\u00e3o atingido', '-' + pfFmtBRL(impactoAbs), qtdFora, 'right') +
       '</div>' +
     '</div>';
   }
@@ -17676,14 +17686,14 @@ var SIGNATURES = {
     }
 
     var selRecs = selRecsAll.slice().sort(function(a, b){ return (a.data || '').localeCompare(b.data || ''); });
-    var acumSel = 0, lucro = 0, impactoFinanceiro = 0;
+    var acumSel = 0, lucro = 0, impactoFinanceiro = 0, qtdOk = 0, qtdFora = 0;
     var tbl3Rows = [];
     var selLabel = monthLabelFromKey(selectedMonthKey);
     selRecs.forEach(function(r){
       var isNaocad = (r.status === 'FRETE N\u00c3O CADASTRADO' || r.saldo == null);
       if (!isNaocad){
         acumSel += r.saldo;
-        if (r.saldo >= 0) lucro += r.saldo; else impactoFinanceiro += r.saldo;
+        if (r.saldo >= 0) { lucro += r.saldo; qtdOk++; } else { impactoFinanceiro += r.saldo; qtdFora++; }
       }
       var dd = r.data ? (r.data.slice(8,10) + '/' + r.data.slice(5,7)) : '';
       var saldoTxt = isNaocad ? '<span style="color:var(--text-muted);">frete n\u00e3o cadastrado</span>' : ((r.saldo >= 0 ? '+' : '') + pfFmtBRL(r.saldo));
@@ -17695,17 +17705,12 @@ var SIGNATURES = {
     if (tbl3Body) tbl3Body.innerHTML = tbl3Rows.join('');
 
     if (grid){
-      var barHtml = buildMonthBar(lucro, impactoFinanceiro);
+      var barHtml = buildMonthBar(lucro, impactoFinanceiro, qtdOk, qtdFora);
       grid.innerHTML = '<div>' +
         '<div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px;">' +
           '<div style="font-size:12.5px; font-weight:600; color:var(--text-secondary);">' + selLabel + '</div>' +
-          '<div style="font-family:var(--font-num); font-size:15px; font-weight:600;" class="' + (acumSel >= 0 ? 'good' : 'critical') + '">' + (acumSel >= 0 ? '+' : '') + pfFmtBRL(acumSel) + '</div>' +
         '</div>' +
         barHtml +
-        '<div style="display:flex; gap:14px; font-size:11px; color:var(--text-muted); margin-top:6px;">' +
-          '<span>Lucro: <b style="color:var(--good);font-family:var(--font-num);">' + pfFmtBRL(lucro) + '</b></span>' +
-          '<span>Impacto financeiro: <b style="color:var(--critical);font-family:var(--font-num);">' + pfFmtBRL(impactoFinanceiro) + '</b></span>' +
-        '</div>' +
       '</div>';
     }
   }
