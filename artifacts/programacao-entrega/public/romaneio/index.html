@@ -17255,16 +17255,6 @@ var SIGNATURES = {
       btn.style.cssText += 'flex:0 0 auto;';
       topRow.appendChild(btn);
     });
-    if (d.cfDesenho && currentRole === 'admin'){
-      var completarBtnDone = document.createElement('button');
-      completarBtnDone.type = 'button';
-      completarBtnDone.className = 'add-btn btn-destaque-azul';
-      completarBtnDone.style.cssText = 'flex:0 0 auto;';
-      completarBtnDone.textContent = '➕ Completar carga';
-      completarBtnDone.title = 'Abrir o desenho desta carga na calculadora e completar o caminhão com outros itens (sai um romaneio novo só com os itens novos)';
-      completarBtnDone.addEventListener('click', function(){ cfAbrirCompletarCarga(doc.id, d); });
-      topRow.appendChild(completarBtnDone);
-    }
     // botão amarelo "N" — aparece em TODOS os romaneios finalizados (não só
     // nos de clientes cadastrados no Nathan, já que ele pode acompanhar uma
     // carga fora do padrão dele); some sozinho depois que todo cliente do
@@ -17285,6 +17275,18 @@ var SIGNATURES = {
         });
       });
       topRow.appendChild(nathanBtn);
+      precisaMargemAuto = false;
+    }
+    // "C" (azul) — completar carga: botão pequeno junto do N / Q / R
+    if (d.cfDesenho && currentRole === 'admin'){
+      var completarBtnDone = document.createElement('button');
+      completarBtnDone.type = 'button';
+      completarBtnDone.className = 'add-btn';
+      completarBtnDone.style.cssText = (precisaMargemAuto ? 'margin-left:auto; ' : '') + 'flex:0 0 auto; padding:5px 9px; min-width:0; background:#2a78d6; border-color:#2a78d6; color:#ffffff; font-weight:700;';
+      completarBtnDone.textContent = 'C';
+      completarBtnDone.title = 'Completar carga — abrir o desenho desta carga na calculadora e completar o caminhão com outros itens (sai um romaneio novo só com os itens novos)';
+      completarBtnDone.addEventListener('click', function(){ cfAbrirCompletarCarga(doc.id, d); });
+      topRow.appendChild(completarBtnDone);
       precisaMargemAuto = false;
     }
     if (currentRole === 'admin'){
