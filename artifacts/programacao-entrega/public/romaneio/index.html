@@ -11433,6 +11433,33 @@ var SIGNATURES = {
     } else {
       parciaisPendentes.forEach(function(p){ grupos.push([p]); });
     }
+    // pilhas montadas à mão (arrastar uma sobra solta em cima de outra, no desenho): a peça de
+    // origem sai do grupo dela e entra no grupo da peça alvo — guardado em item.pilhasManuais
+    // ({ refPeca: { alvoItemId, alvoRef } }); refPeca = chave da divisão + "#" + ordem, ou "sobra"
+    function cfRefPeca(pc){ return pc.divididoJunto ? (pc.divididoJunto + '#' + (pc.ordemDivisao || 0)) : (pc.doadoPara == null ? 'sobra' : null); }
+    function cfAcharGrupoDaPeca(itemId, ref){
+      for (var gi = 0; gi < grupos.length; gi++){
+        for (var pi2 = 0; pi2 < grupos[gi].length; pi2++){
+          var pc = grupos[gi][pi2];
+          if (pc.itemId === itemId && cfRefPeca(pc) === ref) return { gi: gi, pi: pi2 };
+        }
+      }
+      return null;
+    }
+    itensCarga.forEach(function(icPm){
+      var itPm = icPm.item;
+      if (!itPm || !itPm.pilhasManuais) return;
+      Object.keys(itPm.pilhasManuais).forEach(function(refO){
+        var alvoPm = itPm.pilhasManuais[refO];
+        var o = cfAcharGrupoDaPeca(itPm.id, refO);
+        var a = alvoPm ? cfAcharGrupoDaPeca(alvoPm.alvoItemId, alvoPm.alvoRef) : null;
+        if (!o || !a || o.gi === a.gi) return;
+        var pecaO = Object.assign({}, grupos[o.gi][o.pi], { pilhaManualDe: { itemId: itPm.id, ref: refO } });
+        grupos[o.gi].splice(o.pi, 1);
+        grupos[a.gi].push(pecaO);
+        if (!grupos[o.gi].length) grupos.splice(o.gi, 1);
+      });
+    });
     grupos.forEach(function(g){
       // referência de tamanho do grupo: sempre a MAIOR peça entre as
       // sobras combinadas (por comprimento) — antes o comprimento pegava
@@ -12316,7 +12343,7 @@ var SIGNATURES = {
     var podeDividirUnidade = !(item && item.modoDoisTras);
     var unidadeJaDividida = !!(item.unidadesDivididas && item.unidadesDivididas[unitIndex]);
     var metadeUnidadeMenu = Math.floor((fardo.pecasPorFardo || 0) / 2);
-    var dividirUnidadeHtml = podeDividirUnidade ? '<button type="button" class="add-btn ' + (unidadeJaDividida ? 'btn-destaque-vermelho' : 'btn-destaque-azul') + '" data-cf-slot-act="dividir" style="width:100%;">' + (unidadeJaDividida ? '↩️ Desfazer divisão deste fardo' : '➗ Dividir este fardo ao meio (metade: ' + metadeUnidadeMenu + ' pçs)') + '</button>' : '';
+    var dividirUnidadeHtml = podeDividirUnidade ? '<button type="button" class="add-btn ' + (unidadeJaDividida ? 'btn-destaque-vermelho' : 'btn-destaque-azul') + '" data-cf-slot-act="dividir" style="width:100%;">' + (unidadeJaDividida ? '↩️ Desfazer divisão deste fardo' : '➗ Dividir este fardo ao meio (2 fardos soltos de ' + metadeUnidadeMenu + ' pçs)') + '</button>' : '';
     menu.innerHTML =
       '<div style="font-size:11.5px; color:' + corTexto + '; margin-bottom:2px; word-break:break-word;">' + escapeHtml(fardo.codigo) + ' — unidade ' + (unitIndex + 1) + '</div>' +
       '<button type="button" class="add-btn btn-destaque-azul" data-cf-slot-act="dup" style="width:100%;">📋 Duplicar este fardo</button>' +
@@ -12359,6 +12386,11 @@ var SIGNATURES = {
     if (btnDividirUnidade) btnDividirUnidade.addEventListener('click', function(){
       if (!item.unidadesDivididas) item.unidadesDivididas = {};
       item.unidadesDivididas[unitIndex] = !item.unidadesDivididas[unitIndex];
+      // já sai desmembrado: as duas metades viram dois fardos soltos (cada um na sua posição)
+      if (!item.desmembrarChaves) item.desmembrarChaves = {};
+      var chaveDivUni = 'div:' + item.id + ':u' + unitIndex;
+      if (item.unidadesDivididas[unitIndex]) item.desmembrarChaves[chaveDivUni] = true;
+      else delete item.desmembrarChaves[chaveDivUni];
       cfFecharSlotMenu();
       cfCalcular();
     });
@@ -12445,6 +12477,11 @@ var SIGNATURES = {
       matchDivSobra ? '↩️ Estornar totalmente (voltar à sobra original)' :
       matchPar ? '↩️ Desfazer este arrasto (voltar à quantidade padrão)' : '';
     var estornarHtml = tituloEstornar ? '<button type="button" class="add-btn btn-destaque-vermelho" id="cf-combo-estornar" style="width:100%; margin-top:2px;">' + tituloEstornar + '</button>' : '';
+    // pilha montada à mão (arrasto de uma sobra solta em cima de outra): opção de separar
+    var partesPilhaManual = partesInfo.filter(function(pi){ return pi.parte && pi.parte.pilhaManualDe; });
+    if (partesPilhaManual.length){
+      estornarHtml += '<button type="button" class="add-btn btn-destaque-vermelho" id="cf-combo-separar-pilha" style="width:100%; margin-top:2px;">↩️ Separar esta pilha (voltar às posições soltas)</button>';
+    }
     menu.innerHTML = partesInfo.map(function(pi){
       // uma parte que já É metade de uma divisão (sobra dividida, ou fardo
       // cheio dividido) não tem "completar"/"dividir" próprios — ela só
@@ -12534,6 +12571,16 @@ var SIGNATURES = {
       var itemDiv = partesInfo[0].item;
       if (!itemDiv.desmembrarChaves) itemDiv.desmembrarChaves = {};
       itemDiv.desmembrarChaves[chaveDivisaoCombo] = !itemDiv.desmembrarChaves[chaveDivisaoCombo];
+      cfFecharSlotMenu();
+      cfCalcular();
+    });
+    var btnSepararPilha = menu.querySelector('#cf-combo-separar-pilha');
+    if (btnSepararPilha) btnSepararPilha.addEventListener('click', function(){
+      partesPilhaManual.forEach(function(pi){
+        var de = pi.parte.pilhaManualDe;
+        var itDe = cfItens.filter(function(it){ return it.id === de.itemId; })[0];
+        if (itDe && itDe.pilhasManuais) delete itDe.pilhasManuais[de.ref];
+      });
       cfFecharSlotMenu();
       cfCalcular();
     });
@@ -12691,6 +12738,17 @@ var SIGNATURES = {
     }
     return null;
   }
+  // caixa de sobra com UMA peça só (sobra natural ou metade de uma divisão já desmembrada):
+  // devolve o item e a referência dessa peça, pra poder empilhar com outra (ver cfCalcularPlano)
+  function cfPecaSoltaDaCaixa(boxEl){
+    if (!boxEl || !boxEl.classList.contains('cf-box-combo')) return null;
+    var keyB = boxEl.getAttribute('data-cf-box-key');
+    var boxB = keyB ? cfUltimasCaixasPorKey[keyB] : null;
+    if (!boxB || !boxB.slot || !boxB.slot.partes || boxB.slot.partes.length !== 1) return null;
+    var pc = boxB.slot.partes[0];
+    if (pc.itemId == null || pc.doadoPara != null) return null;
+    return { itemId: pc.itemId, ref: pc.divididoJunto ? (pc.divididoJunto + '#' + (pc.ordemDivisao || 0)) : 'sobra', parte: pc };
+  }
   // acha, entre as OUTRAS caixas do desenho, a que mais se sobrepõe ao
   // retângulo final da caixa arrastada — só conta como "soltou em cima"
   // se a sobreposição for de pelo menos metade da área da menor caixa
@@ -12771,7 +12829,20 @@ var SIGNATURES = {
         if (caixaAlvoEl && caixaAlvoEl.classList.contains('cf-box-original')) caixaAlvoEl = null;
         var refOrigem = caixaAlvoEl ? cfResolveRefDeBoxEl(el) : null;
         var refAlvo = caixaAlvoEl ? cfResolveRefDeBoxEl(caixaAlvoEl) : null;
-        if (refOrigem && refAlvo && !(refOrigem.itemId === refAlvo.itemId && refOrigem.ref === refAlvo.ref)){
+        // sobra solta (inclusive metade desmembrada) em cima de outra sobra solta: empilha as duas
+        var pecaSoltaOrigem = caixaAlvoEl ? cfPecaSoltaDaCaixa(el) : null;
+        var pecaSoltaAlvo = caixaAlvoEl ? cfPecaSoltaDaCaixa(caixaAlvoEl) : null;
+        if (pecaSoltaOrigem && pecaSoltaAlvo && (!refOrigem || !refAlvo || pecaSoltaOrigem.parte.divididoJunto || pecaSoltaAlvo.parte.divididoJunto) &&
+            !(pecaSoltaOrigem.itemId === pecaSoltaAlvo.itemId && pecaSoltaOrigem.ref === pecaSoltaAlvo.ref)){
+          el.style.left = startLeft + 'px';
+          el.style.top = startTop + 'px';
+          var itemPilha = cfItens.filter(function(it){ return it.id === pecaSoltaOrigem.itemId; })[0];
+          if (itemPilha){
+            if (!itemPilha.pilhasManuais) itemPilha.pilhasManuais = {};
+            itemPilha.pilhasManuais[pecaSoltaOrigem.ref] = { alvoItemId: pecaSoltaAlvo.itemId, alvoRef: pecaSoltaAlvo.ref };
+          }
+          cfCalcular();
+        } else if (refOrigem && refAlvo && !(refOrigem.itemId === refAlvo.itemId && refOrigem.ref === refAlvo.ref)){
           // soltou em cima de outra caixa válida — volta a posição visual
           // pro lugar de origem (o pareamento é decidido no pop-up, não
           // por posição livre) e pergunta o que fazer.
