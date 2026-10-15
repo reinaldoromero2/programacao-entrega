@@ -3687,7 +3687,7 @@ var SIGNATURES = {
     var rpCopyBtn = row.querySelector('.rp-copy-btn');
     if (rpCopyBtn){
       rpCopyBtn.addEventListener('click', function(){
-        var valor = row.querySelector('.rp-input').value.trim();
+        var valor = cfCodigoParaRp(row.querySelector('.rp-input').value.split(' — ')[0]).trim();
         if (!valor) return;
         copiarTextoParaClipboard(valor, rpCopyBtn);
       });
@@ -9421,7 +9421,8 @@ var SIGNATURES = {
         fardoCopyBtn.addEventListener('click', function(){
           var item = cfItens.filter(function(i){ return i.id === id; })[0];
           var fardoDoItem = item ? cfFardosOrdenados().filter(function(f){ return f.id === item.fardoId; })[0] : null;
-          var codigo = fardoDoItem ? fardoDoItem.codigo : ((item && item.codigoSemFardo) || '');
+          // copia só o RP cadastrado, sem a anotação entre parênteses (ex.: "(carrega c/20)")
+          var codigo = fardoDoItem ? cfCodigoParaRp(fardoDoItem.codigo) : ((item && item.codigoSemFardo) || '');
           if (!codigo) return;
           copiarTextoParaClipboard(codigo, fardoCopyBtn);
         });
@@ -13173,22 +13174,46 @@ var SIGNATURES = {
   function cfPreencherItensDeSaldoTatu(itensSaldo){
     var fardos = cfFardosOrdenados();
     var novosItens = [];
+    // códigos com mais de uma variação cadastrada (ex.: 0774-001C03 "carrega c/15", "c/20", "c/25"):
+    // a linha entra sem fardo e, logo que a calculadora abre, o pop-up "Qual desses fardos?" pergunta qual usar
+    var ambiguos = [];
     (itensSaldo || []).forEach(function(it){
       if (!it || !it.rp) return;
       var rpDigitado = String(it.rp).trim().toUpperCase();
       var rpBase = cfCodigoBase(rpDigitado);
-      var fardo = fardos.filter(function(f){
-        var codigoFardo = String(f.codigo || '').trim().toUpperCase();
+      // compara sem a anotação entre parênteses do cadastro (ex.: "(carrega c/20)")
+      var candidatosFardo = fardos.filter(function(f){
+        var codigoFardo = cfCodigoParaRp(String(f.codigo || '')).trim().toUpperCase();
         return codigoFardo === rpDigitado || cfCodigoBase(codigoFardo) === rpBase;
-      })[0];
+      });
+      if (candidatosFardo.length > 1){
+        var semVirado = candidatosFardo.filter(function(f){ return String(f.codigo || '').toUpperCase().indexOf('(VIRADO)') === -1; });
+        if (semVirado.length === 1) candidatosFardo = semVirado;
+      }
+      var fardo = candidatosFardo.length === 1 ? candidatosFardo[0] : null;
+      var idNovo = cfProximoItemId++;
+      if (candidatosFardo.length > 1) ambiguos.push({ itemId: idNovo, candidatos: candidatosFardo });
       novosItens.push({
-        id: cfProximoItemId++, fardoId: fardo ? fardo.id : '', qtd: it.qtd || '',
+        id: idNovo, fardoId: fardo ? fardo.id : '', qtd: it.qtd || '',
+        codigoSemFardo: (!fardo && typeof cfResolverRpSemFardo === 'function') ? (cfResolverRpSemFardo(rpDigitado) || '') : '',
         ofobs: it.ofobs || '', orientacaoOverride: null, unitFlips: {}, modoDoisTras: false, semQtd: false, ladoFixo: null,
         cliente: it.cliente ? String(it.cliente).trim() : ''
       });
     });
     if (novosItens.length) cfItens = novosItens;
     renderCfItens();
+    // um pop-up por código com várias variações, um depois do outro
+    (function perguntar(i){
+      if (i >= ambiguos.length) return;
+      setTimeout(function(){
+        abrirEscolhaFardo(ambiguos[i].candidatos, function(fardoEsc){
+          var itAmb = cfItens.filter(function(x){ return x.id === ambiguos[i].itemId; })[0];
+          if (itAmb){ itAmb.fardoId = fardoEsc.id; itAmb.codigoSemFardo = ''; itAmb.orientacaoOverride = null; itAmb.unitFlips = {}; }
+          renderCfItens();
+          perguntar(i + 1);
+        });
+      }, i === 0 ? 350 : 150);
+    })(0);
   }
   function wizAbrirCalculadoraComCaminhao(d, itensSaldoTatu){
     if (!cfFardosModal) return;
@@ -13211,7 +13236,7 @@ var SIGNATURES = {
     temFardo: function(rp){
       try {
         var r = String(rp || '').trim().toUpperCase(), b = cfCodigoBase(r);
-        return cfFardosOrdenados().some(function(f){ var c = String(f.codigo || '').trim().toUpperCase(); return c === r || cfCodigoBase(c) === b; });
+        return cfFardosOrdenados().some(function(f){ var c = cfCodigoParaRp(String(f.codigo || '')).trim().toUpperCase(); return c === r || cfCodigoBase(c) === b; });
       } catch (e){ return false; }
     },
     preco: function(rp){ try { var k = rp ? findKeyCI(RP_MAP, rp) : null; return k ? RP_MAP[k] : null; } catch (e){ return null; } },
@@ -14478,7 +14503,7 @@ var SIGNATURES = {
     if (rpCopyBtn){
       rpCopyBtn.addEventListener('click', function(){
         var input = row.querySelector('.wiz-item-rp');
-        var valor = input ? input.value.trim() : '';
+        var valor = input ? cfCodigoParaRp(input.value.split(' — ')[0]).trim() : '';
         if (!valor) return;
         copiarTextoParaClipboard(valor, rpCopyBtn);
       });
