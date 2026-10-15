@@ -13255,18 +13255,20 @@ var SIGNATURES = {
         return true;
       }
       wizProgPlaca = { cliente: cliente, itens: itens, aoAbrir: aoAbrir };
-      wizMostrarPlacaModalOrigemCalc();
-      // veio pelo botão direito numa linha da Programação: a placa (ou, sem ela, o motorista) daquela
-      // linha já entra preenchida e, reconhecida, segue sozinha para a calculadora
-      // linha da Programação com caminhão da RIPACK sem placa ("..."): pergunta qual dos caminhões da casa
+      // linha da Programação com caminhão da RIPACK sem placa ("..."): primeiro pergunta qual dos
+      // caminhões da casa; a tela da placa só abre depois (já preenchida) ou no Cancelar (pra digitar)
       if (wizCaminhaoProgRipackSemPlaca(caminhao)){
         wizEscolherCaminhaoRipack(function(placaEsc){
+          wizMostrarPlacaModalOrigemCalc();
           wizOrigemCalcPlacaInput.value = placaEsc;
           wizAtualizarPlacaVisual(placaEsc);
           wizAplicarOrigemCalcPlaca(wizResolverOrigemCalcPlaca(placaEsc), true);
-        });
+        }, function(){ wizMostrarPlacaModalOrigemCalc(); });
         return true;
       }
+      wizMostrarPlacaModalOrigemCalc();
+      // veio pelo botão direito numa linha da Programação: a placa (ou, sem ela, o motorista) daquela
+      // linha já entra preenchida e, reconhecida, segue sozinha para a calculadora
       var placa = wizPlacaDoCaminhaoProg(caminhao);
       if (placa){
         wizOrigemCalcPlacaInput.value = placa;
@@ -13297,28 +13299,30 @@ var SIGNATURES = {
     return /[.…]/.test(placaBruta) || /RIPACK/i.test(String(c.motorista || ''));
   }
   // pop-up "Qual caminhão da RIPACK?" — Cancelar deixa a tela da placa aberta pra digitar
-  function wizEscolherCaminhaoRipack(aoEscolher){
+  function wizEscolherCaminhaoRipack(aoEscolher, aoCancelar){
     var raiz = document.querySelector('.app-root') || document.body;
     var ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed; inset:0; z-index:400; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; padding:16px;';
-    var box = document.createElement('div');
-    box.style.cssText = 'background:var(--surface-1); color:var(--text-primary); border-radius:14px; padding:18px; width:100%; max-width:360px; box-shadow:0 10px 40px rgba(0,0,0,0.35); display:flex; flex-direction:column; gap:8px;';
-    box.innerHTML = '<div style="font-weight:700; font-size:15px;">Qual caminhão da RIPACK?</div>' +
-      '<div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:4px;">A Programação não diz a placa — escolha o caminhão desta carga.</div>' +
-      CAMINHOES_RIPACK.map(function(pl){
-        var cad = wizTodosCaminhoesCadastrados().filter(function(d){ return String(d.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === pl; })[0];
-        return '<button type="button" class="add-btn btn-destaque-azul" data-placa-ripack="' + pl + '" style="width:100%; font-size:15px; font-weight:700; letter-spacing:.05em;">' + pl + (cad && cad.motorista ? ' · ' + escapeHtml(cad.motorista) : '') + '</button>';
-      }).join('') +
-      '<button type="button" class="add-btn" data-placa-ripack-cancelar style="width:100%; margin-top:4px; opacity:.8;">Cancelar (digitar a placa)</button>';
-    ov.appendChild(box);
+    ov.className = 'rom-modal-overlay';
+    ov.style.zIndex = '600';
+    var botoes = CAMINHOES_RIPACK.map(function(pl){
+      var cad = wizTodosCaminhoesCadastrados().filter(function(d){ return String(d.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === pl; })[0];
+      return '<button type="button" class="add-btn btn-destaque-azul" data-placa-ripack="' + pl + '" style="width:100%; font-size:15px; font-weight:700; letter-spacing:.05em;">' + pl + (cad && cad.motorista ? ' · ' + escapeHtml(cad.motorista) : '') + '</button>';
+    }).join('');
+    ov.innerHTML = '<div class="rom-modal-card" style="max-width:380px;">' +
+      '<div class="rom-modal-head"><h3>Qual caminhão da RIPACK?</h3></div>' +
+      '<div style="padding:16px 18px; display:flex; flex-direction:column; gap:8px;">' +
+        '<p class="foot-note" style="margin:0 0 4px;">A Programação não diz a placa — escolha o caminhão desta carga.</p>' +
+        botoes +
+        '<button type="button" class="add-btn wiz-choice-btn" data-placa-ripack-cancelar style="margin-top:6px;">CANCELAR (DIGITAR A PLACA)</button>' +
+      '</div></div>';
     raiz.appendChild(ov);
     function fecha(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
-    box.addEventListener('click', function(ev){
+    ov.addEventListener('click', function(ev){
       var b = ev.target.closest ? ev.target.closest('button') : null;
       if (!b) return;
       fecha();
       var pl = b.getAttribute('data-placa-ripack');
-      if (pl) aoEscolher(pl);
+      if (pl) aoEscolher(pl); else if (aoCancelar) aoCancelar();
     });
   }
   function wizPlacaDoCaminhaoProg(c){
