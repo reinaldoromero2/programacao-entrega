@@ -1049,6 +1049,9 @@
     </div>
     <h1>Romaneio Ripack</h1>
 
+    <!-- Ler etiquetas: no topo de tudo para quem não é admin (empilhadeiristas); o admin usa o botão do menu -->
+    <button type="button" class="add-btn btn-destaque-verde" id="leitor-topo-btn" hidden onclick="document.getElementById('leitor-abrir-btn').click()" style="width:100%; padding:16px; font-size:18px; font-weight:800; border-radius:14px; margin:0 0 14px;">📷 Ler etiquetas</button>
+
     <div class="card card-cristal">
       <h2>CARREGAMENTOS</h2>
       <p class="foot-note" id="pend-status" style="margin:6px 0 4px;"></p>
@@ -1618,10 +1621,12 @@
         <button type="button" class="menu-card-btn" data-clicar="patio-abrir-btn"><span class="menu-card-ico">⏱️</span><span>Tempo de Pátio</span></button>
         <button type="button" class="menu-card-btn" data-clicar="bloq-abrir-btn"><span class="menu-card-ico">🔒</span><span>Bloqueados Qualidade</span></button>
         <button type="button" class="menu-card-btn" data-clicar="abrir-carga-facil"><span class="menu-card-ico">🚛</span><span>Carga Fácil</span></button>
-        <button type="button" class="menu-card-btn" data-clicar="leitor-abrir-btn"><span class="menu-card-ico">📷</span><span>Leitor de código</span></button>
+        <button type="button" class="menu-card-btn" data-clicar="leitor-abrir-btn"><span class="menu-card-ico">📷</span><span>Ler etiquetas</span></button>
+        <button type="button" class="menu-card-btn" data-clicar="leituras-abrir-btn"><span class="menu-card-ico">📋</span><span>Leituras de etiquetas</span></button>
+        <button type="button" class="menu-card-btn" data-clicar="saldo-local-abrir-btn"><span class="menu-card-ico">📦</span><span>Saldo por local</span></button>
       </div>
     </div>
-    <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Leitor de código</button></div>
+    <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Ler etiquetas</button><button type="button" id="leituras-abrir-btn" hidden>Leituras de etiquetas</button><button type="button" id="saldo-local-abrir-btn" hidden>Saldo por local</button></div>
 
     <div class="card" data-role="admin" id="card-historico">
       <div class="history-head">
@@ -1716,42 +1721,93 @@
     </div>
 
     <style>#patio-modal .patio-filtros, #patio-modal #patio-kpis, #patio-modal #patio-form, #patio-modal #patio-lista, #patio-modal #patio-status, #patio-modal .patio-so-nc{ display:none !important; }</style>
-    <div class="rom-modal-overlay" id="leitor-modal" hidden>
-      <div class="rom-modal-card" style="max-width:720px; max-height:94vh; overflow-y:auto;">
+    <!-- Ler etiquetas: tela cheia, só a câmera e a lista dos códigos lidos -->
+    <div id="leitor-modal" class="leitor-tela" hidden>
+      <div class="leitor-topo">
+        <span>📷 Ler etiquetas</span>
+        <button class="rom-modal-close" id="leitor-close" type="button">Sair</button>
+      </div>
+      <div class="leitor-video-wrap">
+        <video id="leitor-video" playsinline muted autoplay></video>
+        <div class="leitor-mira"></div>
+        <div class="leitor-aviso-camera" id="leitor-aviso-camera"></div>
+      </div>
+      <div class="leitor-manual-wrap" id="leitor-manual-wrap" hidden>
+        <input type="text" id="leitor-manual" autocomplete="off" placeholder="Digite ou use o leitor USB e aperte Enter">
+      </div>
+      <div class="leitor-lidos-tit"><span id="leitor-contagem">0 lidas hoje</span></div>
+      <div class="leitor-lidos" id="leitor-lidos"></div>
+      <div class="leitor-pop" id="leitor-pop" hidden><div class="leitor-pop-card"><div class="leitor-pop-ico" id="leitor-pop-ico"></div><div class="leitor-pop-tit" id="leitor-pop-tit"></div><div class="leitor-pop-cod" id="leitor-pop-cod"></div></div></div>
+    </div>
+
+    <!-- Saldo por local: o saldo do produto em cada local de estoque do sistema -->
+    <div class="rom-modal-overlay" id="saldo-local-modal" hidden>
+      <div class="rom-modal-card" style="max-width:640px; max-height:94vh; overflow-y:auto;">
         <div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3>📷 Leitor de código de barras</h3>
-          <button class="rom-modal-close" id="leitor-close" type="button" aria-label="Fechar">Sair</button>
+          <h3>📦 Saldo por local</h3>
+          <button class="rom-modal-close" id="saldo-local-close" type="button" aria-label="Fechar">Sair</button>
         </div>
         <div style="padding:12px 18px 18px;">
-          <div class="leitor-video-wrap" id="leitor-video-wrap" hidden>
-            <video id="leitor-video" playsinline muted autoplay></video>
-            <div class="leitor-mira"></div>
-            <div class="leitor-flash" id="leitor-flash"></div>
+          <div style="display:flex; gap:8px; align-items:flex-end;">
+            <div class="field" style="margin:0; flex:1 1 auto;"><label for="saldo-local-codigo">Código do produto (RP)</label><input type="text" id="saldo-local-codigo" autocomplete="off" placeholder="Ex.: 0621-014/25 ou 621-014"></div>
+            <button type="button" class="add-btn btn-destaque-azul" id="saldo-local-buscar" style="flex:0 0 auto;">Buscar</button>
           </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0;">
-            <button type="button" class="add-btn btn-destaque-azul" id="leitor-camera-btn" style="flex:1 1 200px;">📷 Ler com a câmera</button>
-            <button type="button" class="add-btn" id="leitor-trocar-btn" hidden style="flex:0 0 auto;">🔄 Trocar câmera</button>
-          </div>
-          <div class="field" style="margin:0 0 6px;">
-            <label for="leitor-manual">Ou digite / use o leitor USB (Enter grava)</label>
-            <input type="text" id="leitor-manual" autocomplete="off" placeholder="Código de barras">
-          </div>
-          <p class="foot-note" id="leitor-status" style="margin:4px 0 10px; min-height:18px;"></p>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;">
-            <div class="field" style="margin:0; flex:0 0 auto;"><label for="leitor-data">Dia</label><input type="date" id="leitor-data"></div>
-            <span class="foot-note" id="leitor-contagem" style="flex:1 1 auto; margin:0 0 8px;"></span>
-            <button type="button" class="add-btn btn-destaque-verde" id="leitor-exportar-btn" style="flex:0 0 auto;">⬇ Exportar para Excel</button>
-          </div>
-          <div id="leitor-lista"></div>
+          <label style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin:10px 0 4px;"><input type="checkbox" id="saldo-local-zeros"> Mostrar locais com saldo 0</label>
+          <p class="foot-note" id="saldo-local-status" style="margin:6px 0 10px; min-height:16px;"></p>
+          <div id="saldo-local-res"></div>
         </div>
       </div>
     </div>
     <style>
-      .leitor-video-wrap{ position:relative; width:100%; max-width:560px; margin:0 auto; aspect-ratio:4/3; background:#000; border-radius:12px; overflow:hidden; }
-      .leitor-video-wrap video{ width:100%; height:100%; object-fit:cover; display:block; }
-      .leitor-mira{ position:absolute; left:8%; right:8%; top:38%; height:24%; border:3px solid rgba(113,200,44,0.95); border-radius:10px; box-shadow:0 0 0 999px rgba(0,0,0,0.25); pointer-events:none; }
-      .leitor-flash{ position:absolute; inset:0; background:rgba(113,200,44,0.45); opacity:0; transition:opacity .25s; pointer-events:none; }
-      .leitor-flash.on{ opacity:1; transition:none; }
+      .saldo-prod{ margin:0 0 14px; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      .saldo-prod .sp-cab{ padding:8px 12px; font-weight:800; background:var(--surface-2); display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+      .saldo-prod .sp-cab span{ font-weight:600; color:var(--text-secondary); font-size:12.5px; }
+      .saldo-prod .sp-lin{ display:flex; gap:10px; align-items:baseline; padding:7px 12px; border-top:1px solid var(--grid); }
+      .saldo-prod .sp-loc{ font-weight:700; min-width:96px; }
+      .saldo-prod .sp-desc{ flex:1 1 auto; min-width:0; font-size:12px; color:var(--text-muted); }
+      .saldo-prod .sp-qtd{ font-family:ui-monospace, Consolas, monospace; font-weight:800; font-size:15px; }
+      .saldo-prod .sp-qtd.neg{ color:var(--critical); }
+    </style>
+
+    <!-- Leituras de etiquetas: o dia, os dados do sistema e o Excel -->
+    <div class="rom-modal-overlay" id="leituras-modal" hidden>
+      <div class="rom-modal-card" style="max-width:720px; max-height:94vh; overflow-y:auto;">
+        <div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>📋 Leituras de etiquetas</h3>
+          <button class="rom-modal-close" id="leituras-close" type="button" aria-label="Fechar">Sair</button>
+        </div>
+        <div style="padding:12px 18px 18px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;">
+            <div class="field" style="margin:0; flex:0 0 auto;"><label for="leituras-data">Dia</label><input type="date" id="leituras-data"></div>
+            <span class="foot-note" id="leituras-contagem" style="flex:1 1 auto; margin:0 0 8px;"></span>
+            <button type="button" class="add-btn btn-destaque-verde" id="leitor-exportar-btn" style="flex:0 0 auto;">⬇ Exportar para Excel</button>
+          </div>
+          <p class="foot-note" id="leituras-status" style="margin:0 0 8px; min-height:16px;"></p>
+          <div id="leituras-lista"></div>
+        </div>
+      </div>
+    </div>
+    <style>
+      .leitor-tela{ position:fixed; inset:0; z-index:700; background:#0b0d12; color:#fff; display:flex; flex-direction:column; padding:env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); box-sizing:border-box; }
+      .leitor-tela[hidden]{ display:none; }
+      .leitor-topo{ display:flex; justify-content:space-between; align-items:center; padding:10px 14px; font-weight:700; font-size:16px; }
+      .leitor-video-wrap{ position:relative; flex:1 1 auto; min-height:0; background:#000; overflow:hidden; }
+      .leitor-video-wrap video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+      .leitor-mira{ position:absolute; left:7%; right:7%; top:40%; height:20%; border:4px solid rgba(113,200,44,0.95); border-radius:14px; box-shadow:0 0 0 999px rgba(0,0,0,0.3); pointer-events:none; }
+      .leitor-aviso-camera{ position:absolute; left:16px; right:16px; bottom:16px; text-align:center; font-size:14px; color:#fff; text-shadow:0 1px 3px #000; }
+      .leitor-manual-wrap{ padding:10px 14px 0; }
+      .leitor-manual-wrap input{ width:100%; box-sizing:border-box; padding:12px; font-size:16px; border-radius:10px; border:0; }
+      .leitor-lidos-tit{ padding:10px 14px 4px; font-size:13px; color:#c9cdd6; }
+      .leitor-lidos{ flex:0 0 auto; max-height:28vh; overflow-y:auto; padding:0 14px 12px; }
+      .leitor-lidos div{ font-family:ui-monospace, Consolas, monospace; font-size:17px; font-weight:700; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.12); }
+      .leitor-pop{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.35); padding:20px; }
+      .leitor-pop[hidden]{ display:none; }
+      .leitor-pop-card{ background:#1f9d4a; color:#fff; border-radius:20px; padding:26px 24px; text-align:center; width:100%; max-width:360px; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
+      .leitor-pop-card.ja{ background:#d97706; }
+      .leitor-pop-card.erro{ background:#c0392b; }
+      .leitor-pop-ico{ font-size:56px; line-height:1; }
+      .leitor-pop-tit{ font-size:24px; font-weight:800; margin-top:10px; }
+      .leitor-pop-cod{ font-family:ui-monospace, Consolas, monospace; font-size:22px; font-weight:700; margin-top:8px; word-break:break-all; }
       .leitor-item{ display:flex; gap:10px; align-items:center; padding:9px 4px; border-bottom:1px solid var(--grid); }
       .leitor-item .l-cod{ font-family:ui-monospace, Consolas, monospace; font-size:16px; font-weight:700; color:var(--text-primary); word-break:break-all; }
       .leitor-item .l-sub{ font-size:11.5px; color:var(--text-muted); margin-top:2px; }
@@ -17877,6 +17933,8 @@ var SIGNATURES = {
   var pendingLoginUserKey = null;
 
   function applyRole(role){
+    var leitorTopo = document.getElementById('leitor-topo-btn');
+    if (leitorTopo) leitorTopo.hidden = (role === 'admin');
     var admEls = document.querySelectorAll('[data-role="admin"]');
     admEls.forEach(function(el){
       el.style.display = (role === 'admin') ? 'block' : 'none';
@@ -20558,57 +20616,64 @@ var SIGNATURES = {
 <script>
 (function(){
   var $ = function(id){ return document.getElementById(id); };
-  var modal = $('leitor-modal');
-  if (!modal) return;
+  var tela = $('leitor-modal'), lista = $('leituras-modal');
+  if (!tela || !lista) return;
   var COL = 'leituras_codigo';
   var dbL = null, docs = [], carregou = false;
-  var stream = null, timer = null, zxReader = null, detector = null, usandoTraseira = true;
-  var ultimoLido = '', ultimoLidoEm = 0;
+  var stream = null, timer = null, zxReader = null, detector = null;
+  var visto = {}; // código -> quando a câmera viu por último (não repete o aviso enquanto a etiqueta segue na frente)
   function pad(n){ return (n < 10 ? '0' : '') + n; }
   function hojeISO(){ var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function esc(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function quem(){ try { var s = JSON.parse(localStorage.getItem('ripackRomaneioSessao') || 'null'); return (s && s.nome) || ''; } catch (e){ return ''; } }
-  function status(t, ruim){ var el = $('leitor-status'); el.textContent = t || ''; el.style.color = ruim ? 'var(--critical)' : (t ? 'var(--good)' : ''); }
+  function quem(){ try { var x = JSON.parse(localStorage.getItem('ripackRomaneioSessao') || 'null'); return (x && x.nome) || ''; } catch (e){ return ''; } }
   function horaDe(iso){ var d = new Date(iso); return isNaN(d) ? '' : pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
-  function doDia(){ var dia = $('leitor-data').value || hojeISO(); return docs.filter(function(x){ return x.data === dia; }); }
+  function horaCurta(iso){ var d = new Date(iso); return isNaN(d) ? '' : pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 
-  // ---- grava uma leitura (sem repetir o mesmo código no mesmo dia) ----
-  function registrar(codigoBruto, origem){
-    var codigo = String(codigoBruto || '').trim();
-    if (!codigo) return;
-    var agora = Date.now();
-    if (codigo === ultimoLido && agora - ultimoLidoEm < 3000) return; // a câmera vê a mesma etiqueta várias vezes seguidas
-    ultimoLido = codigo; ultimoLidoEm = agora;
-    var dia = hojeISO();
-    var ja = docs.filter(function(x){ return x.data === dia && x.codigo === codigo; })[0];
-    if (ja){ avisar(false); status('Já lido hoje às ' + horaDe(ja.lidoEm) + ': ' + codigo, true); return; }
-    avisar(true);
-    try { if (navigator.clipboard) navigator.clipboard.writeText(codigo).catch(function(){}); } catch (e){}
-    var doc = { codigo: codigo, data: dia, lidoEm: new Date().toISOString(), lidoPor: quem() || null, origem: origem || 'camera' };
-    if (!dbL){ status('Banco compartilhado indisponível agora — a leitura não foi guardada.', true); return; }
-    // aparece na hora na lista; o banco confirma depois
-    docs.unshift(Object.assign({ _id: 'tmp' + agora, _pendente: true }, doc));
-    if ($('leitor-data').value !== dia) $('leitor-data').value = dia;
-    render();
-    status('Lido e guardado: ' + codigo);
-    dbL.collection(COL).add(doc).catch(function(){ status('Não foi possível guardar ' + codigo + ' agora — tente de novo.', true); });
+  // ---- pop-up grande de cada leitura ----
+  var popTimer = null;
+  function pop(tipo, titulo, codigo){
+    var card = $('leitor-pop').firstChild;
+    card.className = 'leitor-pop-card' + (tipo === 'ok' ? '' : ' ' + tipo);
+    $('leitor-pop-ico').textContent = tipo === 'ok' ? '✅' : tipo === 'ja' ? '⚠️' : '❌';
+    $('leitor-pop-tit').textContent = titulo;
+    $('leitor-pop-cod').textContent = codigo || '';
+    $('leitor-pop').hidden = false;
+    clearTimeout(popTimer);
+    popTimer = setTimeout(function(){ $('leitor-pop').hidden = true; }, tipo === 'ok' ? 1300 : 2200);
   }
-  function avisar(bom){
-    try { if (navigator.vibrate) navigator.vibrate(bom ? 120 : [80, 60, 80]); } catch (e){}
+  $('leitor-pop').addEventListener('click', function(){ this.hidden = true; });
+  function som(bom){
+    try { if (navigator.vibrate) navigator.vibrate(bom ? 150 : [90, 70, 90]); } catch (e){}
     try {
       var Ctx = window.AudioContext || window.webkitAudioContext;
-      if (Ctx){
-        var ctx = avisar.ctx || (avisar.ctx = new Ctx());
-        var o = ctx.createOscillator(), g = ctx.createGain();
-        o.frequency.value = bom ? 1800 : 400; g.gain.value = 0.15;
-        o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + (bom ? 0.12 : 0.3));
-      }
+      if (!Ctx) return;
+      var ctx = som.ctx || (som.ctx = new Ctx());
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = bom ? 1800 : 420; g.gain.value = 0.18;
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + (bom ? 0.12 : 0.32));
     } catch (e){}
-    var f = $('leitor-flash');
-    if (f && bom){ f.classList.add('on'); setTimeout(function(){ f.classList.remove('on'); }, 60); }
   }
 
-  // ---- câmera: BarcodeDetector nativo (Android/Chrome) ou ZXing (iPhone e o resto) ----
+  // ---- grava uma leitura (a mesma etiqueta não entra duas vezes no mesmo dia) ----
+  function registrar(codigoBruto, origem){
+    var codigo = String(codigoBruto || '').trim().toUpperCase();
+    if (!codigo) return;
+    var agora = Date.now();
+    if (origem === 'camera' && visto[codigo] && agora - visto[codigo] < 4000){ visto[codigo] = agora; return; }
+    visto[codigo] = agora;
+    var dia = hojeISO();
+    var ja = docs.filter(function(x){ return x.data === dia && String(x.codigo).toUpperCase() === codigo; })[0];
+    if (ja){ som(false); pop('ja', 'Já lida hoje às ' + horaCurta(ja.lidoEm), codigo); return; }
+    if (!dbL){ som(false); pop('erro', 'Não guardou: sem conexão', codigo); return; }
+    som(true);
+    pop('ok', 'Etiqueta lida', codigo);
+    var doc = { codigo: codigo, data: dia, lidoEm: new Date().toISOString(), lidoPor: quem() || null, origem: origem || 'camera' };
+    docs.unshift(Object.assign({ _id: 'tmp' + agora, _pendente: true }, doc));
+    renderTela(); if (!lista.hidden) renderLista();
+    dbL.collection(COL).add(doc).catch(function(){ pop('erro', 'Não foi possível guardar — leia de novo', codigo); });
+  }
+
+  // ---- câmera traseira: BarcodeDetector nativo (Android/Chrome) ou ZXing (iPhone e o resto) ----
   var ZX_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.23.0/umd/index.min.js';
   function carregarZxing(){
     if (window.ZXing) return Promise.resolve(window.ZXing);
@@ -20622,64 +20687,156 @@ var SIGNATURES = {
     });
     return carregarZxing.p;
   }
-  function restricoes(){ return { audio: false, video: { facingMode: { ideal: usandoTraseira ? 'environment' : 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } } }; }
+  var RESTRICOES = { audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+  function avisoCamera(t){ $('leitor-aviso-camera').textContent = t || ''; }
   function pararCamera(){
     if (timer){ clearInterval(timer); timer = null; }
     if (zxReader){ try { zxReader.reset(); } catch (e){} zxReader = null; }
     if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
     var v = $('leitor-video'); if (v) v.srcObject = null;
-    $('leitor-video-wrap').hidden = true;
-    $('leitor-trocar-btn').hidden = true;
-    $('leitor-camera-btn').textContent = '📷 Ler com a câmera';
   }
   function ligarCamera(){
-    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
-      status('Este aparelho não deixa usar a câmera aqui. Use o campo de digitar ou um leitor USB.', true); return;
-    }
-    status('Abrindo a câmera...');
-    $('leitor-video-wrap').hidden = false;
-    $('leitor-camera-btn').textContent = '⏹ Parar câmera';
-    $('leitor-trocar-btn').hidden = false;
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ semCamera('Este aparelho não deixa usar a câmera aqui.'); return; }
+    avisoCamera('Abrindo a câmera...');
     var video = $('leitor-video');
-    var nativo = ('BarcodeDetector' in window);
-    var prontoNativo = nativo ? window.BarcodeDetector.getSupportedFormats().then(function(fmts){
-      var quero = ['code_128', 'code_39', 'code_93', 'codabar', 'ean_13', 'ean_8', 'itf', 'upc_a', 'qr_code', 'data_matrix'];
-      var usar = quero.filter(function(f){ return fmts.indexOf(f) !== -1; });
+    var nativo = ('BarcodeDetector' in window) ? window.BarcodeDetector.getSupportedFormats().then(function(fmts){
+      var usar = ['code_39', 'code_128', 'code_93', 'codabar', 'ean_13', 'ean_8', 'itf', 'upc_a', 'qr_code', 'data_matrix'].filter(function(f){ return fmts.indexOf(f) !== -1; });
       if (!usar.length) throw new Error('sem formatos');
       detector = new window.BarcodeDetector({ formats: usar });
     }) : Promise.reject(new Error('sem BarcodeDetector'));
-    prontoNativo.then(function(){
-      return navigator.mediaDevices.getUserMedia(restricoes()).then(function(st){
-        stream = st; video.srcObject = st; return video.play();
-      }).then(function(){
-        status('Aponte para o código de barras da etiqueta.');
+    nativo.then(function(){
+      return navigator.mediaDevices.getUserMedia(RESTRICOES).then(function(st){ stream = st; video.srcObject = st; return video.play(); }).then(function(){
+        avisoCamera('Aponte para o código de barras da etiqueta');
         timer = setInterval(function(){
-          if (!detector || video.readyState < 2) return;
+          if (!detector || video.readyState < 2 || !$('leitor-pop').hidden) return;
           detector.detect(video).then(function(achou){ if (achou && achou.length) registrar(achou[0].rawValue, 'camera'); }).catch(function(){});
-        }, 180);
+        }, 160);
       });
-    }).catch(function(){
-      // sem detector nativo: ZXing lê direto do vídeo
+    }).catch(function(errNativo){
+      if (errNativo && /NotAllowed|NotFound|NotReadable|Overconstrained/.test(errNativo.name || '')) throw errNativo;
       return carregarZxing().then(function(ZX){
         var dicas = new Map();
-        dicas.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.CODE_39, ZX.BarcodeFormat.CODE_93, ZX.BarcodeFormat.CODABAR,
+        dicas.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.CODE_39, ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.CODE_93, ZX.BarcodeFormat.CODABAR,
           ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.EAN_8, ZX.BarcodeFormat.ITF, ZX.BarcodeFormat.UPC_A, ZX.BarcodeFormat.QR_CODE, ZX.BarcodeFormat.DATA_MATRIX]);
         dicas.set(ZX.DecodeHintType.TRY_HARDER, true);
         zxReader = new ZX.BrowserMultiFormatReader(dicas, 200);
-        status('Aponte para o código de barras da etiqueta.');
-        return zxReader.decodeFromConstraints(restricoes(), video, function(res){ if (res) registrar(res.getText(), 'camera'); });
+        avisoCamera('Aponte para o código de barras da etiqueta');
+        return zxReader.decodeFromConstraints(RESTRICOES, video, function(res){ if (res && $('leitor-pop').hidden) registrar(res.getText(), 'camera'); });
       });
     }).catch(function(err){
       pararCamera();
       var nome = err && err.name;
-      status(nome === 'NotAllowedError' ? 'A câmera foi bloqueada. Libere a câmera para este app nas configurações do navegador e tente de novo.'
-        : nome === 'NotFoundError' ? 'Nenhuma câmera encontrada neste aparelho.'
-        : 'Não foi possível abrir a câmera agora (sem internet para carregar o leitor?).', true);
+      semCamera(nome === 'NotAllowedError' ? 'A câmera foi bloqueada. Libere a câmera para este app nas configurações e abra de novo.'
+        : nome === 'NotFoundError' ? 'Nenhuma câmera neste aparelho.' : 'Não foi possível abrir a câmera agora.');
     });
   }
+  // sem câmera (ex.: PC): campo para digitar ou usar o leitor USB
+  function semCamera(texto){
+    avisoCamera(texto + ' Use o campo abaixo.');
+    $('leitor-manual-wrap').hidden = false;
+    setTimeout(function(){ try { $('leitor-manual').focus(); } catch (e){} }, 50);
+  }
+  $('leitor-manual').addEventListener('keydown', function(ev){
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    var v = this.value; this.value = '';
+    registrar(v, 'manual');
+  });
 
-  // ---- dados da etiqueta no sistema: o app do PC (que alcança o Oracle) completa as leituras ainda
-  // sem dados, de quem quer que tenha lido (celular ou PC); vários PCs abertos gravam o mesmo valor ----
+  // ---- tela de leitura: só os códigos lidos hoje ----
+  function renderTela(){
+    var hoje = docs.filter(function(x){ return x.data === hojeISO(); });
+    $('leitor-contagem').textContent = hoje.length + (hoje.length === 1 ? ' lida hoje' : ' lidas hoje');
+    $('leitor-lidos').innerHTML = hoje.map(function(x){ return '<div>' + esc(x.codigo) + '</div>'; }).join('');
+  }
+  function fecharTela(){ pararCamera(); tela.hidden = true; $('leitor-pop').hidden = true; document.documentElement.style.overflow = ''; }
+  $('leitor-close').addEventListener('click', fecharTela);
+  document.addEventListener('visibilitychange', function(){
+    if (tela.hidden) return;
+    if (document.hidden) pararCamera(); else if (!stream && !zxReader) ligarCamera();
+  });
+  $('leitor-abrir-btn').addEventListener('click', function(){
+    tela.hidden = false;
+    document.documentElement.style.overflow = 'hidden';
+    $('leitor-manual-wrap').hidden = true;
+    visto = {};
+    renderTela();
+    ligarCamera();
+  });
+
+  // ---- tela de leituras: dia, dados do sistema, copiar/excluir, Excel ----
+  function status(t, ruim){ var el = $('leituras-status'); el.textContent = t || ''; el.style.color = ruim ? 'var(--critical)' : (t ? 'var(--good)' : ''); }
+  function doDia(){ var dia = $('leituras-data').value || hojeISO(); return docs.filter(function(x){ return x.data === dia; }); }
+  function renderLista(){
+    var el = $('leituras-lista');
+    var itens = doDia();
+    $('leituras-contagem').textContent = itens.length + ' leitura(s) em ' + ($('leituras-data').value || hojeISO()).split('-').reverse().join('/');
+    if (!carregou){ el.innerHTML = '<p class="foot-note">Carregando leituras...</p>'; return; }
+    if (!dbL){ el.innerHTML = '<p class="foot-note">O banco compartilhado não está disponível aqui agora.</p>'; return; }
+    if (!itens.length){ el.innerHTML = '<p class="foot-note">Nenhuma leitura neste dia.</p>'; return; }
+    el.innerHTML = itens.map(function(x){
+      var sis = x.sistema;
+      var dados = sis ? '<div class="l-dados"><b>' + esc(sis.codpro) + '</b>' + (sis.of ? ' · OF ' + esc(sis.of) : '') + (sis.qtd != null ? ' · ' + esc(sis.qtd) + ' pç' : '') +
+          '<div>' + esc(sis.descricao) + '</div><div>' + esc(sis.cliente) + '</div></div>'
+        : x.naoAchada ? '<div class="l-dados" style="color:var(--critical);">Etiqueta não encontrada no sistema</div>'
+        : x._pendente ? '' : '<div class="l-dados" style="color:var(--text-muted);">buscando os dados no sistema… (precisa de um PC com o app aberto)</div>';
+      return '<div class="leitor-item"><div class="l-txt"><div class="l-cod">' + esc(x.codigo) + '</div>' + dados +
+        '<div class="l-sub">' + esc(horaDe(x.lidoEm)) + (x.lidoPor ? ' · ' + esc(x.lidoPor) : '') + (x.origem === 'manual' ? ' · digitado/leitor USB' : ' · câmera') + (x._pendente ? ' · guardando...' : '') + '</div></div>' +
+        '<button type="button" class="add-btn" data-leitor-copiar="' + esc(x.codigo) + '">Copiar</button>' +
+        (x._pendente ? '' : '<button type="button" class="add-btn btn-destaque-vermelho" data-leitor-excluir="' + esc(x._id) + '">Excluir</button>') +
+      '</div>';
+    }).join('');
+  }
+  $('leituras-lista').addEventListener('click', function(ev){
+    var b = ev.target.closest ? ev.target.closest('button') : null;
+    if (!b) return;
+    var cod = b.getAttribute('data-leitor-copiar');
+    if (cod){
+      try { navigator.clipboard.writeText(cod).then(function(){ status('Copiado: ' + cod); }).catch(function(){ status('Não deu pra copiar aqui.', true); }); } catch (e){ status('Não deu pra copiar aqui.', true); }
+      return;
+    }
+    var id = b.getAttribute('data-leitor-excluir');
+    if (id && dbL){
+      if (b.getAttribute('data-armado') !== '1'){ b.setAttribute('data-armado', '1'); b.textContent = 'Confirmar?'; setTimeout(function(){ if (b.isConnected){ b.removeAttribute('data-armado'); b.textContent = 'Excluir'; } }, 4000); return; }
+      b.disabled = true;
+      dbL.collection(COL).doc(id).delete().catch(function(){ b.disabled = false; status('Não foi possível excluir agora.', true); });
+    }
+  });
+  $('leitor-exportar-btn').addEventListener('click', function(){
+    var itens = doDia().filter(function(x){ return !x._pendente; }).slice().reverse();
+    if (!itens.length){ status('Nada para exportar neste dia.', true); return; }
+    if (typeof XLSX === 'undefined'){ status('O gerador de Excel não carregou (sem internet?).', true); return; }
+    var linhas = [['Código de barras', 'Código interno', 'Descrição', 'Cliente', 'Qtd', 'OF', 'Data da etiqueta', 'Data da leitura', 'Hora', 'Lido por', 'Como']];
+    itens.forEach(function(x){
+      var sis = x.sistema || {};
+      linhas.push([x.codigo, sis.codpro || (x.naoAchada ? 'não encontrada no sistema' : ''), sis.descricao || '', sis.cliente || '', sis.qtd != null ? sis.qtd : '', sis.of || '',
+        (sis.dataEtiqueta || '').split('-').reverse().join('/'), (x.data || '').split('-').reverse().join('/'), horaDe(x.lidoEm), x.lidoPor || '', x.origem === 'manual' ? 'digitado/leitor USB' : 'câmera']);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(linhas);
+    ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 46 }, { wch: 34 }, { wch: 7 }, { wch: 9 }, { wch: 12 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 18 }];
+    for (var c = 0; c < 11; c++){ var ref = XLSX.utils.encode_cell({ r: 0, c: c }); if (ws[ref]) ws[ref].s = { font: { bold: true, color: { rgb: 'FFFFFFFF' } }, fill: { fgColor: { rgb: 'FF243776' } } }; }
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leituras');
+    var blob = new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    if (!(window.claude && claude.use)){ status('Exportação indisponível agora.', true); return; }
+    claude.use('downloads').then(function(dl){
+      if (!dl){ status('Exportação indisponível agora.', true); return; }
+      dl.save({ filename: 'leituras-etiquetas-' + ($('leituras-data').value || hojeISO()) + '.xlsx', data: blob })
+        .then(function(){ status('Arquivo do Excel pronto.'); })
+        .catch(function(){ status('Não foi possível salvar o arquivo.', true); });
+    });
+  });
+  $('leituras-data').addEventListener('change', renderLista);
+  $('leituras-close').addEventListener('click', function(){ lista.hidden = true; });
+  lista.addEventListener('click', function(ev){ if (ev.target === lista) lista.hidden = true; });
+  $('leituras-abrir-btn').addEventListener('click', function(){
+    lista.hidden = false;
+    if (!$('leituras-data').value) $('leituras-data').value = hojeISO();
+    status('');
+    renderLista();
+  });
+
+  // ---- dados da etiqueta no sistema: o app do PC (que alcança o Oracle) completa as leituras ----
   var oracleOk = false, completando = false;
   function semDados(x){ return x && !x._pendente && !x.sistema && !x.naoAchada && x.codigo; }
   function completar(){
@@ -20690,7 +20847,7 @@ var SIGNATURES = {
     var codigos = faltam.map(function(x){ return x.codigo; }).filter(function(c, i, a){ return a.indexOf(c) === i; });
     window.ripackOfs.etiquetas(codigos).then(function(res){
       completando = false;
-      if (!res || res.ok === false && !(res.linhas || []).length){ return; }
+      if (!res || res.ok === false && !(res.linhas || []).length) return;
       var porCodigo = {};
       (res.linhas || []).forEach(function(l){ porCodigo[String(l.etiqueta || '').toUpperCase()] = l; });
       var semErro = !(res.erros || []).length;
@@ -20712,106 +20869,87 @@ var SIGNATURES = {
   setInterval(completar, 15000);
   if (window.ripackOfs && window.ripackOfs.quandoSouber) window.ripackOfs.quandoSouber(function(ok){ oracleOk = !!ok; completar(); });
 
-  // ---- lista ----
-  function render(){
-    var lista = $('leitor-lista');
-    if (!dbL && carregou){ lista.innerHTML = '<p class="foot-note">O banco compartilhado não está disponível aqui agora.</p>'; }
-    else if (!carregou){ lista.innerHTML = '<p class="foot-note">Carregando leituras...</p>'; }
-    var itens = doDia();
-    $('leitor-contagem').textContent = itens.length + ' leitura(s) em ' + ($('leitor-data').value || hojeISO()).split('-').reverse().join('/');
-    if (!carregou) return;
-    if (!itens.length){ lista.innerHTML = '<p class="foot-note">Nenhuma leitura neste dia ainda.</p>'; return; }
-    lista.innerHTML = itens.map(function(x){
-      var s = x.sistema;
-      var dados = s ? '<div class="l-dados"><b>' + esc(s.codpro) + '</b>' + (s.of ? ' · OF ' + esc(s.of) : '') + (s.qtd != null ? ' · ' + esc(s.qtd) + ' pç' : '') +
-          '<div>' + esc(s.descricao) + '</div><div>' + esc(s.cliente) + '</div></div>'
-        : x.naoAchada ? '<div class="l-dados" style="color:var(--critical);">Etiqueta não encontrada no sistema</div>'
-        : x._pendente ? '' : '<div class="l-dados" style="color:var(--text-muted);">buscando os dados no sistema… (precisa de um PC com o app aberto)</div>';
-      return '<div class="leitor-item"><div class="l-txt"><div class="l-cod">' + esc(x.codigo) + '</div>' + dados +
-        '<div class="l-sub">' + esc(horaDe(x.lidoEm)) + (x.lidoPor ? ' · ' + esc(x.lidoPor) : '') + (x.origem === 'manual' ? ' · digitado/leitor USB' : ' · câmera') + (x._pendente ? ' · guardando...' : '') + '</div></div>' +
-        '<button type="button" class="add-btn" data-leitor-copiar="' + esc(x.codigo) + '">Copiar</button>' +
-        (x._pendente ? '' : '<button type="button" class="add-btn btn-destaque-vermelho" data-leitor-excluir="' + esc(x._id) + '">Excluir</button>') +
-      '</div>';
-    }).join('');
-  }
-  $('leitor-lista').addEventListener('click', function(ev){
-    var b = ev.target.closest ? ev.target.closest('button') : null;
-    if (!b) return;
-    var cod = b.getAttribute('data-leitor-copiar');
-    if (cod){
-      try { navigator.clipboard.writeText(cod).then(function(){ status('Copiado: ' + cod); }).catch(function(){ status('Não deu pra copiar aqui.', true); }); } catch (e){ status('Não deu pra copiar aqui.', true); }
-      return;
-    }
-    var id = b.getAttribute('data-leitor-excluir');
-    if (id && dbL){
-      if (b.getAttribute('data-armado') !== '1'){ b.setAttribute('data-armado', '1'); b.textContent = 'Confirmar?'; setTimeout(function(){ if (b.isConnected){ b.removeAttribute('data-armado'); b.textContent = 'Excluir'; } }, 4000); return; }
-      b.disabled = true;
-      dbL.collection(COL).doc(id).delete().catch(function(){ b.disabled = false; status('Não foi possível excluir agora.', true); });
-    }
-  });
-
-  // ---- Excel ----
-  $('leitor-exportar-btn').addEventListener('click', function(){
-    var itens = doDia().filter(function(x){ return !x._pendente; }).slice().reverse();
-    if (!itens.length){ status('Nada para exportar neste dia.', true); return; }
-    if (typeof XLSX === 'undefined'){ status('O gerador de Excel não carregou (sem internet?).', true); return; }
-    var linhas = [['Código de barras', 'Código interno', 'Descrição', 'Cliente', 'Qtd', 'OF', 'Data da etiqueta', 'Data da leitura', 'Hora', 'Lido por', 'Como']];
-    itens.forEach(function(x){
-      var s = x.sistema || {};
-      linhas.push([x.codigo, s.codpro || (x.naoAchada ? 'não encontrada no sistema' : ''), s.descricao || '', s.cliente || '', s.qtd != null ? s.qtd : '', s.of || '',
-        (s.dataEtiqueta || '').split('-').reverse().join('/'), (x.data || '').split('-').reverse().join('/'), horaDe(x.lidoEm), x.lidoPor || '', x.origem === 'manual' ? 'digitado/leitor USB' : 'câmera']);
-    });
-    var ws = XLSX.utils.aoa_to_sheet(linhas);
-    ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 46 }, { wch: 34 }, { wch: 7 }, { wch: 9 }, { wch: 12 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 18 }];
-    for (var c = 0; c < 11; c++){ var ref = XLSX.utils.encode_cell({ r: 0, c: c }); if (ws[ref]) ws[ref].s = { font: { bold: true, color: { rgb: 'FFFFFFFF' } }, fill: { fgColor: { rgb: 'FF243776' } } }; }
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Leituras');
-    var blob = new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    if (!(window.claude && claude.use)){ status('Exportação indisponível agora.', true); return; }
-    claude.use('downloads').then(function(dl){
-      if (!dl){ status('Exportação indisponível agora.', true); return; }
-      dl.save({ filename: 'leituras-codigo-' + ($('leitor-data').value || hojeISO()) + '.xlsx', data: blob })
-        .then(function(){ status('Arquivo do Excel pronto.'); })
-        .catch(function(){ status('Não foi possível salvar o arquivo.', true); });
-    });
-  });
-
-  // ---- eventos ----
-  $('leitor-camera-btn').addEventListener('click', function(){ if (stream || zxReader || timer) pararCamera(); else ligarCamera(); });
-  $('leitor-trocar-btn').addEventListener('click', function(){ usandoTraseira = !usandoTraseira; pararCamera(); ligarCamera(); });
-  $('leitor-manual').addEventListener('keydown', function(ev){
-    if (ev.key !== 'Enter') return;
-    ev.preventDefault();
-    var v = this.value; this.value = '';
-    ultimoLido = ''; // digitado: nunca descarta como "mesma leitura da câmera"
-    registrar(v, 'manual');
-  });
-  $('leitor-data').addEventListener('change', render);
-  function fechar(){ pararCamera(); modal.hidden = true; }
-  $('leitor-close').addEventListener('click', fechar);
-  modal.addEventListener('click', function(ev){ if (ev.target === modal) fechar(); });
-  document.addEventListener('visibilitychange', function(){ if (document.hidden && !modal.hidden) pararCamera(); });
-  $('leitor-abrir-btn').addEventListener('click', function(){
-    modal.hidden = false;
-    if (!$('leitor-data').value) $('leitor-data').value = hojeISO();
-    status('');
-    render();
-    setTimeout(function(){ try { $('leitor-manual').focus(); } catch (e){} }, 50);
-  });
-
   // ---- banco ----
   if (window.claude && claude.use){
     claude.use('db').then(function(db){
       dbL = db || null;
-      if (!db){ carregou = true; render(); return; }
+      if (!db){ carregou = true; return; }
       db.collection(COL).orderBy('lidoEm', 'desc').limit(2000).onSnapshot(function(snap){
         docs = (snap.docs || []).map(function(d){ var x = d.data() || {}; x._id = d.id; return x; });
         carregou = true;
-        if (!modal.hidden) render();
+        if (!tela.hidden) renderTela();
+        if (!lista.hidden) renderLista();
         completar();
-      }, function(){ carregou = true; if (!modal.hidden) render(); });
+      }, function(){ carregou = true; if (!lista.hidden) renderLista(); });
     }).catch(function(){ carregou = true; });
   } else { carregou = true; }
+})();
+</script>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var modal = $('saldo-local-modal');
+  if (!modal) return;
+  var ultimas = [], buscando = false;
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function fmt(n){ return Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 }); }
+  function status(t, ruim){ var el = $('saldo-local-status'); el.textContent = t || ''; el.style.color = ruim ? 'var(--critical)' : ''; }
+  // "621-014" vira "0621-014" (o cliente do RP tem 4 dígitos)
+  function comZeros(c){ return String(c || '').trim().toUpperCase().replace(/^(\d{1,3})-/, function(m, n){ return ('0000' + n).slice(-4) + '-'; }); }
+  function render(){
+    var mostrarZeros = $('saldo-local-zeros').checked;
+    var grupos = {}, ordem = [];
+    ultimas.forEach(function(l){
+      var k = l.empresa + '|' + l.codpro;
+      if (!grupos[k]){ grupos[k] = { empresa: l.empresa, codpro: l.codpro, linhas: [], total: 0 }; ordem.push(k); }
+      grupos[k].linhas.push(l); grupos[k].total += Number(l.saldo || 0);
+    });
+    if (!ordem.length){ $('saldo-local-res').innerHTML = ''; return; }
+    $('saldo-local-res').innerHTML = ordem.map(function(k){
+      var g = grupos[k];
+      var linhas = g.linhas.filter(function(l){ return mostrarZeros || Math.abs(Number(l.saldo || 0)) > 0.0005; })
+        .sort(function(a, b){ return Number(b.saldo || 0) - Number(a.saldo || 0); });
+      return '<div class="saldo-prod"><div class="sp-cab">' + esc(g.codpro) + ' <span>' + (g.empresa === 'filial' ? 'Filial' : 'Matriz') + ' · total ' + fmt(g.total) + '</span></div>' +
+        (linhas.length ? linhas.map(function(l){
+          return '<div class="sp-lin"><span class="sp-loc">' + esc(l.local) + '</span><span class="sp-desc">' + esc(l.descricao) + '</span><span class="sp-qtd' + (Number(l.saldo) < 0 ? ' neg' : '') + '">' + fmt(l.saldo) + '</span></div>';
+        }).join('') : '<div class="sp-lin"><span class="sp-desc">Sem saldo em nenhum local.</span></div>') +
+      '</div>';
+    }).join('');
+  }
+  function buscar(){
+    var codigo = comZeros($('saldo-local-codigo').value);
+    if (codigo.length < 4){ status('Digite ao menos o começo do código (ex.: 0621-014).', true); return; }
+    if (!(window.ripackOfs && window.ripackOfs.saldo)){ status('A consulta ao sistema só funciona no app instalado nos PCs do escritório.', true); return; }
+    if (buscando) return;
+    buscando = true;
+    $('saldo-local-buscar').disabled = true;
+    status('Consultando o sistema...');
+    window.ripackOfs.quandoSouber(function(ok){
+      if (!ok){ buscando = false; $('saldo-local-buscar').disabled = false; status('Este aparelho não alcança o sistema. Use o app num PC do escritório.', true); return; }
+      window.ripackOfs.saldo(codigo).then(function(res){
+        buscando = false; $('saldo-local-buscar').disabled = false;
+        ultimas = (res && res.linhas) || [];
+        var erros = (res && res.erros) || [];
+        if (!ultimas.length) status(erros.length ? 'Não foi possível consultar: ' + erros.join(' / ') : 'Nenhum produto começando com ' + codigo + ' no sistema.', true);
+        else {
+          var prods = {}; ultimas.forEach(function(l){ prods[l.codpro] = 1; });
+          var n = Object.keys(prods).length;
+          status(n + ' produto(s) · saldo = saldo anterior + entradas − saídas, por local (sistema, agora)' + (erros.length ? ' · aviso: ' + erros.join(' / ') : ''));
+        }
+        render();
+      });
+    });
+  }
+  $('saldo-local-buscar').addEventListener('click', buscar);
+  $('saldo-local-codigo').addEventListener('keydown', function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); buscar(); } });
+  $('saldo-local-zeros').addEventListener('change', render);
+  $('saldo-local-close').addEventListener('click', function(){ modal.hidden = true; });
+  modal.addEventListener('click', function(ev){ if (ev.target === modal) modal.hidden = true; });
+  $('saldo-local-abrir-btn').addEventListener('click', function(){
+    modal.hidden = false;
+    status('');
+    setTimeout(function(){ try { $('saldo-local-codigo').focus(); } catch (e){} }, 50);
+  });
 })();
 </script>
 </body></html>

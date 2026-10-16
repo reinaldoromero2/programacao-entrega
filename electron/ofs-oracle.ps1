@@ -116,6 +116,32 @@ elseif ($entrada.acao -eq 'etiquetas') {
     } finally { if ($a) { $a.conexao.Close() } }
   }
 }
+elseif ($entrada.acao -eq 'saldo') {
+  # só leitura: saldo de cada local de estoque do produto (saldo anterior + entradas - saídas)
+  $codigo = ([string]$entrada.codigo).Trim().ToUpper()
+  if ($codigo.Length -ge 4) {
+    foreach ($empresa in 'matriz', 'filial') {
+      $a = $null
+      try {
+        $a = Abrir $empresa
+        $u = $a.usuario
+        $cmd = $a.conexao.CreateCommand()
+        $cmd.CommandText = "SELECT * FROM (SELECT E.EST_CODPRO, E.EST_LOCEST, L.LCE_DESCRI, NVL(E.EST_SLDANT, 0) + NVL(E.EST_QTENTR, 0) - NVL(E.EST_QTCONS, 0), TO_CHAR(E.EST_ULTINV, 'YYYY-MM-DD HH24:MI') FROM $u.F_ESTOQ E LEFT JOIN $u.F_LOCEST L ON L.LCE_CODIGO = E.EST_LOCEST WHERE UPPER(E.EST_CODPRO) LIKE ? ORDER BY E.EST_CODPRO, E.EST_LOCEST) WHERE ROWNUM <= 400"
+        [void]$cmd.Parameters.AddWithValue('c', $codigo + '%')
+        $r = $cmd.ExecuteReader()
+        while ($r.Read()) {
+          $saida.linhas += [pscustomobject]@{
+            empresa = $empresa; codpro = (Texto $r[0]); local = (Texto $r[1]); descricao = (Texto $r[2])
+            saldo = $(if ($r[3] -is [DBNull]) { 0 } else { [double]$r[3] }); atualizado = (Texto $r[4])
+          }
+        }
+        $r.Close()
+      } catch {
+        $saida.erros += "${empresa}: " + $_.Exception.Message
+      } finally { if ($a) { $a.conexao.Close() } }
+    }
+  }
+}
 elseif ($entrada.acao -eq 'gravar') {
   foreach ($empresa in 'matriz', 'filial') {
     $linhas = @($entrada.linhas | Where-Object { $_.empresa -eq $empresa })
