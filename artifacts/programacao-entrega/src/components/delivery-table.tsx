@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { Loader2, Trash2, GripVertical } from "lucide-react";
+import { Loader2, Trash2, GripVertical, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MotoristaCombobox } from "@/components/motorista-combobox";
 import { ClienteAutocomplete } from "@/components/cliente-autocomplete";
@@ -105,6 +105,16 @@ interface DeliveryTableProps {
 export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectedIds, selectionMode, onToggleSelection }: DeliveryTableProps) {
   const queryClient = useQueryClient();
   const reorderEntregas = useReorderEntregas();
+  const updateEntregaTabela = useUpdateEntrega();
+  const deleteEntregaTabela = useDeleteEntrega();
+  // "Conjugar carga": linha marcada que, solta em cima de outra, vira "cliente + cliente" numa linha só
+  const [conjugarId, setConjugarId] = useState<number | null>(null);
+  useEffect(() => {
+    if (conjugarId === null) return;
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") setConjugarId(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [conjugarId]);
 
   const [colWidths, setColWidths] = useState<number[]>(loadWidths);
   const [draggedId, setDraggedId] = useState<number | null>(null);
@@ -157,10 +167,55 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
   const handleDragEnter = (id: number) => { if (id !== draggedId) setDragOverId(id); };
   const handleDragEnd = () => { setDraggedId(null); setDragOverId(null); };
 
+  // junta a linha `origemId` na linha `alvoId`: cliente, OBS e HRS somados com " + "; motorista e placa
+  // ficam os do alvo (ou os da origem, se o alvo não tiver); a linha de origem é apagada
+  const conjugar = (origemId: number, alvoId: number) => {
+    const origem = sortedEntregas.find(e => e.id === origemId);
+    const alvo = sortedEntregas.find(e => e.id === alvoId);
+    if (!origem || !alvo) return;
+    const juntar = (a: string | null | undefined, b: string | null | undefined) => {
+      const x = (a ?? "").trim(), y = (b ?? "").trim();
+      return x && y ? `${x} + ${y}` : (x || y);
+    };
+    const data = {
+      cliente: juntar(alvo.cliente, origem.cliente),
+      obs: juntar(alvo.obs, origem.obs) || null,
+      hrs: juntar(alvo.hrs, origem.hrs) || null,
+      motorista: (alvo.motorista ?? "").trim() || origem.motorista || null,
+      placa: (alvo.placa ?? "").trim() || origem.placa || null,
+    };
+    if (!window.confirm(`Conjugar a carga?\n\n${origem.cliente || "(sem cliente)"}  →  ${alvo.cliente || "(sem cliente)"}\n\nFica uma linha só: ${data.cliente}`)) return;
+    const queryKey = getListEntregasQueryKey({ date });
+    const previous = queryClient.getQueryData<Entrega[]>(queryKey);
+    queryClient.setQueryData<Entrega[]>(queryKey, (old) =>
+      old?.filter(e => e.id !== origemId).map(e => (e.id === alvoId ? { ...e, ...data } : e)) ?? []
+    );
+    updateEntregaTabela.mutate({ id: alvoId, data }, {
+      onSuccess: () => {
+        deleteEntregaTabela.mutate({ id: origemId }, {
+          onSettled: () => queryClient.invalidateQueries({ queryKey }),
+        });
+      },
+      onError: () => {
+        queryClient.setQueryData(queryKey, previous);
+        window.alert("Não foi possível conjugar agora. Tente de novo.");
+      },
+    });
+  };
+
   const handleDrop = (targetId: number) => {
     if (draggedId === null || draggedId === targetId) {
       setDraggedId(null);
       setDragOverId(null);
+      return;
+    }
+    // linha marcada em "Conjugar carga": em vez de mudar a ordem, junta com a linha onde foi solta
+    if (conjugarId !== null && draggedId === conjugarId){
+      const origem = draggedId;
+      setDraggedId(null);
+      setDragOverId(null);
+      setConjugarId(null);
+      conjugar(origem, targetId);
       return;
     }
     const fromIndex = sortedEntregas.findIndex(e => e.id === draggedId);
@@ -247,6 +302,9 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
               acrylicEnabled={acrylicEnabled}
               selectionMode={selectionMode}
               onToggleSelection={() => onToggleSelection(entrega.id)}
+              conjugando={conjugarId === entrega.id}
+              conjugarAtivo={conjugarId !== null}
+              onConjugar={() => setConjugarId((atual) => (atual === entrega.id ? null : entrega.id))}
             />
           ))}
 
@@ -274,6 +332,9 @@ interface DeliveryRowProps {
   date: string;
   rowIndex: number;
   onDragStart: () => void;
+  conjugando?: boolean;
+  conjugarAtivo?: boolean;
+  onConjugar?: () => void;
   onDragEnter: () => void;
   onDrop: () => void;
   onDragEnd: () => void;
@@ -287,7 +348,7 @@ interface DeliveryRowProps {
   onToggleSelection: () => void;
 }
 
-function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection }: DeliveryRowProps) {
+function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection, conjugando, conjugarAtivo, onConjugar }: DeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const updateEntrega = useUpdateEntrega();
@@ -451,7 +512,11 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
   const rowRef = useRef<HTMLDivElement>(null);
 
   const enableDrag  = () => { if (rowRef.current) rowRef.current.draggable = true; };
-  const disableDrag = () => { if (rowRef.current) rowRef.current.draggable = false; };
+  const disableDrag = () => { if (rowRef.current && !conjugando) rowRef.current.draggable = false; };
+  // linha marcada para conjugar: dá pra arrastar segurando em qualquer ponto dela
+  useEffect(() => {
+    if (rowRef.current) rowRef.current.draggable = !!conjugando;
+  }, [conjugando]);
 
   return (
     <div
@@ -473,8 +538,11 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         isCancelled && (backgroundImageEnabled || acrylicEnabled ? "bg-red-100/75 hover:bg-red-200/80" : "bg-red-100 hover:bg-red-200"),
         isDevolution && !isCancelled && (backgroundImageEnabled || acrylicEnabled ? "bg-yellow-100/75 hover:bg-yellow-200/80" : "bg-yellow-100 hover:bg-yellow-200"),
         isDragging && "opacity-30 scale-[0.99]",
-        isDragOver && "border-t-2 border-blue-500",
+        isDragOver && !conjugarAtivo && "border-t-2 border-blue-500",
+        isDragOver && conjugarAtivo && !conjugando && "ring-2 ring-inset ring-emerald-500 bg-emerald-50",
+        conjugando && "ring-2 ring-inset ring-blue-600 bg-blue-100 cursor-grab",
       )}
+      title={conjugando ? "Arraste esta linha para cima da carga com que ela vai ser conjugada (Esc cancela)" : undefined}
       style={{
         display: "grid",
         gridTemplateColumns: template,
@@ -767,7 +835,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
             />
           </label>
         )}
-        <div className="absolute right-0 inset-y-0 flex items-center justify-center gap-0.5 pl-7 pr-1 bg-white/90 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity print:hidden">
+        <div className={cn("absolute right-0 inset-y-0 flex items-center justify-center gap-0.5 pl-7 pr-1 bg-white/90 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity print:hidden", conjugando && "opacity-100 pointer-events-auto")}>
           <div
             onMouseDown={enableDrag}
             onMouseUp={disableDrag}
@@ -776,6 +844,9 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
           >
             <GripVertical className="w-4 h-4" />
           </div>
+          <Button variant="ghost" size="icon" onClick={onConjugar} title={conjugando ? "Cancelar conjugar carga" : "Conjugar carga: marque esta linha e arraste para cima de outra"} className={cn("w-6 h-6 rounded", conjugando ? "text-blue-700 bg-blue-100" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50")} data-testid={`button-conjugar-${entrega.id}`}>
+            <Link2 className="w-3 h-3" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={handleDelete} className="w-6 h-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded" data-testid={`button-delete-${entrega.id}`}>
             <Trash2 className="w-3 h-3" />
           </Button>

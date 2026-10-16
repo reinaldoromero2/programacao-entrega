@@ -2721,12 +2721,20 @@
     var base = String(full).split('/')[0];
     if (!(base in RP_BASE_MAP)) RP_BASE_MAP[base] = full;
   });
+  // "629-044" vira "0629-044": o cliente do RP tem sempre 4 dígitos, mas dá pra digitar sem o zero da frente
+  function rpComZeros(c){ return String(c || '').replace(/^(\d{1,3})-/, function(m, n){ return ('0000' + n).slice(-4) + '-'; }); }
   function resolverCodigoRpCompleto(codigo){
     var c = (codigo || '').trim();
     if (!c) return c;
     if (RP_MAP.hasOwnProperty(c)) return c;
     var base = c.split('/')[0];
     if (RP_BASE_MAP.hasOwnProperty(base)) return RP_BASE_MAP[base];
+    var cz = rpComZeros(c);
+    if (cz !== c){
+      if (RP_MAP.hasOwnProperty(cz)) return cz;
+      var baseZ = cz.split('/')[0];
+      if (RP_BASE_MAP.hasOwnProperty(baseZ)) return RP_BASE_MAP[baseZ];
+    }
     return c;
   }
   var CLI_MAP = {}, CLI_LIST = [];
@@ -9559,7 +9567,7 @@ var SIGNATURES = {
             // Fardos e voltou pra tentar de novo aqui, sem reabrir a
             // linha) senão nunca seria encontrado, mesmo já cadastrado.
             var fardosAgora = cfFardosOrdenados();
-            var termo = val.toUpperCase();
+            var termo = rpComZeros(val.toUpperCase());
             var candidatos = fardosAgora.filter(function(f){ return f.codigo && f.codigo.toUpperCase().indexOf(termo) !== -1; });
             if (candidatos.length > 1){
               // digitou sem o "0" à esquerda (ex.: "621-015" em vez de
@@ -10001,7 +10009,7 @@ var SIGNATURES = {
   // cadastrar o fardo depois. Devolve o RP completo já resolvido, ou ''
   // se nem na tabela de preço esse código existe.
   function cfResolverRpSemFardo(textoDigitado){
-    var termo = String(textoDigitado || '').trim().toUpperCase();
+    var termo = rpComZeros(String(textoDigitado || '').trim().toUpperCase());
     if (!termo) return '';
     var resolvido = resolverCodigoRpCompleto(termo).toUpperCase();
     if (RP_MAP.hasOwnProperty(resolvido)) return resolvido;
@@ -10285,7 +10293,8 @@ var SIGNATURES = {
       origFrete: (d.modo || 'frete') === 'frete' ? origFrete : null,
       origTotal: origTotal,
       verificacaoId: hDoc ? hDoc.id : null,
-      verificacaoTotalProprio: hd && typeof hd.totalAntesComplemento === 'number' ? hd.totalAntesComplemento : origTotal
+      verificacaoTotalProprio: hd && typeof hd.totalAntesComplemento === 'number' ? hd.totalAntesComplemento : origTotal,
+      complementosClientes: d.complementosClientes || []
     };
     // os itens que já estão no caminhão continuam no desenho, mas marcados — não entram no romaneio novo
     var snap = Object.assign({}, snapshot, {
@@ -15236,6 +15245,10 @@ var SIGNATURES = {
     if (extraMatriz) extraParts.push('+ MATRIZ');
     if (extraFilial) extraParts.push('+ FILIAL');
     if (extraAglotec) extraParts.push('BASE AGLOTEC FILIAL');
+    // completar carga: com quem este romaneio divide o caminhão ("+ PRADA SP")
+    var textoCompl = ('complementoTexto' in extra) ? extra.complementoTexto
+      : ((typeof romComplementoInfo !== 'undefined' && romComplementoInfo && romComplementoInfo.cliente) ? '+ ' + nomeSemCodigoCliente(romComplementoInfo.cliente) : '');
+    if (textoCompl) extraParts.push(textoCompl);
     var extraLocal = extraParts.join('  ');
 
     function checkboxHtml(checked){
@@ -16028,6 +16041,16 @@ var SIGNATURES = {
   // ---- visualizar um romaneio salvo (pendente ou já assinado) direto da
   // lista de "Assinatura do empilhadeirista", sem depender do formulário
   // "Gerar romaneio" acima estar preenchido com os mesmos dados ----
+  // "+ CLIENTE" de quem divide o caminhão: a carga original (se este for complemento) e os
+  // complementos que entraram depois (guardados em complementosClientes na original)
+  // "0629 PRADA SP" -> "PRADA SP" (vários clientes juntos: tira o código de cada um)
+  function nomeSemCodigoCliente(n){ return String(n || '').split(' + ').map(function(x){ return x.trim().replace(/^\d+\s+/, ''); }).join(' + '); }
+  function textoComplementoDoRomaneio(d){
+    var nomes = [];
+    if (d && d.complementoDeCliente) nomes.push(d.complementoDeCliente);
+    ((d && d.complementosClientes) || []).forEach(function(n){ if (n && nomes.indexOf(n) === -1) nomes.push(n); });
+    return nomes.map(function(n){ return '+ ' + nomeSemCodigoCliente(n); }).join('  ');
+  }
   function previewRomaneioFromDoc(d, statusEl){
     if (typeof html2canvas === 'undefined'){
       if (statusEl){ statusEl.textContent = 'Não foi possível carregar o gerador de imagem. Tente novamente em instantes.'; statusEl.style.color = 'var(--critical)'; }
@@ -16046,6 +16069,7 @@ var SIGNATURES = {
       extraMatriz: !!d.extraMatriz,
       extraFilial: !!d.extraFilial,
       extraAglotec: !!d.extraAglotec,
+      complementoTexto: textoComplementoDoRomaneio(d),
       qa: d.qa || [],
       tipoVeiculo: d.tipoVeiculo || '',
       lm01: !!d.lm01,
@@ -16526,10 +16550,10 @@ var SIGNATURES = {
     }
 
     var complEnvio = (romComplementoInfo && typeof romComplementoInfo.origFrete === 'number') ? romComplementoInfo : null;
-    if (complEnvio){
-      camposComuns.complementoDe = complEnvio.id;
-      camposComuns.complementoDeCliente = complEnvio.cliente;
-    }
+    var complQualquer = romComplementoInfo || null;
+    if (complEnvio) camposComuns.complementoDe = complEnvio.id;
+    // o nome da carga original vai junto mesmo sem frete cadastrado: sai impresso como "+ CLIENTE"
+    if (complQualquer) camposComuns.complementoDeCliente = complQualquer.cliente;
     var payload = Object.assign({}, camposComuns, {
       docStatus: 'pendente',
       carregStatus: 'aguardando',
@@ -16554,6 +16578,15 @@ var SIGNATURES = {
       if (!result.qtdPendente) addToHistory(result, camposComuns, ref.id);
       // completar carga: a verificação da carga original passa a valer pelas duas cargas
       // somadas (uma carga só no Resumo de Frete, com o frete uma vez)
+      if (complQualquer){
+        var origDocCache = (allPendDocs || []).concat(allDoneDocs || []).filter(function(dd){ return dd.id === complQualquer.id; })[0];
+        var jaTinha = origDocCache ? ((origDocCache.data() || {}).complementosClientes || []) : (complQualquer.complementosClientes || []);
+        var nomeNovo = result.cliente || resumoClientesTxt(result.clientes, '');
+        if (nomeNovo && jaTinha.indexOf(nomeNovo) === -1){
+          dbApi.collection('romaneios').doc(complQualquer.id).update({ complementosClientes: jaTinha.concat([nomeNovo]) })
+            .catch(function(err){ console.error('Falha ao marcar o complemento na carga original:', err); });
+        }
+      }
       if (complEnvio && complEnvio.verificacaoId && !result.qtdPendente && typeof result.saldo === 'number'){
         dbApi.collection('verificacoes').doc(complEnvio.verificacaoId).update({
           total: complEnvio.origTotal + result.total,
