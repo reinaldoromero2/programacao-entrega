@@ -16596,8 +16596,15 @@ var SIGNATURES = {
   // em "Histórico de verificações" — casadas pelo mesmo conteúdo (cliente,
   // valores, status) registrado no mesmo dia, já que os dois registros
   // nascem do mesmo cálculo, só que em coleções separadas.
-  function deleteLinkedHistoryEntries(romDoc){
+  function deleteLinkedHistoryEntries(romDoc, romId){
     if (!dbApi || !romDoc) return;
+    // a verificação de um romaneio é gravada com o id fixo "rom_<id do romaneio>" — apaga por ele
+    // (a busca por conteúdo abaixo falhava quando o romaneio tinha sido mexido depois, ex.: OF lançada)
+    if (romId){
+      dbApi.collection('verificacoes').doc('rom_' + romId).delete();
+      allHistDocs.filter(function(h){ return (h.data() || {}).romaneioId === romId && h.id !== 'rom_' + romId; })
+        .forEach(function(h){ dbApi.collection('verificacoes').doc(h.id).delete(); });
+    }
     var sig = signatureFor(romDoc);
     var diaRom = dateKeyLocal(romDoc.criadoEm);
     allHistDocs.filter(function(hDoc){
@@ -17023,7 +17030,7 @@ var SIGNATURES = {
         if (!dbApi) return;
         abrirConfirmarAcao('Excluir romaneio', 'Excluir este romaneio? Essa ação não pode ser desfeita.', function(){
           dbApi.collection('romaneios').doc(doc.id).delete();
-          deleteLinkedHistoryEntries(d);
+          deleteLinkedHistoryEntries(d, doc.id);
         });
       });
       btnWrap.appendChild(delBtn);
@@ -17561,7 +17568,7 @@ var SIGNATURES = {
         if (!dbApi) return;
         abrirConfirmarAcao('Excluir romaneio', 'Excluir este romaneio concluído? Essa ação não pode ser desfeita.', function(){
           dbApi.collection('romaneios').doc(doc.id).delete();
-          deleteLinkedHistoryEntries(d);
+          deleteLinkedHistoryEntries(d, doc.id);
         });
       });
       topRow.appendChild(delBtn);
