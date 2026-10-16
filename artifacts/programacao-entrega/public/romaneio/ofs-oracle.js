@@ -412,5 +412,10 @@
     });
   });
 
-  window.ripackOfs = { botao: botao };
+  window.ripackOfs = {
+    botao: botao,
+    // Leitor de código: dados das etiquetas no sistema (só o app do PC responde)
+    etiquetas: function (codigos) { return oracle({ acao: 'etiquetas', codigos: codigos }); },
+    quandoSouber: function (f) { if (disponivel !== null) f(disponivel); else aoSaberDisponivel.push(function () { f(disponivel); }); }
+  };
 })();

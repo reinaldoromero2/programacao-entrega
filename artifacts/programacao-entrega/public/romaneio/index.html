@@ -1618,9 +1618,10 @@
         <button type="button" class="menu-card-btn" data-clicar="patio-abrir-btn"><span class="menu-card-ico">⏱️</span><span>Tempo de Pátio</span></button>
         <button type="button" class="menu-card-btn" data-clicar="bloq-abrir-btn"><span class="menu-card-ico">🔒</span><span>Bloqueados Qualidade</span></button>
         <button type="button" class="menu-card-btn" data-clicar="abrir-carga-facil"><span class="menu-card-ico">🚛</span><span>Carga Fácil</span></button>
+        <button type="button" class="menu-card-btn" data-clicar="leitor-abrir-btn"><span class="menu-card-ico">📷</span><span>Leitor de código</span></button>
       </div>
     </div>
-    <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button></div>
+    <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Leitor de código</button></div>
 
     <div class="card" data-role="admin" id="card-historico">
       <div class="history-head">
@@ -1715,6 +1716,51 @@
     </div>
 
     <style>#patio-modal .patio-filtros, #patio-modal #patio-kpis, #patio-modal #patio-form, #patio-modal #patio-lista, #patio-modal #patio-status, #patio-modal .patio-so-nc{ display:none !important; }</style>
+    <div class="rom-modal-overlay" id="leitor-modal" hidden>
+      <div class="rom-modal-card" style="max-width:720px; max-height:94vh; overflow-y:auto;">
+        <div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>📷 Leitor de código de barras</h3>
+          <button class="rom-modal-close" id="leitor-close" type="button" aria-label="Fechar">Sair</button>
+        </div>
+        <div style="padding:12px 18px 18px;">
+          <div class="leitor-video-wrap" id="leitor-video-wrap" hidden>
+            <video id="leitor-video" playsinline muted autoplay></video>
+            <div class="leitor-mira"></div>
+            <div class="leitor-flash" id="leitor-flash"></div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0;">
+            <button type="button" class="add-btn btn-destaque-azul" id="leitor-camera-btn" style="flex:1 1 200px;">📷 Ler com a câmera</button>
+            <button type="button" class="add-btn" id="leitor-trocar-btn" hidden style="flex:0 0 auto;">🔄 Trocar câmera</button>
+          </div>
+          <div class="field" style="margin:0 0 6px;">
+            <label for="leitor-manual">Ou digite / use o leitor USB (Enter grava)</label>
+            <input type="text" id="leitor-manual" autocomplete="off" placeholder="Código de barras">
+          </div>
+          <p class="foot-note" id="leitor-status" style="margin:4px 0 10px; min-height:18px;"></p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;">
+            <div class="field" style="margin:0; flex:0 0 auto;"><label for="leitor-data">Dia</label><input type="date" id="leitor-data"></div>
+            <span class="foot-note" id="leitor-contagem" style="flex:1 1 auto; margin:0 0 8px;"></span>
+            <button type="button" class="add-btn btn-destaque-verde" id="leitor-exportar-btn" style="flex:0 0 auto;">⬇ Exportar para Excel</button>
+          </div>
+          <div id="leitor-lista"></div>
+        </div>
+      </div>
+    </div>
+    <style>
+      .leitor-video-wrap{ position:relative; width:100%; max-width:560px; margin:0 auto; aspect-ratio:4/3; background:#000; border-radius:12px; overflow:hidden; }
+      .leitor-video-wrap video{ width:100%; height:100%; object-fit:cover; display:block; }
+      .leitor-mira{ position:absolute; left:8%; right:8%; top:38%; height:24%; border:3px solid rgba(113,200,44,0.95); border-radius:10px; box-shadow:0 0 0 999px rgba(0,0,0,0.25); pointer-events:none; }
+      .leitor-flash{ position:absolute; inset:0; background:rgba(113,200,44,0.45); opacity:0; transition:opacity .25s; pointer-events:none; }
+      .leitor-flash.on{ opacity:1; transition:none; }
+      .leitor-item{ display:flex; gap:10px; align-items:center; padding:9px 4px; border-bottom:1px solid var(--grid); }
+      .leitor-item .l-cod{ font-family:ui-monospace, Consolas, monospace; font-size:16px; font-weight:700; color:var(--text-primary); word-break:break-all; }
+      .leitor-item .l-sub{ font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+      .leitor-item .l-dados{ font-size:12.5px; color:var(--text-secondary); margin-top:3px; line-height:1.35; }
+      .leitor-item .l-dados b{ color:var(--text-primary); }
+      .leitor-item .l-txt{ flex:1 1 auto; min-width:0; }
+      .leitor-item button{ flex:0 0 auto; padding:5px 10px; min-width:0; font-size:12px; }
+    </style>
+
     <div class="rom-modal-overlay" id="patio-modal" hidden>
       <div class="rom-modal-card" style="max-width:720px; max-height:92vh; overflow-y:auto;">
         <div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;">
@@ -20509,4 +20555,263 @@ var SIGNATURES = {
 })();
 </script>
 
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var modal = $('leitor-modal');
+  if (!modal) return;
+  var COL = 'leituras_codigo';
+  var dbL = null, docs = [], carregou = false;
+  var stream = null, timer = null, zxReader = null, detector = null, usandoTraseira = true;
+  var ultimoLido = '', ultimoLidoEm = 0;
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function hojeISO(){ var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function quem(){ try { var s = JSON.parse(localStorage.getItem('ripackRomaneioSessao') || 'null'); return (s && s.nome) || ''; } catch (e){ return ''; } }
+  function status(t, ruim){ var el = $('leitor-status'); el.textContent = t || ''; el.style.color = ruim ? 'var(--critical)' : (t ? 'var(--good)' : ''); }
+  function horaDe(iso){ var d = new Date(iso); return isNaN(d) ? '' : pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+  function doDia(){ var dia = $('leitor-data').value || hojeISO(); return docs.filter(function(x){ return x.data === dia; }); }
+
+  // ---- grava uma leitura (sem repetir o mesmo código no mesmo dia) ----
+  function registrar(codigoBruto, origem){
+    var codigo = String(codigoBruto || '').trim();
+    if (!codigo) return;
+    var agora = Date.now();
+    if (codigo === ultimoLido && agora - ultimoLidoEm < 3000) return; // a câmera vê a mesma etiqueta várias vezes seguidas
+    ultimoLido = codigo; ultimoLidoEm = agora;
+    var dia = hojeISO();
+    var ja = docs.filter(function(x){ return x.data === dia && x.codigo === codigo; })[0];
+    if (ja){ avisar(false); status('Já lido hoje às ' + horaDe(ja.lidoEm) + ': ' + codigo, true); return; }
+    avisar(true);
+    try { if (navigator.clipboard) navigator.clipboard.writeText(codigo).catch(function(){}); } catch (e){}
+    var doc = { codigo: codigo, data: dia, lidoEm: new Date().toISOString(), lidoPor: quem() || null, origem: origem || 'camera' };
+    if (!dbL){ status('Banco compartilhado indisponível agora — a leitura não foi guardada.', true); return; }
+    // aparece na hora na lista; o banco confirma depois
+    docs.unshift(Object.assign({ _id: 'tmp' + agora, _pendente: true }, doc));
+    if ($('leitor-data').value !== dia) $('leitor-data').value = dia;
+    render();
+    status('Lido e guardado: ' + codigo);
+    dbL.collection(COL).add(doc).catch(function(){ status('Não foi possível guardar ' + codigo + ' agora — tente de novo.', true); });
+  }
+  function avisar(bom){
+    try { if (navigator.vibrate) navigator.vibrate(bom ? 120 : [80, 60, 80]); } catch (e){}
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx){
+        var ctx = avisar.ctx || (avisar.ctx = new Ctx());
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = bom ? 1800 : 400; g.gain.value = 0.15;
+        o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + (bom ? 0.12 : 0.3));
+      }
+    } catch (e){}
+    var f = $('leitor-flash');
+    if (f && bom){ f.classList.add('on'); setTimeout(function(){ f.classList.remove('on'); }, 60); }
+  }
+
+  // ---- câmera: BarcodeDetector nativo (Android/Chrome) ou ZXing (iPhone e o resto) ----
+  var ZX_URL = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.23.0/umd/index.min.js';
+  function carregarZxing(){
+    if (window.ZXing) return Promise.resolve(window.ZXing);
+    if (carregarZxing.p) return carregarZxing.p;
+    carregarZxing.p = new Promise(function(ok, falha){
+      var sc = document.createElement('script');
+      sc.src = ZX_URL;
+      sc.onload = function(){ window.ZXing ? ok(window.ZXing) : falha(new Error('sem ZXing')); };
+      sc.onerror = function(){ carregarZxing.p = null; falha(new Error('não carregou')); };
+      document.head.appendChild(sc);
+    });
+    return carregarZxing.p;
+  }
+  function restricoes(){ return { audio: false, video: { facingMode: { ideal: usandoTraseira ? 'environment' : 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } } }; }
+  function pararCamera(){
+    if (timer){ clearInterval(timer); timer = null; }
+    if (zxReader){ try { zxReader.reset(); } catch (e){} zxReader = null; }
+    if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
+    var v = $('leitor-video'); if (v) v.srcObject = null;
+    $('leitor-video-wrap').hidden = true;
+    $('leitor-trocar-btn').hidden = true;
+    $('leitor-camera-btn').textContent = '📷 Ler com a câmera';
+  }
+  function ligarCamera(){
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){
+      status('Este aparelho não deixa usar a câmera aqui. Use o campo de digitar ou um leitor USB.', true); return;
+    }
+    status('Abrindo a câmera...');
+    $('leitor-video-wrap').hidden = false;
+    $('leitor-camera-btn').textContent = '⏹ Parar câmera';
+    $('leitor-trocar-btn').hidden = false;
+    var video = $('leitor-video');
+    var nativo = ('BarcodeDetector' in window);
+    var prontoNativo = nativo ? window.BarcodeDetector.getSupportedFormats().then(function(fmts){
+      var quero = ['code_128', 'code_39', 'code_93', 'codabar', 'ean_13', 'ean_8', 'itf', 'upc_a', 'qr_code', 'data_matrix'];
+      var usar = quero.filter(function(f){ return fmts.indexOf(f) !== -1; });
+      if (!usar.length) throw new Error('sem formatos');
+      detector = new window.BarcodeDetector({ formats: usar });
+    }) : Promise.reject(new Error('sem BarcodeDetector'));
+    prontoNativo.then(function(){
+      return navigator.mediaDevices.getUserMedia(restricoes()).then(function(st){
+        stream = st; video.srcObject = st; return video.play();
+      }).then(function(){
+        status('Aponte para o código de barras da etiqueta.');
+        timer = setInterval(function(){
+          if (!detector || video.readyState < 2) return;
+          detector.detect(video).then(function(achou){ if (achou && achou.length) registrar(achou[0].rawValue, 'camera'); }).catch(function(){});
+        }, 180);
+      });
+    }).catch(function(){
+      // sem detector nativo: ZXing lê direto do vídeo
+      return carregarZxing().then(function(ZX){
+        var dicas = new Map();
+        dicas.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.CODE_39, ZX.BarcodeFormat.CODE_93, ZX.BarcodeFormat.CODABAR,
+          ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.EAN_8, ZX.BarcodeFormat.ITF, ZX.BarcodeFormat.UPC_A, ZX.BarcodeFormat.QR_CODE, ZX.BarcodeFormat.DATA_MATRIX]);
+        dicas.set(ZX.DecodeHintType.TRY_HARDER, true);
+        zxReader = new ZX.BrowserMultiFormatReader(dicas, 200);
+        status('Aponte para o código de barras da etiqueta.');
+        return zxReader.decodeFromConstraints(restricoes(), video, function(res){ if (res) registrar(res.getText(), 'camera'); });
+      });
+    }).catch(function(err){
+      pararCamera();
+      var nome = err && err.name;
+      status(nome === 'NotAllowedError' ? 'A câmera foi bloqueada. Libere a câmera para este app nas configurações do navegador e tente de novo.'
+        : nome === 'NotFoundError' ? 'Nenhuma câmera encontrada neste aparelho.'
+        : 'Não foi possível abrir a câmera agora (sem internet para carregar o leitor?).', true);
+    });
+  }
+
+  // ---- dados da etiqueta no sistema: o app do PC (que alcança o Oracle) completa as leituras ainda
+  // sem dados, de quem quer que tenha lido (celular ou PC); vários PCs abertos gravam o mesmo valor ----
+  var oracleOk = false, completando = false;
+  function semDados(x){ return x && !x._pendente && !x.sistema && !x.naoAchada && x.codigo; }
+  function completar(){
+    if (!oracleOk || completando || !dbL || !window.ripackOfs || !window.ripackOfs.etiquetas) return;
+    var faltam = docs.filter(semDados).slice(0, 60);
+    if (!faltam.length) return;
+    completando = true;
+    var codigos = faltam.map(function(x){ return x.codigo; }).filter(function(c, i, a){ return a.indexOf(c) === i; });
+    window.ripackOfs.etiquetas(codigos).then(function(res){
+      completando = false;
+      if (!res || res.ok === false && !(res.linhas || []).length){ return; }
+      var porCodigo = {};
+      (res.linhas || []).forEach(function(l){ porCodigo[String(l.etiqueta || '').toUpperCase()] = l; });
+      var semErro = !(res.erros || []).length;
+      faltam.forEach(function(x){
+        var l = porCodigo[String(x.codigo).toUpperCase()];
+        if (l){
+          var produto = String(l.produto || '');
+          var desc = produto.indexOf(' - ') !== -1 ? produto.slice(produto.indexOf(' - ') + 3) : produto;
+          dbL.collection(COL).doc(x._id).update({ sistema: {
+            codpro: l.codpro || '', descricao: desc, cliente: String(l.cliente || '').replace(/\s+/g, ' ').trim(),
+            qtd: l.qtd, of: l.of || '', dataEtiqueta: l.data || '', local: l.local || '', empresa: l.empresa || '', ativa: l.ativa
+          }, completadoEm: new Date().toISOString() }).catch(function(){});
+        } else if (semErro){
+          dbL.collection(COL).doc(x._id).update({ naoAchada: true, completadoEm: new Date().toISOString() }).catch(function(){});
+        }
+      });
+    }, function(){ completando = false; });
+  }
+  setInterval(completar, 15000);
+  if (window.ripackOfs && window.ripackOfs.quandoSouber) window.ripackOfs.quandoSouber(function(ok){ oracleOk = !!ok; completar(); });
+
+  // ---- lista ----
+  function render(){
+    var lista = $('leitor-lista');
+    if (!dbL && carregou){ lista.innerHTML = '<p class="foot-note">O banco compartilhado não está disponível aqui agora.</p>'; }
+    else if (!carregou){ lista.innerHTML = '<p class="foot-note">Carregando leituras...</p>'; }
+    var itens = doDia();
+    $('leitor-contagem').textContent = itens.length + ' leitura(s) em ' + ($('leitor-data').value || hojeISO()).split('-').reverse().join('/');
+    if (!carregou) return;
+    if (!itens.length){ lista.innerHTML = '<p class="foot-note">Nenhuma leitura neste dia ainda.</p>'; return; }
+    lista.innerHTML = itens.map(function(x){
+      var s = x.sistema;
+      var dados = s ? '<div class="l-dados"><b>' + esc(s.codpro) + '</b>' + (s.of ? ' · OF ' + esc(s.of) : '') + (s.qtd != null ? ' · ' + esc(s.qtd) + ' pç' : '') +
+          '<div>' + esc(s.descricao) + '</div><div>' + esc(s.cliente) + '</div></div>'
+        : x.naoAchada ? '<div class="l-dados" style="color:var(--critical);">Etiqueta não encontrada no sistema</div>'
+        : x._pendente ? '' : '<div class="l-dados" style="color:var(--text-muted);">buscando os dados no sistema… (precisa de um PC com o app aberto)</div>';
+      return '<div class="leitor-item"><div class="l-txt"><div class="l-cod">' + esc(x.codigo) + '</div>' + dados +
+        '<div class="l-sub">' + esc(horaDe(x.lidoEm)) + (x.lidoPor ? ' · ' + esc(x.lidoPor) : '') + (x.origem === 'manual' ? ' · digitado/leitor USB' : ' · câmera') + (x._pendente ? ' · guardando...' : '') + '</div></div>' +
+        '<button type="button" class="add-btn" data-leitor-copiar="' + esc(x.codigo) + '">Copiar</button>' +
+        (x._pendente ? '' : '<button type="button" class="add-btn btn-destaque-vermelho" data-leitor-excluir="' + esc(x._id) + '">Excluir</button>') +
+      '</div>';
+    }).join('');
+  }
+  $('leitor-lista').addEventListener('click', function(ev){
+    var b = ev.target.closest ? ev.target.closest('button') : null;
+    if (!b) return;
+    var cod = b.getAttribute('data-leitor-copiar');
+    if (cod){
+      try { navigator.clipboard.writeText(cod).then(function(){ status('Copiado: ' + cod); }).catch(function(){ status('Não deu pra copiar aqui.', true); }); } catch (e){ status('Não deu pra copiar aqui.', true); }
+      return;
+    }
+    var id = b.getAttribute('data-leitor-excluir');
+    if (id && dbL){
+      if (b.getAttribute('data-armado') !== '1'){ b.setAttribute('data-armado', '1'); b.textContent = 'Confirmar?'; setTimeout(function(){ if (b.isConnected){ b.removeAttribute('data-armado'); b.textContent = 'Excluir'; } }, 4000); return; }
+      b.disabled = true;
+      dbL.collection(COL).doc(id).delete().catch(function(){ b.disabled = false; status('Não foi possível excluir agora.', true); });
+    }
+  });
+
+  // ---- Excel ----
+  $('leitor-exportar-btn').addEventListener('click', function(){
+    var itens = doDia().filter(function(x){ return !x._pendente; }).slice().reverse();
+    if (!itens.length){ status('Nada para exportar neste dia.', true); return; }
+    if (typeof XLSX === 'undefined'){ status('O gerador de Excel não carregou (sem internet?).', true); return; }
+    var linhas = [['Código de barras', 'Código interno', 'Descrição', 'Cliente', 'Qtd', 'OF', 'Data da etiqueta', 'Data da leitura', 'Hora', 'Lido por', 'Como']];
+    itens.forEach(function(x){
+      var s = x.sistema || {};
+      linhas.push([x.codigo, s.codpro || (x.naoAchada ? 'não encontrada no sistema' : ''), s.descricao || '', s.cliente || '', s.qtd != null ? s.qtd : '', s.of || '',
+        (s.dataEtiqueta || '').split('-').reverse().join('/'), (x.data || '').split('-').reverse().join('/'), horaDe(x.lidoEm), x.lidoPor || '', x.origem === 'manual' ? 'digitado/leitor USB' : 'câmera']);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(linhas);
+    ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 46 }, { wch: 34 }, { wch: 7 }, { wch: 9 }, { wch: 12 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 18 }];
+    for (var c = 0; c < 11; c++){ var ref = XLSX.utils.encode_cell({ r: 0, c: c }); if (ws[ref]) ws[ref].s = { font: { bold: true, color: { rgb: 'FFFFFFFF' } }, fill: { fgColor: { rgb: 'FF243776' } } }; }
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leituras');
+    var blob = new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    if (!(window.claude && claude.use)){ status('Exportação indisponível agora.', true); return; }
+    claude.use('downloads').then(function(dl){
+      if (!dl){ status('Exportação indisponível agora.', true); return; }
+      dl.save({ filename: 'leituras-codigo-' + ($('leitor-data').value || hojeISO()) + '.xlsx', data: blob })
+        .then(function(){ status('Arquivo do Excel pronto.'); })
+        .catch(function(){ status('Não foi possível salvar o arquivo.', true); });
+    });
+  });
+
+  // ---- eventos ----
+  $('leitor-camera-btn').addEventListener('click', function(){ if (stream || zxReader || timer) pararCamera(); else ligarCamera(); });
+  $('leitor-trocar-btn').addEventListener('click', function(){ usandoTraseira = !usandoTraseira; pararCamera(); ligarCamera(); });
+  $('leitor-manual').addEventListener('keydown', function(ev){
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    var v = this.value; this.value = '';
+    ultimoLido = ''; // digitado: nunca descarta como "mesma leitura da câmera"
+    registrar(v, 'manual');
+  });
+  $('leitor-data').addEventListener('change', render);
+  function fechar(){ pararCamera(); modal.hidden = true; }
+  $('leitor-close').addEventListener('click', fechar);
+  modal.addEventListener('click', function(ev){ if (ev.target === modal) fechar(); });
+  document.addEventListener('visibilitychange', function(){ if (document.hidden && !modal.hidden) pararCamera(); });
+  $('leitor-abrir-btn').addEventListener('click', function(){
+    modal.hidden = false;
+    if (!$('leitor-data').value) $('leitor-data').value = hojeISO();
+    status('');
+    render();
+    setTimeout(function(){ try { $('leitor-manual').focus(); } catch (e){} }, 50);
+  });
+
+  // ---- banco ----
+  if (window.claude && claude.use){
+    claude.use('db').then(function(db){
+      dbL = db || null;
+      if (!db){ carregou = true; render(); return; }
+      db.collection(COL).orderBy('lidoEm', 'desc').limit(2000).onSnapshot(function(snap){
+        docs = (snap.docs || []).map(function(d){ var x = d.data() || {}; x._id = d.id; return x; });
+        carregou = true;
+        if (!modal.hidden) render();
+        completar();
+      }, function(){ carregou = true; if (!modal.hidden) render(); });
+    }).catch(function(){ carregou = true; });
+  } else { carregou = true; }
+})();
+</script>
 </body></html>

@@ -87,6 +87,35 @@ if ($entrada.acao -eq 'buscar') {
     } finally { if ($a) { $a.conexao.Close() } }
   }
 }
+elseif ($entrada.acao -eq 'etiquetas') {
+  # só leitura: os dados de cada etiqueta (código de barras) como o sistema guarda (V_ETIQUETAS)
+  $codigos = @($entrada.codigos | Where-Object { $_ } | Select-Object -First 100)
+  foreach ($empresa in 'matriz', 'filial') {
+    if (-not $codigos.Count) { break }
+    $a = $null
+    try {
+      $a = Abrir $empresa
+      $u = $a.usuario
+      $cmd = $a.conexao.CreateCommand()
+      $cmd.CommandText = "SELECT ETIQUETA, EMPRESA, PRODUTO, CODPRO, QTDE, DETOF, CODIOF, TO_CHAR(DATA_REF, 'YYYY-MM-DD'), LOCEST, SALDO, ATIVA FROM $u.V_ETIQUETAS WHERE ETIQUETA IN (" + (($codigos | ForEach-Object { '?' }) -join ',') + ")"
+      foreach ($cod in $codigos) { [void]$cmd.Parameters.AddWithValue('e', [string]$cod) }
+      $r = $cmd.ExecuteReader()
+      while ($r.Read()) {
+        $saida.linhas += [pscustomobject]@{
+          empresa = $empresa; etiqueta = (Texto $r[0]); cliente = (Texto $r[1]); produto = (Texto $r[2]); codpro = (Texto $r[3])
+          qtd = $(if ($r[4] -is [DBNull]) { $null } else { [double]$r[4] }); of = $(if (Texto $r[5]) { Texto $r[5] } else { Texto $r[6] })
+          data = (Texto $r[7]); local = (Texto $r[8]); saldo = $(if ($r[9] -is [DBNull]) { $null } else { [double]$r[9] }); ativa = (Texto $r[10])
+        }
+      }
+      $r.Close()
+      # o que já achou na Matriz não precisa procurar na Filial
+      $achados = @($saida.linhas | ForEach-Object { $_.etiqueta })
+      $codigos = @($codigos | Where-Object { $achados -notcontains $_ })
+    } catch {
+      $saida.erros += "${empresa}: " + $_.Exception.Message
+    } finally { if ($a) { $a.conexao.Close() } }
+  }
+}
 elseif ($entrada.acao -eq 'gravar') {
   foreach ($empresa in 'matriz', 'filial') {
     $linhas = @($entrada.linhas | Where-Object { $_.empresa -eq $empresa })

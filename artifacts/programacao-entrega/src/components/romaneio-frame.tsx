@@ -235,7 +235,7 @@ export function RomaneioFrame() {
           title="Romaneio Ripack"
           className="h-full w-full border-0"
           style={{ visibility: conteudoPronto ? undefined : "hidden" }}
-          allow="clipboard-read; clipboard-write"
+          allow="clipboard-read; clipboard-write; camera"
           onLoad={() => {
             carregado.current = true;
             avisarPagina(tela);
