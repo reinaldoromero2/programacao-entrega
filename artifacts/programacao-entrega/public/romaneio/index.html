@@ -4800,6 +4800,76 @@ var SIGNATURES = {
   var TATU_CLIENTE_NOME = '1046 TATU';
   var tatuEntregasModal = document.getElementById('tatu-entregas-modal');
   var tatuEntregasListaEl = document.getElementById('tatu-entregas-lista');
+  // editar / excluir uma entrada de NF da TATU (coleção tatu_estoque)
+  function tatuAbrirEditarEntrada(docId){
+    var doc = allTatuEstoqueDocs.filter(function(d){ return d.id === docId; })[0];
+    if (!doc || !dbApi) return;
+    var e = doc.data() || {};
+    var raiz = document.querySelector('.app-root') || document.body;
+    var ov = document.createElement('div');
+    ov.className = 'rom-modal-overlay';
+    ov.style.zIndex = '600';
+    function campo(rotulo, id, valor, tipo){
+      return '<div class="field" style="margin:0 0 10px;"><label for="' + id + '">' + rotulo + '</label>' +
+        '<input type="' + (tipo || 'text') + '" id="' + id + '" value="' + escapeHtml(String(valor == null ? '' : valor)) + '"' + (tipo === 'number' ? ' inputmode="decimal"' : '') + '></div>';
+    }
+    ov.innerHTML = '<div class="rom-modal-card" style="max-width:420px;">' +
+      '<div class="rom-modal-head"><h3>Editar entrada da TATU</h3></div>' +
+      '<div style="padding:16px 18px;">' +
+        campo('Data da chegada', 'tatu-ed-data', e.data || '', 'date') +
+        campo('Código', 'tatu-ed-codigo', e.codigo || '') +
+        campo('Quantidade', 'tatu-ed-qtd', e.quantidade, 'number') +
+        campo('NF', 'tatu-ed-nf', e.nf || '') +
+        campo('Motorista', 'tatu-ed-motorista', e.motorista || '') +
+        campo('Placa', 'tatu-ed-placa', e.placa || '') +
+        '<p class="foot-note" id="tatu-ed-status" style="margin:0 0 8px;"></p>' +
+        '<div style="display:flex; gap:8px;">' +
+          '<button type="button" class="add-btn btn-destaque-verde" id="tatu-ed-salvar" style="flex:1;">Salvar</button>' +
+          '<button type="button" class="add-btn" id="tatu-ed-cancelar" style="flex:1;">Cancelar</button>' +
+        '</div>' +
+      '</div></div>';
+    raiz.appendChild(ov);
+    function fecha(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
+    ov.querySelector('#tatu-ed-cancelar').addEventListener('click', fecha);
+    ov.querySelector('#tatu-ed-salvar').addEventListener('click', function(){
+      var st = ov.querySelector('#tatu-ed-status');
+      var codigo = resolverCodigoRpCompleto(ov.querySelector('#tatu-ed-codigo').value);
+      var qtd = toNumSeguro(ov.querySelector('#tatu-ed-qtd').value);
+      var dataNova = ov.querySelector('#tatu-ed-data').value || e.data || dataHojeISO();
+      if (!codigo || !qtd){ st.textContent = 'Preencha ao menos o código e a quantidade.'; st.style.color = 'var(--critical)'; return; }
+      var criadoEmNovo = e.criadoEm;
+      if (dataNova !== e.data){
+        try { var pd = dataNova.split('-'); criadoEmNovo = new Date(Number(pd[0]), Number(pd[1]) - 1, Number(pd[2]), 12, 0, 0).toISOString(); } catch (er){}
+      }
+      var btn = ov.querySelector('#tatu-ed-salvar');
+      btn.disabled = true; st.textContent = 'Salvando...'; st.style.color = '';
+      dbApi.collection('tatu_estoque').doc(docId).update({
+        codigo: codigo, quantidade: qtd, data: dataNova, criadoEm: criadoEmNovo,
+        nf: (ov.querySelector('#tatu-ed-nf').value || '').trim(),
+        motorista: (ov.querySelector('#tatu-ed-motorista').value || '').trim(),
+        placa: (ov.querySelector('#tatu-ed-placa').value || '').trim(),
+        editadoEm: new Date().toISOString(), editadoPor: currentSessionNome || null
+      }).then(fecha).catch(function(){
+        btn.disabled = false; st.textContent = 'Não foi possível salvar agora.'; st.style.color = 'var(--critical)';
+      });
+    });
+  }
+  if (tatuEntregasListaEl){
+    tatuEntregasListaEl.addEventListener('click', function(ev){
+      var b = ev.target.closest ? ev.target.closest('button') : null;
+      if (!b) return;
+      var idEd = b.getAttribute('data-tatu-entrada-editar');
+      var idEx = b.getAttribute('data-tatu-entrada-excluir');
+      if (idEd) tatuAbrirEditarEntrada(idEd);
+      if (idEx && dbApi){
+        var docEx = allTatuEstoqueDocs.filter(function(d){ return d.id === idEx; })[0];
+        var dx = docEx ? (docEx.data() || {}) : {};
+        abrirConfirmarAcao('Excluir entrada', 'Excluir a entrada ' + (dx.codigo || '') + (dx.nf ? ' · NF ' + dx.nf : '') + ' · Qtd ' + (dx.quantidade || '') + '? O saldo da TATU é recalculado sem ela.', function(){
+          dbApi.collection('tatu_estoque').doc(idEx).delete();
+        });
+      }
+    });
+  }
   var tatuEntregasResumoEl = document.getElementById('tatu-entregas-resumo');
   var abrirTatuEntregasBtn = document.getElementById('abrir-tatu-entregas');
   var tatuEntregasCloseBtn = document.getElementById('tatu-entregas-close');
@@ -5155,7 +5225,8 @@ var SIGNATURES = {
       if (!entradasParCodigo[codigo]) entradasParCodigo[codigo] = [];
       entradasParCodigo[codigo].push({
         quantidade: toNumSeguro(e.quantidade), nf: e.nf || '', data: e.data || '',
-        motorista: e.motorista || '', placa: e.placa || '', criadoEm: e.criadoEm || ''
+        motorista: e.motorista || '', placa: e.placa || '', criadoEm: e.criadoEm || '',
+        docId: doc.id
       });
     });
     Object.keys(entradasParCodigo).forEach(function(c){
@@ -5411,6 +5482,11 @@ var SIGNATURES = {
           acertoEstoqueHtml +
           saldoAnteriorHtml +
           dataHtml +
+          ((e.docId && !e.saldoAnterior && !e.manual && currentRole === 'admin') ?
+            '<div style="display:flex; gap:6px; margin-top:6px;">' +
+              '<button type="button" class="add-btn btn-destaque-branco" data-tatu-entrada-editar="' + escapeHtml(e.docId) + '" style="padding:4px 10px; font-size:12px; min-width:0;">✏️ Editar</button>' +
+              '<button type="button" class="add-btn btn-destaque-vermelho" data-tatu-entrada-excluir="' + escapeHtml(e.docId) + '" style="padding:4px 10px; font-size:12px; min-width:0;">🗑 Excluir</button>' +
+            '</div>' : '') +
         '</div>';
       }).join('');
     }
