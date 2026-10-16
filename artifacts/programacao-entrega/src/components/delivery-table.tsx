@@ -109,6 +109,8 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
   const deleteEntregaTabela = useDeleteEntrega();
   // "Conjugar carga": linha marcada que, solta em cima de outra, vira "cliente + cliente" numa linha só
   const [conjugarId, setConjugarId] = useState<number | null>(null);
+  // a linha guarda o que foi digitado só ao montar: depois de conjugar, remonta a linha do alvo pra mostrar o cliente novo
+  const [versaoLinha, setVersaoLinha] = useState<Record<number, number>>({});
   useEffect(() => {
     if (conjugarId === null) return;
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") setConjugarId(null); };
@@ -190,6 +192,7 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
     queryClient.setQueryData<Entrega[]>(queryKey, (old) =>
       old?.filter(e => e.id !== origemId).map(e => (e.id === alvoId ? { ...e, ...data } : e)) ?? []
     );
+    setVersaoLinha((v) => ({ ...v, [alvoId]: (v[alvoId] ?? 0) + 1 }));
     updateEntregaTabela.mutate({ id: alvoId, data }, {
       onSuccess: () => {
         deleteEntregaTabela.mutate({ id: origemId }, {
@@ -286,7 +289,7 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
         <div className="flex flex-col">
           {sortedEntregas.map((entrega, index) => (
             <DeliveryRow
-              key={entrega.id}
+              key={`${entrega.id}-${versaoLinha[entrega.id] ?? 0}`}
               entrega={entrega}
               date={date}
               rowIndex={index + 1}
