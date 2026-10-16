@@ -10432,8 +10432,9 @@ var SIGNATURES = {
         gruposUsados[''] = true;
         return { nome: c.nome, isBase: true, itens: gruposPorCliente[''] || [] };
       }
-      return { nome: c.nome, isBase: isBase, itens: c.itens || [] };
-    });
+      // cliente que não tem mais nenhum item na calculadora (as linhas dele foram apagadas): sai do romaneio
+      return null;
+    }).filter(Boolean);
     // clientes novos: apareceram na calculadora com um nome que ainda não
     // existia nesse romaneio — entram como cliente adicional (não-base).
     ordemGrupos.forEach(function(chave){
@@ -10466,6 +10467,10 @@ var SIGNATURES = {
         payload.qtdPendente = !!resultado.qtdPendente;
       }
       dbApi.collection('romaneios').doc(romaneioIdAlvo).update(payload).then(function(){
+        // a verificação (histórico / Resumo de Frete / saídas da TATU) acompanha os itens novos
+        if (resultado && !resultado.qtdPendente && allHistDocs.some(function(h){ return h.id === 'rom_' + romaneioIdAlvo; })){
+          addToHistory(resultado, Object.assign({}, docAntigo, payload), romaneioIdAlvo);
+        }
         cfEditandoRomaneioId = null;
         cfEditandoRomaneioDocData = null;
         cfAtualizarBotoesSalvarOuCriar();

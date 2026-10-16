@@ -429,6 +429,8 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       deleteEntrega.mutate({ id: entrega.id }, {
         onError: () => queryClient.setQueryData(queryKey, previous),
       });
+      // depois de recarregar, a tela volta para o dia desta entrega (e não para hoje)
+      try { sessionStorage.setItem("ripack_dia_apos_recarregar", date); } catch { /* sem sessionStorage: volta para hoje */ }
       window.setTimeout(() => window.location.reload(), 1000);
     }
   };

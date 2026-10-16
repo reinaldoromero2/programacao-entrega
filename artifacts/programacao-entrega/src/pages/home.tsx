@@ -51,7 +51,15 @@ function saveDeliveryCache(date: string, deliveries: Entrega[]) {
 
 export default function Home() {
   const queryClient = useQueryClient();
-  const [date, setDate] = useState<Date>(new Date());
+  // abre no dia guardado antes de um recarregamento (ex.: excluir uma entrega); senão, hoje
+  const [date, setDate] = useState<Date>(() => {
+    try {
+      const dia = sessionStorage.getItem("ripack_dia_apos_recarregar");
+      sessionStorage.removeItem("ripack_dia_apos_recarregar");
+      if (dia && /^\d{4}-\d{2}-\d{2}$/.test(dia)) return new Date(dia + "T12:00:00");
+    } catch { /* sem sessionStorage */ }
+    return new Date();
+  });
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [agendamentoOpen, setAgendamentoOpen] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
