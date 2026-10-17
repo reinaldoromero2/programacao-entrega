@@ -2326,6 +2326,7 @@
                 <button type="button" class="add-btn" id="cf-guardar-rascunho" style="flex:1 1 0; min-width:0; box-sizing:border-box; padding:9px 6px; font-size:12.5px; font-weight:700; margin-bottom:0; background:#eab308; border-color:#eab308; color:#241c02; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">💾 Rascunho</button>
                 <button type="button" class="add-btn" id="cf-lm-requisitos-btn" style="flex:1 1 0; min-width:0; box-sizing:border-box; padding:9px 6px; font-size:12.5px; font-weight:700; margin-bottom:0; background:#ec4899; border-color:#ec4899; color:#ffffff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📋 Requisitos</button>
               </div>
+              <button type="button" class="add-btn btn-destaque-azul" id="cf-puxar-os" hidden style="width:100%; box-sizing:border-box; padding:9px 6px; font-size:12.5px; font-weight:700; margin:0 0 8px;">📥 Puxar da OS (agrupamento do sistema)</button>
               <div id="cf-lm-requisitos-resultado" hidden style="margin:-2px 0 14px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; line-height:1.4;"></div>
               <p class="foot-note" id="cf-criar-romaneio-status" style="margin:-2px 0 14px;"></p>
               <div id="cf-complemento-aviso" hidden style="margin:-4px 0 14px; padding:10px 12px; border:1px solid var(--accent-blue); border-radius:8px; background:var(--surface-2); font-size:12.5px; line-height:1.45;"></div>
@@ -13407,6 +13408,71 @@ var SIGNATURES = {
       }, i === 0 ? 350 : 150);
     })(0);
   }
+  // ---- "Puxar da OS": a OS já pronta no sistema vira os itens da calculadora ----
+  (function(){
+    var btn = document.getElementById('cf-puxar-os');
+    if (!btn || !window.ripackOfs || !window.ripackOfs.quandoSouber) return;
+    window.ripackOfs.quandoSouber(function(ok){ btn.hidden = !ok; });
+    // cliente pelo código do produto: "2022-003/26" -> cliente "2022 ..."
+    function clientePeloRp(rp){
+      var cod = String(rp || '').split('-')[0].trim();
+      if (!/^\d{4}$/.test(cod)) return '';
+      var nomes = (typeof wizTodosNomesClientes === 'function' ? wizTodosNomesClientes() : Object.keys(CLI_MAP))
+        .filter(function(n){ return String(n).trim().indexOf(cod + ' ') === 0; });
+      return nomes.length === 1 ? nomes[0] : (nomes.sort(function(a, b){ return a.length - b.length; })[0] || '');
+    }
+    function pedirAgrupamento(aoConfirmar){
+      var raiz = document.querySelector('.app-root') || document.body;
+      var ov = document.createElement('div');
+      ov.className = 'rom-modal-overlay';
+      ov.style.zIndex = '600';
+      ov.innerHTML = '<div class="rom-modal-card" style="max-width:380px;"><div class="rom-modal-head"><h3>Puxar da OS</h3></div>' +
+        '<div style="padding:16px 18px;"><div class="field" style="margin:0 0 8px;"><label for="cf-os-agrupa">Número do agrupamento da OS</label>' +
+        '<input type="text" inputmode="numeric" id="cf-os-agrupa" autocomplete="off" placeholder="Ex.: 42011"></div>' +
+        '<p class="foot-note" id="cf-os-status" style="margin:0 0 10px; min-height:16px;"></p>' +
+        '<div style="display:flex; gap:8px;"><button type="button" class="add-btn btn-destaque-verde" id="cf-os-ok" style="flex:1;">Buscar</button>' +
+        '<button type="button" class="add-btn" id="cf-os-cancelar" style="flex:1;">Cancelar</button></div></div></div>';
+      raiz.appendChild(ov);
+      var inp = ov.querySelector('#cf-os-agrupa'), st = ov.querySelector('#cf-os-status'), ok = ov.querySelector('#cf-os-ok');
+      function fecha(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
+      function ir(){
+        var n = String(inp.value || '').replace(/\D/g, '');
+        if (!n){ st.textContent = 'Digite o número do agrupamento.'; st.style.color = 'var(--critical)'; return; }
+        ok.disabled = true; st.textContent = 'Buscando no sistema...'; st.style.color = '';
+        aoConfirmar(n, function(erro){ if (erro){ ok.disabled = false; st.textContent = erro; st.style.color = 'var(--critical)'; } else fecha(); });
+      }
+      ok.addEventListener('click', ir);
+      inp.addEventListener('keydown', function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); ir(); } });
+      ov.querySelector('#cf-os-cancelar').addEventListener('click', fecha);
+      setTimeout(function(){ try { inp.focus(); } catch (e){} }, 50);
+    }
+    btn.addEventListener('click', function(){
+      pedirAgrupamento(function(agrupa, terminar){
+        window.ripackOfs.consultarOs(agrupa).then(function(res){
+          var linhas = ((res && res.linhas) || []).filter(function(l){ return String(l.agrupa) === agrupa; });
+          if (!linhas.length){ terminar((res && res.erros && res.erros.length) ? 'Não foi possível consultar: ' + res.erros.join(' / ') : 'Nenhuma OS com o agrupamento ' + agrupa + ' no sistema.'); return; }
+          // a OF vem da informação adicional da OS ("OF:254064"); a quantidade é a enviada (ou a programada)
+          var itens = linhas.map(function(l){
+            var of = String(l.infadc || '').replace(/^\s*OF\s*:?\s*/i, '').trim();
+            return { rp: l.codpro, qtd: l.qtd || '', ofobs: of, cliente: '' };
+          });
+          var clientes = [];
+          itens.forEach(function(it){ var c = clientePeloRp(it.rp); it._cli = c; if (c && clientes.indexOf(c) === -1) clientes.push(c); });
+          // mais de um cliente no mesmo agrupamento: cada linha leva o próprio cliente
+          if (clientes.length > 1) itens.forEach(function(it){ it.cliente = it._cli; });
+          cfPreencherItensDeSaldoTatu(itens);
+          cfRascunhoClienteAtual = clientes[0] || '';
+          if (typeof cfAtualizarSelosLaudo === 'function') cfAtualizarSelosLaudo();
+          var st = document.getElementById('cf-criar-romaneio-status');
+          if (st){
+            st.textContent = 'OS ' + agrupa + ' puxada do sistema: ' + linhas.length + ' item(ns)' + (clientes.length ? ' · ' + clientes.join(' + ') : ' · cliente não reconhecido pelo código, escolha ao criar') + '. Confira as quantidades e escolha o caminhão.';
+            st.style.color = 'var(--good)';
+          }
+          terminar(null);
+        });
+      });
+    });
+  })();
   function wizAbrirCalculadoraComCaminhao(d, itensSaldoTatu){
     if (!cfFardosModal) return;
     cfFardosModal.hidden = false;

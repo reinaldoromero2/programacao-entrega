@@ -417,6 +417,7 @@
     // Leitor de código: dados das etiquetas no sistema (só o app do PC responde)
     etiquetas: function (codigos) { return oracle({ acao: 'etiquetas', codigos: codigos }); },
     saldo: function (codigo) { return oracle({ acao: 'saldo', codigo: codigo }); },
+    consultarOs: function (agrupa) { return oracle({ acao: 'buscar', agrupas: [agrupa], dias: 60 }); },
     quandoSouber: function (f) { if (disponivel !== null) f(disponivel); else aoSaberDisponivel.push(function () { f(disponivel); }); }
   };
 })();
