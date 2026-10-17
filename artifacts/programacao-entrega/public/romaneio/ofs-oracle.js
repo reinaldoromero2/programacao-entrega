@@ -418,6 +418,7 @@
     etiquetas: function (codigos) { return oracle({ acao: 'etiquetas', codigos: codigos }); },
     saldo: function (codigo) { return oracle({ acao: 'saldo', codigo: codigo }); },
     consultarOs: function (agrupa) { return oracle({ acao: 'buscar', agrupas: [agrupa], dias: 60 }); },
+    listarOs: function (dias) { return oracle({ acao: 'listarOs', dias: dias }); },
     quandoSouber: function (f) { if (disponivel !== null) f(disponivel); else aoSaberDisponivel.push(function () { f(disponivel); }); }
   };
 })();

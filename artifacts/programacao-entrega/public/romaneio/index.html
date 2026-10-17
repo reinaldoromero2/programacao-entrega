@@ -1132,6 +1132,7 @@
       <div style="display:flex; flex-direction:column; align-items:center; gap:12px; margin:18px 0 6px;">
         <button class="btn-inserir-glass" id="btn-inserir-romaneio" type="button" style="width:100%; max-width:340px; box-sizing:border-box; margin:0; text-align:center; padding:20px 16px; font-size:18px;">+ Inserir romaneio</button>
         <button class="btn-inserir-glass" id="prog-atalho-btn" type="button" style="width:100%; max-width:340px; box-sizing:border-box; margin:0; text-align:center; padding:20px 16px; font-size:18px; animation:none; background:#ffffff; color:#1f2937; text-shadow:none; border:1px solid #d1d5db; box-shadow:0 2px 8px rgba(0,0,0,0.12); -webkit-backdrop-filter:none; backdrop-filter:none;">📄 Programação</button>
+        <button class="btn-inserir-glass" id="os-atalho-btn" type="button" hidden style="width:100%; max-width:340px; box-sizing:border-box; margin:0; text-align:center; padding:20px 16px; font-size:18px; animation:none; background:#ffffff; color:#1f2937; text-shadow:none; border:1px solid #d1d5db; box-shadow:0 2px 8px rgba(0,0,0,0.1);">📥 Puxar da OS</button>
       </div>
       <script>
         (function(){ var b=document.getElementById("prog-atalho-btn"); if(!b) return; b.addEventListener("click",function(){ var a=document.getElementById("prog-abrir-btn"); if(a) a.click(); }); })();
@@ -2326,7 +2327,7 @@
                 <button type="button" class="add-btn" id="cf-guardar-rascunho" style="flex:1 1 0; min-width:0; box-sizing:border-box; padding:9px 6px; font-size:12.5px; font-weight:700; margin-bottom:0; background:#eab308; border-color:#eab308; color:#241c02; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">💾 Rascunho</button>
                 <button type="button" class="add-btn" id="cf-lm-requisitos-btn" style="flex:1 1 0; min-width:0; box-sizing:border-box; padding:9px 6px; font-size:12.5px; font-weight:700; margin-bottom:0; background:#ec4899; border-color:#ec4899; color:#ffffff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📋 Requisitos</button>
               </div>
-              <button type="button" class="add-btn btn-destaque-azul" id="cf-puxar-os" hidden style="width:100%; box-sizing:border-box; padding:9px 6px; font-size:12.5px; font-weight:700; margin:0 0 8px;">📥 Puxar da OS (agrupamento do sistema)</button>
+              <button type="button" class="add-btn btn-destaque-azul" id="cf-puxar-os" hidden style="width:100%; box-sizing:border-box; padding:9px 6px; font-size:12.5px; font-weight:700; margin:0 0 8px;">📥 Puxar da OS (OS feitas no sistema)</button>
               <div id="cf-lm-requisitos-resultado" hidden style="margin:-2px 0 14px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; line-height:1.4;"></div>
               <p class="foot-note" id="cf-criar-romaneio-status" style="margin:-2px 0 14px;"></p>
               <div id="cf-complemento-aviso" hidden style="margin:-4px 0 14px; padding:10px 12px; border:1px solid var(--accent-blue); border-radius:8px; background:var(--surface-2); font-size:12.5px; line-height:1.45;"></div>
@@ -13412,7 +13413,12 @@ var SIGNATURES = {
   (function(){
     var btn = document.getElementById('cf-puxar-os');
     if (!btn || !window.ripackOfs || !window.ripackOfs.quandoSouber) return;
-    window.ripackOfs.quandoSouber(function(ok){ btn.hidden = !ok; });
+    var atalho = document.getElementById('os-atalho-btn');
+    window.ripackOfs.quandoSouber(function(ok){ btn.hidden = !ok; if (atalho) atalho.hidden = !ok; });
+    if (atalho) atalho.addEventListener('click', function(){
+      if (abrirCargaFacilBtn) abrirCargaFacilBtn.click();
+      setTimeout(abrirListaOs, 50);
+    });
     // cliente pelo código do produto: "2022-003/26" -> cliente "2022 ..."
     function clientePeloRp(rp){
       var cod = String(rp || '').split('-')[0].trim();
@@ -13421,57 +13427,118 @@ var SIGNATURES = {
         .filter(function(n){ return String(n).trim().indexOf(cod + ' ') === 0; });
       return nomes.length === 1 ? nomes[0] : (nomes.sort(function(a, b){ return a.length - b.length; })[0] || '');
     }
-    function pedirAgrupamento(aoConfirmar){
+    function escOs(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function ofDaOs(l){ return String(l.infadc || '').replace(/^\s*OF\s*:?\s*/i, '').trim(); }
+    // agrupamento já virou romaneio no app? (mesmo produto com a mesma OF num romaneio recente)
+    function jaNoApp(linhas){
+      var docsRom = (typeof allPendDocs !== 'undefined' ? allPendDocs : []).concat(typeof allDoneDocs !== 'undefined' ? allDoneDocs : []);
+      return linhas.some(function(l){
+        var of = ofDaOs(l); if (!of) return false;
+        return docsRom.some(function(doc){
+          var d = doc.data() || {};
+          return (d.clientes || []).some(function(c){ return (c.itens || []).some(function(it){ return String(it.rp || '').toUpperCase() === String(l.codpro).toUpperCase() && String(it.ofobs || '').indexOf(of) !== -1; }); });
+        });
+      });
+    }
+    // preenche a calculadora com as linhas de um agrupamento
+    function aplicarOs(agrupa, linhas){
+      var itens = linhas.map(function(l){ return { rp: l.codpro, qtd: l.qtd || '', ofobs: ofDaOs(l), cliente: '' }; });
+      var clientes = [];
+      itens.forEach(function(it){ var c = clientePeloRp(it.rp); it._cli = c; if (c && clientes.indexOf(c) === -1) clientes.push(c); });
+      if (clientes.length > 1) itens.forEach(function(it){ it.cliente = it._cli; });
+      cfPreencherItensDeSaldoTatu(itens);
+      cfRascunhoClienteAtual = clientes[0] || '';
+      if (typeof cfAtualizarSelosLaudo === 'function') cfAtualizarSelosLaudo();
+      var st = document.getElementById('cf-criar-romaneio-status');
+      if (st){
+        st.textContent = 'OS ' + agrupa + ' puxada do sistema: ' + linhas.length + ' item(ns)' + (clientes.length ? ' · ' + clientes.join(' + ') : ' · cliente não reconhecido pelo código, escolha ao criar') + '. Confira as quantidades e escolha o caminhão.';
+        st.style.color = 'var(--good)';
+      }
+    }
+    // tela com as OS feitas no sistema
+    function abrirListaOs(){
       var raiz = document.querySelector('.app-root') || document.body;
       var ov = document.createElement('div');
       ov.className = 'rom-modal-overlay';
       ov.style.zIndex = '600';
-      ov.innerHTML = '<div class="rom-modal-card" style="max-width:380px;"><div class="rom-modal-head"><h3>Puxar da OS</h3></div>' +
-        '<div style="padding:16px 18px;"><div class="field" style="margin:0 0 8px;"><label for="cf-os-agrupa">Número do agrupamento da OS</label>' +
-        '<input type="text" inputmode="numeric" id="cf-os-agrupa" autocomplete="off" placeholder="Ex.: 42011"></div>' +
-        '<p class="foot-note" id="cf-os-status" style="margin:0 0 10px; min-height:16px;"></p>' +
-        '<div style="display:flex; gap:8px;"><button type="button" class="add-btn btn-destaque-verde" id="cf-os-ok" style="flex:1;">Buscar</button>' +
-        '<button type="button" class="add-btn" id="cf-os-cancelar" style="flex:1;">Cancelar</button></div></div></div>';
+      ov.innerHTML = '<div class="rom-modal-card" style="max-width:640px; max-height:92vh; overflow-y:auto;">' +
+        '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>📥 OS feitas no sistema</h3><button class="rom-modal-close" type="button" data-os-fechar>Sair</button></div>' +
+        '<div style="padding:12px 18px 18px;">' +
+          '<p class="foot-note" style="margin:0 0 8px;">Só as OS abertas no sistema: <b>(C)oleta</b> e <b>(S)eparada</b>. As encerradas não aparecem.</p>' +
+          '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">' +
+            '<input type="text" data-os-filtro placeholder="Filtrar: cliente, produto, agrupamento" style="flex:1 1 180px; min-width:0;">' +
+            '<button type="button" class="add-btn" data-os-atualizar style="flex:0 0 auto;">🔄 Atualizar</button>' +
+          '</div>' +
+          '<label style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin:0 0 6px;"><input type="checkbox" data-os-mostrar-feitas> Mostrar também as que já viraram romaneio no app</label>' +
+          '<p class="foot-note" data-os-status style="margin:0 0 8px;"></p>' +
+          '<div data-os-lista></div>' +
+        '</div></div>';
       raiz.appendChild(ov);
-      var inp = ov.querySelector('#cf-os-agrupa'), st = ov.querySelector('#cf-os-status'), ok = ov.querySelector('#cf-os-ok');
+      var q = function(sel){ return ov.querySelector(sel); };
+      var grupos = [];
       function fecha(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
-      function ir(){
-        var n = String(inp.value || '').replace(/\D/g, '');
-        if (!n){ st.textContent = 'Digite o número do agrupamento.'; st.style.color = 'var(--critical)'; return; }
-        ok.disabled = true; st.textContent = 'Buscando no sistema...'; st.style.color = '';
-        aoConfirmar(n, function(erro){ if (erro){ ok.disabled = false; st.textContent = erro; st.style.color = 'var(--critical)'; } else fecha(); });
-      }
-      ok.addEventListener('click', ir);
-      inp.addEventListener('keydown', function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); ir(); } });
-      ov.querySelector('#cf-os-cancelar').addEventListener('click', fecha);
-      setTimeout(function(){ try { inp.focus(); } catch (e){} }, 50);
-    }
-    btn.addEventListener('click', function(){
-      pedirAgrupamento(function(agrupa, terminar){
-        window.ripackOfs.consultarOs(agrupa).then(function(res){
-          var linhas = ((res && res.linhas) || []).filter(function(l){ return String(l.agrupa) === agrupa; });
-          if (!linhas.length){ terminar((res && res.erros && res.erros.length) ? 'Não foi possível consultar: ' + res.erros.join(' / ') : 'Nenhuma OS com o agrupamento ' + agrupa + ' no sistema.'); return; }
-          // a OF vem da informação adicional da OS ("OF:254064"); a quantidade é a enviada (ou a programada)
-          var itens = linhas.map(function(l){
-            var of = String(l.infadc || '').replace(/^\s*OF\s*:?\s*/i, '').trim();
-            return { rp: l.codpro, qtd: l.qtd || '', ofobs: of, cliente: '' };
-          });
-          var clientes = [];
-          itens.forEach(function(it){ var c = clientePeloRp(it.rp); it._cli = c; if (c && clientes.indexOf(c) === -1) clientes.push(c); });
-          // mais de um cliente no mesmo agrupamento: cada linha leva o próprio cliente
-          if (clientes.length > 1) itens.forEach(function(it){ it.cliente = it._cli; });
-          cfPreencherItensDeSaldoTatu(itens);
-          cfRascunhoClienteAtual = clientes[0] || '';
-          if (typeof cfAtualizarSelosLaudo === 'function') cfAtualizarSelosLaudo();
-          var st = document.getElementById('cf-criar-romaneio-status');
-          if (st){
-            st.textContent = 'OS ' + agrupa + ' puxada do sistema: ' + linhas.length + ' item(ns)' + (clientes.length ? ' · ' + clientes.join(' + ') : ' · cliente não reconhecido pelo código, escolha ao criar') + '. Confira as quantidades e escolha o caminhão.';
-            st.style.color = 'var(--good)';
-          }
-          terminar(null);
+      function render(){
+        var filtro = String(q('[data-os-filtro]').value || '').trim().toUpperCase();
+        var mostrarFeitas = q('[data-os-mostrar-feitas]').checked;
+        var vis = grupos.filter(function(g){
+          if (!mostrarFeitas && g.feita) return false;
+          if (!filtro) return true;
+          return (g.agrupa + ' ' + g.clientes.join(' ') + ' ' + g.linhas.map(function(l){ return l.codpro; }).join(' ')).toUpperCase().indexOf(filtro) !== -1;
         });
+        q('[data-os-lista]').innerHTML = vis.length ? vis.map(function(g, i){
+          return '<div style="border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:0 0 10px;' + (g.feita ? ' opacity:.65;' : '') + '">' +
+            '<div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">' +
+              '<div><b>' + escOs(g.clientes.join(' + ') || '(cliente não reconhecido)') + '</b>' +
+              '<div style="font-size:12px; color:var(--text-muted);">OS ' + escOs(g.agrupa) + ' · <b>' + (g.status === 'C' ? '(C)oleta' : g.status === 'S' ? '(S)eparada' : escOs(g.status)) + '</b> · ' + (g.empresa === 'filial' ? 'Filial' : 'Matriz') + ' · ' + escOs((g.data || '').split('-').reverse().join('/')) + (g.feita ? ' · <b>já tem romaneio no app</b>' : '') + '</div></div>' +
+              '<button type="button" class="add-btn btn-destaque-verde" data-os-usar="' + grupos.indexOf(g) + '" style="flex:0 0 auto;">Usar na calculadora</button>' +
+            '</div>' +
+            '<div style="margin-top:6px; font-size:13px;">' + g.linhas.map(function(l){
+              var of = ofDaOs(l);
+              return '<div>' + escOs(l.codpro) + ' · <b>' + escOs(l.qtd) + '</b> pç' + (of ? ' · OF ' + escOs(of) : '') + '</div>';
+            }).join('') + '</div>' +
+          '</div>';
+        }).join('') : '<p class="foot-note">' + (grupos.length ? 'Nenhuma OS com esse filtro.' : 'Nenhuma OS em coleta ou separada no sistema agora.') + '</p>';
+      }
+      function carregar(){
+        q('[data-os-status]').textContent = 'Buscando as OS no sistema...';
+        q('[data-os-status]').style.color = '';
+        q('[data-os-lista]').innerHTML = '';
+        window.ripackOfs.listarOs(0).then(function(res){
+          var linhas = (res && res.linhas) || [];
+          var mapa = {}, ordem = [];
+          linhas.forEach(function(l){
+            var k = l.empresa + '|' + l.agrupa;
+            if (!mapa[k]){ mapa[k] = { empresa: l.empresa, agrupa: l.agrupa, data: l.data, status: l.status, linhas: [] }; ordem.push(k); }
+            mapa[k].linhas.push(l);
+          });
+          grupos = ordem.map(function(k){
+            var g = mapa[k], cl = [];
+            g.linhas.forEach(function(l){ var c = clientePeloRp(l.codpro); if (c && cl.indexOf(c) === -1) cl.push(c); });
+            g.clientes = cl; g.feita = jaNoApp(g.linhas);
+            return g;
+          });
+          var erros = (res && res.erros) || [];
+          var pend = grupos.filter(function(g){ return !g.feita; }).length;
+          q('[data-os-status]').textContent = grupos.length + ' OS aberta(s) no sistema · ' + pend + ' ainda sem romaneio no app' + (erros.length ? ' · aviso: ' + erros.join(' / ') : '');
+          q('[data-os-status]').style.color = erros.length && !grupos.length ? 'var(--critical)' : '';
+          render();
+        });
+      }
+      ov.addEventListener('click', function(ev){
+        var b = ev.target.closest ? ev.target.closest('button') : null;
+        if (ev.target === ov || (b && b.hasAttribute('data-os-fechar'))){ fecha(); return; }
+        if (!b) return;
+        if (b.hasAttribute('data-os-atualizar')){ carregar(); return; }
+        if (b.hasAttribute('data-os-usar')){
+          var g = grupos[parseInt(b.getAttribute('data-os-usar'), 10)];
+          if (g){ aplicarOs(g.agrupa, g.linhas); fecha(); }
+        }
       });
-    });
+      q('[data-os-filtro]').addEventListener('input', render);
+      q('[data-os-mostrar-feitas]').addEventListener('change', render);
+      carregar();
+    }
+    btn.addEventListener('click', abrirListaOs);
   })();
   function wizAbrirCalculadoraComCaminhao(d, itensSaldoTatu){
     if (!cfFardosModal) return;

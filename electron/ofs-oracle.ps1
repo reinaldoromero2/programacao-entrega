@@ -116,6 +116,28 @@ elseif ($entrada.acao -eq 'etiquetas') {
     } finally { if ($a) { $a.conexao.Close() } }
   }
 }
+elseif ($entrada.acao -eq 'listarOs') {
+  # só leitura: as OS ainda abertas no sistema — status C (coleta) e S (separada); E = encerrada fica de fora
+  foreach ($empresa in 'matriz', 'filial') {
+    $a = $null
+    try {
+      $a = Abrir $empresa
+      $u = $a.usuario
+      $cmd = $a.conexao.CreateCommand()
+      $cmd.CommandText = "SELECT * FROM (SELECT O.ORD_AGRUPA, O.ORD_CODIGO, O.ORD_STATUS, TO_CHAR(O.ORD_DTEMIS, 'YYYY-MM-DD'), O.ORD_CODPRO, CASE WHEN NVL(O.ORD_QTDENV, 0) > 0 THEN O.ORD_QTDENV ELSE O.ORD_QTPROG END, O.ORD_NUMPED, O.ORD_INFADC FROM $u.F_ORDEMSEP O WHERE O.ORD_STATUS IN ('C', 'S') ORDER BY O.ORD_DTEMIS DESC, O.ORD_AGRUPA DESC, O.ORD_CODIGO) WHERE ROWNUM <= 800"
+      $r = $cmd.ExecuteReader()
+      while ($r.Read()) {
+        $saida.linhas += [pscustomobject]@{
+          empresa = $empresa; agrupa = (Texto $r[0]); codigo = (Texto $r[1]); status = (Texto $r[2]); data = (Texto $r[3])
+          codpro = (Texto $r[4]); qtd = $(if ($r[5] -is [DBNull]) { 0 } else { [double]$r[5] }); pedido = (Texto $r[6]); infadc = (Texto $r[7])
+        }
+      }
+      $r.Close()
+    } catch {
+      $saida.erros += "${empresa}: " + $_.Exception.Message
+    } finally { if ($a) { $a.conexao.Close() } }
+  }
+}
 elseif ($entrada.acao -eq 'saldo') {
   # só leitura: saldo de cada local de estoque do produto (saldo anterior + entradas - saídas)
   $codigo = ([string]$entrada.codigo).Trim().ToUpper()
