@@ -116,6 +116,33 @@ elseif ($entrada.acao -eq 'etiquetas') {
     } finally { if ($a) { $a.conexao.Close() } }
   }
 }
+elseif ($entrada.acao -eq 'ofsDoRp') {
+  # só leitura: as ordens de fabricação (tela "Manutenção de Ordens de Fabricação") dos produtos pedidos
+  # só as do mês atual (pela Prev. Início), abertas ou encerradas
+  $codigos = @($entrada.codigos | Where-Object { $_ } | ForEach-Object { ([string]$_).Trim().ToUpper() } | Select-Object -First 40)
+  foreach ($empresa in 'matriz', 'filial') {
+    if (-not $codigos.Count) { break }
+    $a = $null
+    try {
+      $a = Abrir $empresa
+      $u = $a.usuario
+      $cmd = $a.conexao.CreateCommand()
+      $cmd.CommandText = "SELECT * FROM (SELECT TRIM(F.COF_OFCATI), UPPER(TRIM(F.COF_CODPRO)), F.COF_STATUS, F.COF_QTPROG, F.COF_QTREAL, TO_CHAR(F.COF_DTPREV, 'YYYY-MM-DD'), TO_CHAR(F.COF_DTENCE, 'YYYY-MM-DD') FROM $u.F_OF F WHERE UPPER(TRIM(F.COF_CODPRO)) IN (" + (($codigos | ForEach-Object { '?' }) -join ',') + ") AND F.COF_DTPREV >= TRUNC(SYSDATE, 'MM') ORDER BY F.COF_DTPREV DESC, F.COF_OFCATI DESC) WHERE ROWNUM <= 400"
+      foreach ($cod in $codigos) { [void]$cmd.Parameters.AddWithValue('c', $cod) }
+      $r = $cmd.ExecuteReader()
+      while ($r.Read()) {
+        $saida.linhas += [pscustomobject]@{
+          empresa = $empresa; of = (Texto $r[0]); codpro = (Texto $r[1]); status = (Texto $r[2])
+          qtprog = $(if ($r[3] -is [DBNull]) { 0 } else { [double]$r[3] }); qtreal = $(if ($r[4] -is [DBNull]) { 0 } else { [double]$r[4] })
+          previnicio = (Texto $r[5]); encerrada = (Texto $r[6])
+        }
+      }
+      $r.Close()
+    } catch {
+      $saida.erros += "${empresa}: " + $_.Exception.Message
+    } finally { if ($a) { $a.conexao.Close() } }
+  }
+}
 elseif ($entrada.acao -eq 'listarOs') {
   # só leitura: as OS ainda abertas no sistema — status C (coleta) e S (separada); E = encerrada fica de fora
   foreach ($empresa in 'matriz', 'filial') {

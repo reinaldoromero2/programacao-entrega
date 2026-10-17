@@ -9371,6 +9371,94 @@ var SIGNATURES = {
     item.qtdLabel = null;
     renderCfItens();
   }
+  // ---- "OF do sistema": ordens de fabricação (F_OF) dos RP da calculadora ----
+  var cfOfSistemaDisponivel = false;
+  if (window.ripackOfs && window.ripackOfs.quandoSouber && window.ripackOfs.ofsDoRp){
+    window.ripackOfs.quandoSouber(function(ok){ if (ok && !cfOfSistemaDisponivel){ cfOfSistemaDisponivel = true; renderCfItens(); } });
+  }
+  function cfRpDoItem(it){
+    var f = cfFardosOrdenados().filter(function(x){ return x.id === it.fardoId; })[0];
+    var c = f ? cfCodigoParaRp(String(f.codigo || '')) : (it.codigoSemFardo || '');
+    return rpComZeros(String(c).trim().toUpperCase());
+  }
+  // põe a OF na linha (no 1º campo se estiver vazio; senão numa linha de OF nova), sem repetir
+  function cfPorOfNoItem(itemId, of){
+    var item = cfItens.filter(function(i){ return i.id === itemId; })[0];
+    if (!item) return false;
+    var ls = String(item.ofobs || '').split('\n');
+    if (ls.some(function(l){ return l.split(/[^0-9]+/).indexOf(String(of)) !== -1; })) return false;
+    if (!String(ls[0] || '').trim()) ls[0] = String(of);
+    else {
+      var vazio = ls.map(function(l){ return String(l).trim(); }).indexOf('');
+      if (vazio > 0) ls[vazio] = String(of); else ls.push(String(of));
+    }
+    item.ofobs = ls.join('\n');
+    return true;
+  }
+  function cfAbrirOfsDoSistema(itemIdClicado){
+    var porRp = {}, rps = [];
+    cfItens.forEach(function(it){
+      var rp = cfRpDoItem(it);
+      if (!rp) return;
+      if (!porRp[rp]){ porRp[rp] = []; rps.push(rp); }
+      porRp[rp].push(it.id);
+    });
+    var itClicado = cfItens.filter(function(i){ return i.id === itemIdClicado; })[0];
+    var rpClicado = itClicado ? cfRpDoItem(itClicado) : '';
+    if (rpClicado) rps.sort(function(a, b){ return (b === rpClicado) - (a === rpClicado); });
+    var raiz = document.querySelector('.app-root') || document.body;
+    var ov = document.createElement('div');
+    ov.className = 'rom-modal-overlay';
+    ov.style.zIndex = '600';
+    ov.innerHTML = '<div class="rom-modal-card" style="max-width:620px; max-height:92vh; overflow-y:auto;">' +
+      '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>🔎 OF do sistema</h3><button class="rom-modal-close" type="button" data-of-fechar>Sair</button></div>' +
+      '<div style="padding:12px 18px 18px;">' +
+        '<p class="foot-note" style="margin:0 0 8px;">Ordens de fabricação dos RP da calculadora do mês atual (tela "Manutenção de Ordens de Fabricação"), as mais novas em cima. Clique na OF para pôr no campo OF.</p>' +
+        '<p class="foot-note" data-of-status style="margin:0 0 8px;"></p>' +
+        '<div data-of-lista></div>' +
+      '</div></div>';
+    raiz.appendChild(ov);
+    var q = function(sel){ return ov.querySelector(sel); };
+    var linhas = [];
+    function fecha(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
+    function render(){
+      q('[data-of-lista]').innerHTML = rps.map(function(rp){
+        var doRp = linhas.filter(function(l){ return l.codpro === rp; });
+        var usadas = porRp[rp].map(function(id){ var it = cfItens.filter(function(i){ return i.id === id; })[0]; return it ? String(it.ofobs || '') : ''; }).join(' ');
+        return '<div style="border:1px solid ' + (rp === rpClicado ? '#f97316' : 'var(--border)') + '; border-radius:10px; padding:10px 12px; margin:0 0 10px;">' +
+          '<div style="font-weight:800; margin:0 0 6px;">' + escapeHtml(rp) + '</div>' +
+          (doRp.length ? doRp.map(function(l){
+            var ja = usadas.split(/[^0-9]+/).indexOf(l.of) !== -1;
+            return '<button type="button" data-of-usar="' + escapeHtml(l.of) + '" data-of-rp="' + escapeHtml(rp) + '" style="display:flex; width:100%; gap:10px; align-items:baseline; text-align:left; padding:8px 10px; margin:0 0 6px; border-radius:8px; cursor:pointer; border:1px solid ' + (ja ? 'var(--good)' : 'var(--border)') + '; background:' + (ja ? 'rgba(22,163,74,0.10)' : 'var(--surface-2, transparent)') + '; color:inherit; font:inherit;">' +
+              '<span style="font-size:12px; color:var(--text-muted);">OF Cativa</span> <b style="font-family:ui-monospace, Consolas, monospace; font-size:15px;">' + escapeHtml(l.of) + '</b>' +
+              '<span style="flex:1 1 auto; font-size:13px;"><span style="font-size:12px; color:var(--text-muted);">Prev. Início</span> <b>' + escapeHtml((l.previnicio || '').split('-').reverse().join('/')) + '</b></span>' +
+              (ja ? '<span style="font-size:12px; font-weight:700; color:var(--good);">já no campo</span>' : '') +
+            '</button>';
+          }).join('') : '<p class="foot-note" style="margin:0;">' + 'Nenhuma OF deste RP no mês atual.' + '</p>') +
+        '</div>';
+      }).join('') || '<p class="foot-note">Nenhum RP na calculadora.</p>';
+    }
+    ov.addEventListener('click', function(ev){
+      var b = ev.target.closest ? ev.target.closest('button') : null;
+      if (ev.target === ov || (b && b.hasAttribute('data-of-fechar'))){ fecha(); return; }
+      if (!b || !b.hasAttribute('data-of-usar')) return;
+      var rp = b.getAttribute('data-of-rp'), of = b.getAttribute('data-of-usar');
+      // vai na linha clicada se for desse RP; senão na 1ª linha com esse RP
+      var alvo = (rp === rpClicado) ? itemIdClicado : porRp[rp][0];
+      cfPorOfNoItem(alvo, of);
+      renderCfItens();
+      fecha();
+    });
+    if (!rps.length){ render(); return; }
+    q('[data-of-status]').textContent = 'Buscando as OF no sistema...';
+    window.ripackOfs.ofsDoRp(rps).then(function(res){
+      linhas = (res && res.linhas) || [];
+      var erros = (res && res.erros) || [];
+      q('[data-of-status]').textContent = erros.length ? 'Aviso: ' + erros.join(' / ') : '';
+      q('[data-of-status]').style.color = erros.length ? 'var(--critical)' : '';
+      render();
+    });
+  }
   function renderCfItens(){
     if (!cfItensListaEl) return;
     var fardos = cfFardosOrdenados();
@@ -9412,6 +9500,7 @@ var SIGNATURES = {
           '<div class="field" style="flex:1; min-width:50px; margin-bottom:0;"><label style="margin-bottom:3px;">OF</label>' +
             '<div style="display:flex; gap:4px; align-items:center;">' +
               '<input type="text" class="cf-item-of" data-linha-of="0" placeholder="opcional" value="' + escapeHtml(linhasOf[0]) + '" style="flex:1 1 auto; min-width:0;">' +
+              (cfOfSistemaDisponivel ? '<button type="button" class="cf-item-of-sistema" title="OF do sistema: as ordens de fabricação dos RP da calculadora" aria-label="OF do sistema" style="flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid #ea580c; background:#f97316; color:#fff; cursor:pointer; font-size:15px; line-height:1;">🔎</button>' : '') +
               '<button type="button" class="cf-item-of-mais" title="Mais uma linha de OF (outro lote ou data), embaixo desta" aria-label="Mais uma linha de OF" style="flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid var(--accent-blue, #2563eb); background:none; color:var(--accent-blue, #2563eb); cursor:pointer; font-size:18px; font-weight:700; line-height:1;">+</button>' +
             '</div>' +
           '</div>' +
@@ -9469,6 +9558,8 @@ var SIGNATURES = {
         if (item) item.ofobs = camposOf.map(function(c){ return c.value; }).join('\n');
       };
       camposOf.forEach(function(c){ c.addEventListener('input', juntarOf); });
+      var ofSistemaBtn = row.querySelector('.cf-item-of-sistema');
+      if (ofSistemaBtn) ofSistemaBtn.addEventListener('click', function(){ juntarOf(); cfAbrirOfsDoSistema(id); });
       var maisOf = row.querySelector('.cf-item-of-mais');
       if (maisOf){
         maisOf.addEventListener('click', function(){
@@ -13468,6 +13559,8 @@ var SIGNATURES = {
       cfPreencherItensDeSaldoTatu(itens);
       cfRascunhoClienteAtual = clientes[0] || '';
       var placaOs = (linhas.filter(function(l){ return l.placa; })[0] || {}).placa || '';
+      var placasOs = [];
+      linhas.forEach(function(l){ var pl = String(l.placa || '').toUpperCase(); if (pl && placasOs.indexOf(pl) === -1) placasOs.push(pl); });
       var motOs = (linhas.filter(function(l){ return l.motorista; })[0] || {}).motorista || '';
       var cam = escolherCaminhaoDaOs(placaOs);
       if (typeof cfAtualizarSelosLaudo === 'function') cfAtualizarSelosLaudo();
@@ -13476,7 +13569,8 @@ var SIGNATURES = {
       if (st){
         var txtCam = cam ? ' · caminhão ' + (cam.placa || placaOs) + (cam.motorista ? ' (' + cam.motorista + ')' : '') :
           placaOs ? ' · placa ' + placaOs + (motOs ? ' (' + motOs + ')' : '') + ' não está cadastrada no app — escolha o caminhão' : ' · a OS não tem placa: escolha o caminhão';
-        st.textContent = 'OS ' + agrupa + ' puxada do sistema: ' + linhas.length + ' item(ns)' + (clientes.length ? ' · ' + clientes.join(' + ') : ' · cliente não reconhecido, escolha ao criar') + txtCam + '. Confira as quantidades.';
+        if (placasOs.length > 1) txtCam += ' (atenção: as OS têm placas diferentes: ' + placasOs.join(', ') + ')';
+        st.textContent = (String(agrupa).indexOf('+') !== -1 ? 'OS ' + agrupa + ' puxadas' : 'OS ' + agrupa + ' puxada') + ' do sistema: ' + linhas.length + ' item(ns)' + (clientes.length ? ' · ' + clientes.join(' + ') : ' · cliente não reconhecido, escolha ao criar') + txtCam + '. Confira as quantidades.';
         st.style.color = 'var(--good)';
       }
     }
@@ -13497,10 +13591,20 @@ var SIGNATURES = {
           '<label style="display:flex; gap:6px; align-items:center; font-size:12.5px; margin:0 0 6px;"><input type="checkbox" data-os-mostrar-feitas> Mostrar também as que já viraram romaneio no app</label>' +
           '<p class="foot-note" data-os-status style="margin:0 0 8px;"></p>' +
           '<div data-os-lista></div>' +
+          '<div data-os-barra-sel hidden style="position:sticky; bottom:-18px; margin:0 -18px -18px; padding:10px 18px; background:var(--surface, #fff); border-top:1px solid var(--border); display:flex; gap:8px; align-items:center;">' +
+            '<span data-os-sel-txt style="flex:1 1 auto; font-size:13px; font-weight:700;"></span>' +
+            '<button type="button" class="add-btn" data-os-limpar-sel style="flex:0 0 auto;">Limpar</button>' +
+            '<button type="button" class="add-btn btn-destaque-verde" data-os-usar-sel style="flex:0 0 auto;">Usar as selecionadas no mesmo desenho</button>' +
+          '</div>' +
         '</div></div>';
       raiz.appendChild(ov);
       var q = function(sel){ return ov.querySelector(sel); };
-      var grupos = [];
+      var grupos = [], sel = [];
+      function atualizarBarraSel(){
+        var barra = q('[data-os-barra-sel]');
+        barra.hidden = !sel.length;
+        q('[data-os-sel-txt]').textContent = sel.length + ' OS selecionada(s): ' + sel.map(function(i){ return grupos[i].agrupa; }).join(' + ');
+      }
       function fecha(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
       function render(){
         var filtro = String(q('[data-os-filtro]').value || '').trim().toUpperCase();
@@ -13511,10 +13615,12 @@ var SIGNATURES = {
           return (g.agrupa + ' ' + g.clientes.join(' ') + ' ' + g.linhas.map(function(l){ return l.codpro; }).join(' ')).toUpperCase().indexOf(filtro) !== -1;
         });
         q('[data-os-lista]').innerHTML = vis.length ? vis.map(function(g, i){
-          return '<div style="border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:0 0 10px;' + (g.feita ? ' opacity:.65;' : '') + '">' +
+          var gi = grupos.indexOf(g), marcada = sel.indexOf(gi) !== -1;
+          return '<div style="border:' + (marcada ? '2px solid var(--good)' : '1px solid var(--border)') + '; border-radius:10px; padding:10px 12px; margin:0 0 10px;' + (g.feita ? ' opacity:.65;' : '') + '">' +
             '<div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">' +
+              '<label style="display:flex; gap:10px; align-items:center; cursor:pointer; flex:1 1 0; min-width:200px;"><input type="checkbox" data-os-sel="' + gi + '"' + (marcada ? ' checked' : '') + ' style="width:20px; height:20px; flex:0 0 auto;" title="Selecionar para juntar no mesmo desenho">' +
               '<div><b>' + escOs(g.clientes.join(' + ') || '(cliente não reconhecido)') + '</b>' +
-              '<div style="font-size:12px; color:var(--text-muted);">OS ' + escOs(g.agrupa) + ' · <b>' + (g.status === 'C' ? '(C)oleta' : g.status === 'S' ? '(S)eparada' : escOs(g.status)) + '</b> · ' + (g.empresa === 'filial' ? 'Filial' : 'Matriz') + ' · ' + escOs((g.data || '').split('-').reverse().join('/')) + (g.placa || g.motorista ? ' · 🚛 ' + escOs([g.placa, g.motorista].filter(Boolean).join(' · ')) : '') + (g.feita ? ' · <b>já tem romaneio no app</b>' : '') + '</div></div>' +
+              '<div style="font-size:12px; color:var(--text-muted);">OS ' + escOs(g.agrupa) + ' · <b>' + (g.status === 'C' ? '(C)oleta' : g.status === 'S' ? '(S)eparada' : escOs(g.status)) + '</b> · ' + (g.empresa === 'filial' ? 'Filial' : 'Matriz') + ' · ' + escOs((g.data || '').split('-').reverse().join('/')) + (g.placa || g.motorista ? ' · 🚛 ' + escOs([g.placa, g.motorista].filter(Boolean).join(' · ')) : '') + (g.feita ? ' · <b>já tem romaneio no app</b>' : '') + '</div></div></label>' +
               '<button type="button" class="add-btn btn-destaque-verde" data-os-usar="' + grupos.indexOf(g) + '" style="flex:0 0 auto;">Usar na calculadora</button>' +
             '</div>' +
             '<div style="margin-top:6px; font-size:13px;">' + g.linhas.map(function(l){
@@ -13536,6 +13642,7 @@ var SIGNATURES = {
             if (!mapa[k]){ mapa[k] = { empresa: l.empresa, agrupa: l.agrupa, data: l.data, status: l.status, linhas: [] }; ordem.push(k); }
             mapa[k].linhas.push(l);
           });
+          sel = [];
           grupos = ordem.map(function(k){
             var g = mapa[k], cl = [];
             g.linhas.forEach(function(l){ var c = clienteDaLinha(l); if (c && cl.indexOf(c) === -1) cl.push(c); });
@@ -13549,6 +13656,7 @@ var SIGNATURES = {
           q('[data-os-status]').textContent = grupos.length + ' OS aberta(s) no sistema · ' + pend + ' ainda sem romaneio no app' + (erros.length ? ' · aviso: ' + erros.join(' / ') : '');
           q('[data-os-status]').style.color = erros.length && !grupos.length ? 'var(--critical)' : '';
           render();
+          atualizarBarraSel();
         });
       }
       ov.addEventListener('click', function(ev){
@@ -13556,6 +13664,13 @@ var SIGNATURES = {
         if (ev.target === ov || (b && b.hasAttribute('data-os-fechar'))){ fecha(); return; }
         if (!b) return;
         if (b.hasAttribute('data-os-atualizar')){ carregar(); return; }
+        if (b.hasAttribute('data-os-limpar-sel')){ sel = []; render(); atualizarBarraSel(); return; }
+        if (b.hasAttribute('data-os-usar-sel')){
+          var gs = sel.map(function(i){ return grupos[i]; }).filter(Boolean);
+          if (!gs.length) return;
+          aplicarOs(gs.map(function(x){ return x.agrupa; }).join(' + '), [].concat.apply([], gs.map(function(x){ return x.linhas; })));
+          fecha(); return;
+        }
         if (b.hasAttribute('data-os-usar')){
           var g = grupos[parseInt(b.getAttribute('data-os-usar'), 10)];
           if (g){ aplicarOs(g.agrupa, g.linhas); fecha(); }
@@ -13563,6 +13678,15 @@ var SIGNATURES = {
       });
       q('[data-os-filtro]').addEventListener('input', render);
       q('[data-os-mostrar-feitas]').addEventListener('change', render);
+      // marcar/desmarcar uma OS para juntar várias no mesmo desenho (na ordem em que foram marcadas)
+      ov.addEventListener('change', function(ev){
+        var cb = ev.target;
+        if (!cb || !cb.hasAttribute || !cb.hasAttribute('data-os-sel')) return;
+        var i = parseInt(cb.getAttribute('data-os-sel'), 10), pos = sel.indexOf(i);
+        if (cb.checked && pos === -1) sel.push(i);
+        if (!cb.checked && pos !== -1) sel.splice(pos, 1);
+        render(); atualizarBarraSel();
+      });
       carregar();
     }
     btn.addEventListener('click', abrirListaOs);
