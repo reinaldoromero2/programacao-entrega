@@ -9405,7 +9405,8 @@ var SIGNATURES = {
     });
     var itClicado = cfItens.filter(function(i){ return i.id === itemIdClicado; })[0];
     var rpClicado = itClicado ? cfRpDoItem(itClicado) : '';
-    if (rpClicado) rps.sort(function(a, b){ return (b === rpClicado) - (a === rpClicado); });
+    // só as OF do RP da linha clicada
+    if (rpClicado) rps = [rpClicado];
     var raiz = document.querySelector('.app-root') || document.body;
     var ov = document.createElement('div');
     ov.className = 'rom-modal-overlay';
@@ -9413,7 +9414,7 @@ var SIGNATURES = {
     ov.innerHTML = '<div class="rom-modal-card" style="max-width:620px; max-height:92vh; overflow-y:auto;">' +
       '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>🔎 OF do sistema</h3><button class="rom-modal-close" type="button" data-of-fechar>Sair</button></div>' +
       '<div style="padding:12px 18px 18px;">' +
-        '<p class="foot-note" style="margin:0 0 8px;">Ordens de fabricação dos RP da calculadora do mês atual (tela "Manutenção de Ordens de Fabricação"), as mais novas em cima. Clique na OF para pôr no campo OF.</p>' +
+        '<p class="foot-note" style="margin:0 0 8px;">Ordens de fabricação deste RP no mês atual (tela "Manutenção de Ordens de Fabricação"), as mais novas em cima. Clique na OF para pôr no campo OF.</p>' +
         '<p class="foot-note" data-of-status style="margin:0 0 8px;"></p>' +
         '<div data-of-lista></div>' +
       '</div></div>';
@@ -9500,7 +9501,7 @@ var SIGNATURES = {
           '<div class="field" style="flex:1; min-width:50px; margin-bottom:0;"><label style="margin-bottom:3px;">OF</label>' +
             '<div style="display:flex; gap:4px; align-items:center;">' +
               '<input type="text" class="cf-item-of" data-linha-of="0" placeholder="opcional" value="' + escapeHtml(linhasOf[0]) + '" style="flex:1 1 auto; min-width:0;">' +
-              (cfOfSistemaDisponivel ? '<button type="button" class="cf-item-of-sistema" title="OF do sistema: as ordens de fabricação dos RP da calculadora" aria-label="OF do sistema" style="flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid #ea580c; background:#f97316; color:#fff; cursor:pointer; font-size:15px; line-height:1;">🔎</button>' : '') +
+              (cfOfSistemaDisponivel ? '<button type="button" class="cf-item-of-sistema" title="OF do sistema: as ordens de fabricação do RP desta linha" aria-label="OF do sistema" style="flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid #ea580c; background:#f97316; color:#fff; cursor:pointer; font-size:15px; line-height:1;">🔎</button>' : '') +
               '<button type="button" class="cf-item-of-mais" title="Mais uma linha de OF (outro lote ou data), embaixo desta" aria-label="Mais uma linha de OF" style="flex:0 0 auto; height:34px; min-width:34px; border-radius:6px; border:1px solid var(--accent-blue, #2563eb); background:none; color:var(--accent-blue, #2563eb); cursor:pointer; font-size:18px; font-weight:700; line-height:1;">+</button>' +
             '</div>' +
           '</div>' +
