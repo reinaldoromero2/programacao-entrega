@@ -1132,7 +1132,7 @@
       <div style="display:flex; flex-direction:column; align-items:center; gap:12px; margin:18px 0 6px;">
         <button class="btn-inserir-glass" id="btn-inserir-romaneio" type="button" style="width:100%; max-width:340px; box-sizing:border-box; margin:0; text-align:center; padding:20px 16px; font-size:18px;">+ Inserir romaneio</button>
         <button class="btn-inserir-glass" id="prog-atalho-btn" type="button" style="width:100%; max-width:340px; box-sizing:border-box; margin:0; text-align:center; padding:20px 16px; font-size:18px; animation:none; background:#ffffff; color:#1f2937; text-shadow:none; border:1px solid #d1d5db; box-shadow:0 2px 8px rgba(0,0,0,0.12); -webkit-backdrop-filter:none; backdrop-filter:none;">📄 Programação</button>
-        <button class="btn-inserir-glass" id="os-atalho-btn" type="button" hidden style="width:100%; max-width:340px; box-sizing:border-box; margin:0; text-align:center; padding:20px 16px; font-size:18px; animation:none; background:#ffffff; color:#1f2937; text-shadow:none; border:1px solid #d1d5db; box-shadow:0 2px 8px rgba(0,0,0,0.1);">📥 Puxar da OS</button>
+        <button class="btn-inserir-glass" id="os-atalho-btn" type="button" hidden style="width:100%; max-width:340px; box-sizing:border-box; margin:0; text-align:center; padding:20px 16px; font-size:18px; animation:none; background:#f97316; color:#ffffff; text-shadow:none; border:1px solid #ea580c; box-shadow:0 2px 8px rgba(249,115,22,0.35);">📥 Puxar da OS</button>
       </div>
       <script>
         (function(){ var b=document.getElementById("prog-atalho-btn"); if(!b) return; b.addEventListener("click",function(){ var a=document.getElementById("prog-abrir-btn"); if(a) a.click(); }); })();
@@ -13441,17 +13441,42 @@ var SIGNATURES = {
       });
     }
     // preenche a calculadora com as linhas de um agrupamento
+    function clienteDaLinha(l){
+      var cod = String(l.codcli || '').replace(/\D/g, '');
+      if (cod){ var c = clientePeloRp(('0000' + String(parseInt(cod, 10))).slice(-4) + '-'); if (c) return c; }
+      return clientePeloRp(l.codpro);
+    }
+    // caminhão da OS (placa do DebX) já escolhido na calculadora, se estiver cadastrado no app
+    function escolherCaminhaoDaOs(placa){
+      var alvo = String(placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!alvo) return null;
+      var d = cfCaminhoesComDimensao().filter(function(c){ return String(c.placa).toUpperCase().replace(/[^A-Z0-9]/g, '') === alvo; })[0];
+      if (!d) return null;
+      if (d.id !== cfCaminhaoSelecionadoId){ cfManualPos = {}; cfComboFlips = {}; }
+      cfCaminhaoSelecionadoId = d.id;
+      cfAtualizarSelectCaminhao();
+      if (cfCaminhaoInputEl) cfCaminhaoInputEl.value = cfCaminhaoLabel(d);
+      if (cfCaminhaoStatusEl) cfCaminhaoStatusEl.textContent = '';
+      cfSincronizarPlacaVisualCaminhao();
+      return d;
+    }
     function aplicarOs(agrupa, linhas){
-      var itens = linhas.map(function(l){ return { rp: l.codpro, qtd: l.qtd || '', ofobs: ofDaOs(l), cliente: '' }; });
+      var itens = linhas.map(function(l){ return { rp: l.codpro, qtd: l.qtd || '', ofobs: ofDaOs(l), cliente: '', _l: l }; });
       var clientes = [];
-      itens.forEach(function(it){ var c = clientePeloRp(it.rp); it._cli = c; if (c && clientes.indexOf(c) === -1) clientes.push(c); });
+      itens.forEach(function(it){ var c = clienteDaLinha(it._l); it._cli = c; if (c && clientes.indexOf(c) === -1) clientes.push(c); });
       if (clientes.length > 1) itens.forEach(function(it){ it.cliente = it._cli; });
       cfPreencherItensDeSaldoTatu(itens);
       cfRascunhoClienteAtual = clientes[0] || '';
+      var placaOs = (linhas.filter(function(l){ return l.placa; })[0] || {}).placa || '';
+      var motOs = (linhas.filter(function(l){ return l.motorista; })[0] || {}).motorista || '';
+      var cam = escolherCaminhaoDaOs(placaOs);
       if (typeof cfAtualizarSelosLaudo === 'function') cfAtualizarSelosLaudo();
+      if (typeof cfCalcular === 'function') cfCalcular();
       var st = document.getElementById('cf-criar-romaneio-status');
       if (st){
-        st.textContent = 'OS ' + agrupa + ' puxada do sistema: ' + linhas.length + ' item(ns)' + (clientes.length ? ' · ' + clientes.join(' + ') : ' · cliente não reconhecido pelo código, escolha ao criar') + '. Confira as quantidades e escolha o caminhão.';
+        var txtCam = cam ? ' · caminhão ' + (cam.placa || placaOs) + (cam.motorista ? ' (' + cam.motorista + ')' : '') :
+          placaOs ? ' · placa ' + placaOs + (motOs ? ' (' + motOs + ')' : '') + ' não está cadastrada no app — escolha o caminhão' : ' · a OS não tem placa: escolha o caminhão';
+        st.textContent = 'OS ' + agrupa + ' puxada do sistema: ' + linhas.length + ' item(ns)' + (clientes.length ? ' · ' + clientes.join(' + ') : ' · cliente não reconhecido, escolha ao criar') + txtCam + '. Confira as quantidades.';
         st.style.color = 'var(--good)';
       }
     }
@@ -13489,7 +13514,7 @@ var SIGNATURES = {
           return '<div style="border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:0 0 10px;' + (g.feita ? ' opacity:.65;' : '') + '">' +
             '<div style="display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;">' +
               '<div><b>' + escOs(g.clientes.join(' + ') || '(cliente não reconhecido)') + '</b>' +
-              '<div style="font-size:12px; color:var(--text-muted);">OS ' + escOs(g.agrupa) + ' · <b>' + (g.status === 'C' ? '(C)oleta' : g.status === 'S' ? '(S)eparada' : escOs(g.status)) + '</b> · ' + (g.empresa === 'filial' ? 'Filial' : 'Matriz') + ' · ' + escOs((g.data || '').split('-').reverse().join('/')) + (g.feita ? ' · <b>já tem romaneio no app</b>' : '') + '</div></div>' +
+              '<div style="font-size:12px; color:var(--text-muted);">OS ' + escOs(g.agrupa) + ' · <b>' + (g.status === 'C' ? '(C)oleta' : g.status === 'S' ? '(S)eparada' : escOs(g.status)) + '</b> · ' + (g.empresa === 'filial' ? 'Filial' : 'Matriz') + ' · ' + escOs((g.data || '').split('-').reverse().join('/')) + (g.placa || g.motorista ? ' · 🚛 ' + escOs([g.placa, g.motorista].filter(Boolean).join(' · ')) : '') + (g.feita ? ' · <b>já tem romaneio no app</b>' : '') + '</div></div>' +
               '<button type="button" class="add-btn btn-destaque-verde" data-os-usar="' + grupos.indexOf(g) + '" style="flex:0 0 auto;">Usar na calculadora</button>' +
             '</div>' +
             '<div style="margin-top:6px; font-size:13px;">' + g.linhas.map(function(l){
@@ -13513,7 +13538,9 @@ var SIGNATURES = {
           });
           grupos = ordem.map(function(k){
             var g = mapa[k], cl = [];
-            g.linhas.forEach(function(l){ var c = clientePeloRp(l.codpro); if (c && cl.indexOf(c) === -1) cl.push(c); });
+            g.linhas.forEach(function(l){ var c = clienteDaLinha(l); if (c && cl.indexOf(c) === -1) cl.push(c); });
+            var lp = g.linhas.filter(function(l){ return l.placa || l.motorista; })[0] || {};
+            g.placa = lp.placa || ''; g.motorista = lp.motorista || '';
             g.clientes = cl; g.feita = jaNoApp(g.linhas);
             return g;
           });

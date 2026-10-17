@@ -124,12 +124,13 @@ elseif ($entrada.acao -eq 'listarOs') {
       $a = Abrir $empresa
       $u = $a.usuario
       $cmd = $a.conexao.CreateCommand()
-      $cmd.CommandText = "SELECT * FROM (SELECT O.ORD_AGRUPA, O.ORD_CODIGO, O.ORD_STATUS, TO_CHAR(O.ORD_DTEMIS, 'YYYY-MM-DD'), O.ORD_CODPRO, CASE WHEN NVL(O.ORD_QTDENV, 0) > 0 THEN O.ORD_QTDENV ELSE O.ORD_QTPROG END, O.ORD_NUMPED, O.ORD_INFADC FROM $u.F_ORDEMSEP O WHERE O.ORD_STATUS IN ('C', 'S') ORDER BY O.ORD_DTEMIS DESC, O.ORD_AGRUPA DESC, O.ORD_CODIGO) WHERE ROWNUM <= 800"
+      $cmd.CommandText = "SELECT * FROM (SELECT O.ORD_AGRUPA, O.ORD_CODIGO, O.ORD_STATUS, TO_CHAR(O.ORD_DTEMIS, 'YYYY-MM-DD'), O.ORD_CODPRO, CASE WHEN NVL(O.ORD_QTDENV, 0) > 0 THEN O.ORD_QTDENV ELSE O.ORD_QTPROG END, O.ORD_NUMPED, O.ORD_INFADC, (SELECT MAX(I.AGI_MOTORI) FROM $u.F_AGRINF I WHERE I.AGI_AGRUPA = O.ORD_AGRUPA), (SELECT MAX(I.AGI_PLACAV) FROM $u.F_AGRINF I WHERE I.AGI_AGRUPA = O.ORD_AGRUPA), (SELECT MAX(P.PDV_CODEMP) FROM $u.F_PEDVENDA P WHERE P.PDV_NUMPED = O.ORD_NUMPED) FROM $u.F_ORDEMSEP O WHERE O.ORD_STATUS IN ('C', 'S') ORDER BY O.ORD_DTEMIS DESC, O.ORD_AGRUPA DESC, O.ORD_CODIGO) WHERE ROWNUM <= 800"
       $r = $cmd.ExecuteReader()
       while ($r.Read()) {
         $saida.linhas += [pscustomobject]@{
           empresa = $empresa; agrupa = (Texto $r[0]); codigo = (Texto $r[1]); status = (Texto $r[2]); data = (Texto $r[3])
           codpro = (Texto $r[4]); qtd = $(if ($r[5] -is [DBNull]) { 0 } else { [double]$r[5] }); pedido = (Texto $r[6]); infadc = (Texto $r[7])
+          motorista = (Texto $r[8]); placa = (Texto $r[9]); codcli = (Texto $r[10])
         }
       }
       $r.Close()
