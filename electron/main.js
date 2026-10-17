@@ -202,8 +202,8 @@ async function rodarRqc008() {
 ipcMain.handle('rodar-rqc008', () => rodarRqc008());
 
 // Lançar OFs no sistema (Oracle), a partir do Romaneio: o mesmo das planilhas "Inclusor da OF".
-// O script vai como -EncodedCommand (dentro do app instalado ele fica no pacote .asar, que o
-// PowerShell não abre) e roda no PowerShell 32 bits, como a conexão Oracle destes PCs.
+// O script é copiado do pacote .asar (que o PowerShell não abre) para a pasta de dados do app e
+// roda no PowerShell 32 bits, como a conexão Oracle destes PCs.
 const OFS_SCRIPT = path.join(__dirname, 'ofs-oracle.ps1');
 const OFS_TEMPO = 120 * 1000;
 
@@ -216,9 +216,21 @@ function rodarOfsOracle(entrada) {
       resolve({ ok: false, erros: ['Script do lançamento de OFs não encontrado no app.'] });
       return;
     }
+    // o script já passou do limite da linha de comando do Windows (~32 mil caracteres) como
+    // -EncodedCommand: vai para um arquivo na pasta de dados do app e roda com -File
+    const arquivo = path.join(app.getPath('userData'), 'ofs-oracle.ps1');
+    try {
+      const conteudo = '\uFEFF' + script;
+      let atual = null;
+      try { atual = fs.readFileSync(arquivo, 'utf8'); } catch {}
+      if (atual !== conteudo) fs.writeFileSync(arquivo, conteudo, 'utf8');
+    } catch (e) {
+      resolve({ ok: false, erros: ['Não foi possível preparar o script do sistema: ' + e.message] });
+      return;
+    }
     const ps32 = path.join(process.env.WINDIR || 'C:\\Windows', 'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     const exe = fs.existsSync(ps32) ? ps32 : 'powershell.exe';
-    const child = spawn(exe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
+    const child = spawn(exe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', arquivo], {
       windowsHide: true,
       env: { ...process.env, RIPACK_OFS_ENTRADA: Buffer.from(JSON.stringify(entrada), 'utf8').toString('base64'), RIPACK_OFS_PASTA: pastaInclusor() || '' },
     });
