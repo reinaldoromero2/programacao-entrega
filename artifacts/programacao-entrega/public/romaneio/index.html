@@ -10873,7 +10873,7 @@ var SIGNATURES = {
   var cfRascunhoClienteStatus = document.getElementById('cf-rascunho-cliente-status');
   var cfRascunhoClienteCancelarBtn = document.getElementById('cf-rascunho-cliente-cancelar');
   var cfRascunhoClienteConfirmarBtn = document.getElementById('cf-rascunho-cliente-confirmar');
-  function cfSalvarRascunhoComCliente(nomeCliente){
+  function cfSalvarRascunhoComCliente(nomeCliente, resumoClientes){
     if (!dbApi){
       if (cfCriarRomaneioStatusEl){
         cfCriarRomaneioStatusEl.textContent = 'Banco indisponível agora — não dá pra guardar o rascunho.';
@@ -10887,6 +10887,8 @@ var SIGNATURES = {
       // placa digitada que não está no cadastro (sem caminhão escolhido)
       placaLivre: cfCaminhaoSelecionadoId ? '' : cfPlacaDigitada(),
       cliente: nomeCliente || '',
+      // todos os clientes da carga, só para mostrar no card
+      clientesResumo: resumoClientes || nomeCliente || '',
       itens: cfItens.map(function(it){ return Object.assign({}, it, { unitFlips: Object.assign({}, it.unitFlips || {}) }); }),
       manualPos: Object.assign({}, cfManualPos),
       empilhamentoMax: parseInt((cfEmpilhamentoSelectEl && cfEmpilhamentoSelectEl.value) || '1', 10)
@@ -11010,7 +11012,13 @@ var SIGNATURES = {
       });
       var temClienteDefinidoNosItensRascunho = gruposOrdemRascunho.length > 1 || (gruposOrdemRascunho.length === 1 && gruposOrdemRascunho[0] !== '');
       if (temClienteDefinidoNosItensRascunho){
-        cfSalvarRascunhoComCliente(gruposOrdemRascunho.filter(Boolean).join(' + '));
+        // linha sem cliente próprio = cliente da calculadora (o da entrada); ele fica como o cliente
+        // principal do rascunho, e o card mostra todos ("0465 MAXION SP + 1294 ZF ITU")
+        var clienteBaseRascunho = (cfRascunhoClienteAtual || '').trim();
+        var nomesRascunho = [];
+        gruposOrdemRascunho.forEach(function(c){ var n = c || clienteBaseRascunho; if (n && nomesRascunho.indexOf(n) === -1) nomesRascunho.push(n); });
+        var temLinhaSemCliente = gruposOrdemRascunho.indexOf('') !== -1;
+        cfSalvarRascunhoComCliente(temLinhaSemCliente && clienteBaseRascunho ? clienteBaseRascunho : nomesRascunho.join(' + '), nomesRascunho.join(' + '));
         return;
       }
       if (!cfRascunhoClienteModal || !cfRascunhoClienteInput){
@@ -11053,7 +11061,7 @@ var SIGNATURES = {
       var itens = d.itens || [];
       var qtdItens = itens.filter(function(it){ return (it.fardoId || it.codigoSemFardo) && (parseFloat(it.qtd) || 0) > 0; }).length;
       var resumo = qtdItens ? (qtdItens + ' ite' + (qtdItens === 1 ? 'm' : 'ns') + ' montado' + (qtdItens === 1 ? '' : 's')) : 'Nenhum item montado ainda';
-      var clienteLabel = (d.cliente || '').trim();
+      var clienteLabel = (d.clientesResumo || d.cliente || '').trim();
       return '<div class="rascunho-card-glass" style="margin-bottom:12px; position:relative;">' +
         '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; padding-right:44px;">' +
           '<span class="rascunho-badge">RASCUNHO</span>' +
