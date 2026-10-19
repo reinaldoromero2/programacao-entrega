@@ -9032,7 +9032,8 @@ var SIGNATURES = {
     cfAtualizarSelosLaudo();
     if (!cfCaminhaoPlacaVisualTextoEl) return;
     var doc = cfCaminhaoSelecionadoId ? allMotoristaFrotaDocs.filter(function(d){ return d.id === cfCaminhaoSelecionadoId; })[0] : null;
-    var placa = doc ? (doc.data() || {}).placa : '';
+    // sem caminhão cadastrado: mostra a placa digitada (romaneio com placa não cadastrada)
+    var placa = doc ? (doc.data() || {}).placa : cfPlacaDigitada();
     cfCaminhaoPlacaVisualTextoEl.textContent = cfFormatarPlacaVisual(placa);
     var temSelecao = !!cfCaminhaoSelecionadoId;
     if (cfCaminhaoInputEl) cfCaminhaoInputEl.readOnly = temSelecao;
@@ -9267,7 +9268,9 @@ var SIGNATURES = {
         }
       }
       cfCaminhaoSelecionadoId = '';
-      if (cfCaminhaoStatusEl) cfCaminhaoStatusEl.textContent = val ? 'Escolha um caminhão da lista de sugestões.' : '';
+      var placaNova = cfPlacaDigitada();
+      if (cfCaminhaoStatusEl) cfCaminhaoStatusEl.textContent = placaNova ? 'Placa ' + placaNova + ' não cadastrada: dá para criar o romaneio com ela (sem o desenho do caminhão).' : (val ? 'Escolha um caminhão da lista de sugestões ou digite a placa.' : '');
+      if (cfCaminhaoPlacaVisualTextoEl) cfCaminhaoPlacaVisualTextoEl.textContent = cfFormatarPlacaVisual(placaNova);
       cfCalcular();
     });
   }
@@ -10361,11 +10364,18 @@ var SIGNATURES = {
   // executa a criação do romaneio a partir do que está montado na
   // calculadora agora (usado tanto pelo botão "Criar romaneio" quanto,
   // vindo de um card de rascunho, depois de carregar o rascunho aqui).
+  // placa digitada no campo do caminhão que não está no cadastro (só letras e números, até 7)
+  function cfPlacaDigitada(){
+    var v = cfCaminhaoInputEl ? String(cfCaminhaoInputEl.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+    return v.length >= 5 ? v.slice(0, 7) : '';
+  }
   function cfExecutarCriarRomaneio(){
     var caminhaoDoc = allMotoristaFrotaDocs.filter(function(d){ return d.id === cfCaminhaoSelecionadoId; })[0];
-    if (!caminhaoDoc){
+    // placa que não está no cadastro: o romaneio sai com ela, só sem o desenho do caminhão
+    var placaLivre = caminhaoDoc ? '' : cfPlacaDigitada();
+    if (!caminhaoDoc && !placaLivre){
       if (cfCriarRomaneioStatusEl){
-        cfCriarRomaneioStatusEl.textContent = 'Selecione um caminhão antes de criar o romaneio.';
+        cfCriarRomaneioStatusEl.textContent = 'Selecione um caminhão ou digite a placa antes de criar o romaneio.';
         cfCriarRomaneioStatusEl.style.color = 'var(--critical)';
       }
       return;
@@ -10409,7 +10419,7 @@ var SIGNATURES = {
       return;
     }
     if (cfCriarRomaneioStatusEl) cfCriarRomaneioStatusEl.textContent = '';
-    var cd = caminhaoDoc.data() || {};
+    var cd = caminhaoDoc ? (caminhaoDoc.data() || {}) : { placa: placaLivre, motorista: '', categoria: '' };
     // rascunho que deu origem a esse romaneio (se veio de um) — apagado só
     // depois que o romaneio realmente for criado com sucesso.
     var rascunhoIdParaApagar = cfRascunhoEditandoId;
@@ -10874,6 +10884,8 @@ var SIGNATURES = {
     if (cfCriarRomaneioStatusEl) cfCriarRomaneioStatusEl.textContent = '';
     var snapshot = {
       caminhaoId: cfCaminhaoSelecionadoId,
+      // placa digitada que não está no cadastro (sem caminhão escolhido)
+      placaLivre: cfCaminhaoSelecionadoId ? '' : cfPlacaDigitada(),
       cliente: nomeCliente || '',
       itens: cfItens.map(function(it){ return Object.assign({}, it, { unitFlips: Object.assign({}, it.unitFlips || {}) }); }),
       manualPos: Object.assign({}, cfManualPos),
@@ -10899,11 +10911,15 @@ var SIGNATURES = {
       dbApi.collection('cargas_rascunho').doc(cfRascunhoEditandoId).update(snapshot).then(aoSalvar).catch(aoFalhar);
     } else {
       snapshot.criadoEm = new Date().toISOString();
+      snapshot.local = localPadrao();
+      snapshot.criadoPorUser = currentUserKey || '';
       dbApi.collection('cargas_rascunho').add(snapshot).then(aoSalvar).catch(aoFalhar);
     }
   }
   function cfConfirmarClienteRascunho(nomeForcado){
     if (!cfRascunhoClienteInput) return;
+    // já confirmado (o cliente reconhecido confirma sozinho): não guarda o rascunho duas vezes
+    if (cfRascunhoClienteModal && cfRascunhoClienteModal.hidden) return;
     var nome = (nomeForcado || cfRascunhoClienteInput.value || '').trim();
     if (!nome){
       if (cfRascunhoClienteStatus){
@@ -10972,9 +10988,9 @@ var SIGNATURES = {
         }
         return;
       }
-      if (!cfCaminhaoSelecionadoId){
+      if (!cfCaminhaoSelecionadoId && !cfPlacaDigitada()){
         if (cfCriarRomaneioStatusEl){
-          cfCriarRomaneioStatusEl.textContent = 'Selecione um caminhão antes de guardar o rascunho.';
+          cfCriarRomaneioStatusEl.textContent = 'Selecione um caminhão ou digite a placa antes de guardar o rascunho.';
           cfCriarRomaneioStatusEl.style.color = 'var(--critical)';
         }
         return;
@@ -11024,11 +11040,12 @@ var SIGNATURES = {
   var rascunhosWrapEl = document.getElementById('rascunhos-wrap');
   function renderRascunhos(){
     if (!rascunhosWrapEl) return;
-    if (!allRascunhoDocs.length){ rascunhosWrapEl.innerHTML = ''; return; }
-    rascunhosWrapEl.innerHTML = allRascunhoDocs.map(function(doc){
+    var rascunhosVisiveis = allRascunhoDocs.filter(function(doc){ return rascunhoNoFiltro(doc.data() || {}); });
+    if (!rascunhosVisiveis.length){ rascunhosWrapEl.innerHTML = ''; return; }
+    rascunhosWrapEl.innerHTML = rascunhosVisiveis.map(function(doc){
       var d = doc.data() || {};
       var caminhaoDoc = allMotoristaFrotaDocs.filter(function(cd){ return cd.id === d.caminhaoId; })[0];
-      var caminhaoLabel = 'Caminhão não encontrado (removido do cadastro)';
+      var caminhaoLabel = d.placaLivre ? 'Placa ' + d.placaLivre + ' (não cadastrada)' : 'Caminhão não encontrado (removido do cadastro)';
       if (caminhaoDoc){
         var cdData = caminhaoDoc.data() || {};
         caminhaoLabel = cfCaminhaoLabel({ motorista: cdData.motorista, placa: cdData.placa, comprimento: cdData.comprimento || 0, largura: cdData.largura || 0 });
@@ -11234,6 +11251,10 @@ var SIGNATURES = {
     cfFardosModal.hidden = false;
     cfCaminhaoSelecionadoId = snapshot.caminhaoId || '';
     cfAtualizarSelectCaminhao();
+    if (!cfCaminhaoSelecionadoId && snapshot.placaLivre && cfCaminhaoInputEl){
+      cfCaminhaoInputEl.value = snapshot.placaLivre;
+      if (typeof cfSincronizarPlacaVisualCaminhao === 'function') cfSincronizarPlacaVisualCaminhao();
+    }
     if (cfCaminhaoSelecionadoId && cfCaminhaoInputEl){
       var doc = allMotoristaFrotaDocs.filter(function(d){ return d.id === cfCaminhaoSelecionadoId; })[0];
       if (doc){
@@ -17431,7 +17452,9 @@ var SIGNATURES = {
         itens: (wizPendenteDesenho.itens || []).map(function(it){ return Object.assign({}, it, { unitFlips: Object.assign({}, it.unitFlips || {}) }); }),
         manualPos: Object.assign({}, wizPendenteDesenho.manualPos || {}),
         empilhamentoMax: wizPendenteDesenho.empilhamentoMax || 1,
-        criadoEm: new Date().toISOString()
+        criadoEm: new Date().toISOString(),
+        local: localPadrao(),
+        criadoPorUser: currentUserKey || ''
       };
       rascunhoImagemCargaBtn.disabled = true;
       if (imagemCargaAcoesStatusEl){ imagemCargaAcoesStatusEl.textContent = ''; imagemCargaAcoesStatusEl.style.color = ''; }
@@ -18298,6 +18321,18 @@ var SIGNATURES = {
     filtroLocalAtual = v === 'filial' || v === 'todos' ? v : 'matriz';
     pintarFiltroLocal();
     if (typeof renderFiltered === 'function') renderFiltered();
+    if (typeof renderRascunhos === 'function') renderRascunhos();
+    try { window.dispatchEvent(new CustomEvent('ripack-filtro-local', { detail: filtroLocalAtual })); } catch (e){}
+  }
+  // para o card "OFs para conferir" (ofs-oracle.js): o filtro atual e o local de um romaneio
+  window.__ripackFiltroLocal = function(){ return filtroLocalAtual; };
+  window.__ripackLocalDoRomaneio = function(id){
+    var doc = allPendDocs.concat(allDoneDocs).filter(function(dd){ return dd.id === id; })[0];
+    return doc ? String((doc.data() || {}).local || 'Matriz').trim().toLowerCase() : null;
+  };
+  // local de um rascunho: o de quem criou (o Cleiton cria na Filial); os antigos, sem local, são da Matriz
+  function rascunhoNoFiltro(d){
+    return filtroLocalAtual === 'todos' || String(d.local || 'Matriz').trim().toLowerCase() === filtroLocalAtual;
   }
   document.querySelectorAll('[data-filtro-local]').forEach(function(b){
     b.addEventListener('click', function(){ usarFiltroLocal(b.getAttribute('data-filtro-local')); });

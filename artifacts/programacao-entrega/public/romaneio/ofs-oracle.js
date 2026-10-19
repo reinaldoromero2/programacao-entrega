@@ -329,11 +329,17 @@
       '.ofs-pend-linha:last-child{ border-bottom:none; }';
     document.head.appendChild(st);
   }
+  window.addEventListener('ripack-filtro-local', function () { desenharCardPendentes(); });
   function desenharCardPendentes() {
     var limite = Date.now() - PEND_DIAS * 86400000;
     var ids = Object.keys(situacao).filter(function (id) {
       var st = situacao[id];
-      return st && st.completo === false && st.romaneio && Date.parse(st.em || '') >= limite;
+      if (!(st && st.completo === false && st.romaneio && Date.parse(st.em || '') >= limite)) return false;
+      // segue o filtro Matriz/Filial/Todos dos carregamentos (romaneio sem local = Matriz)
+      var filtro = window.__ripackFiltroLocal ? window.__ripackFiltroLocal() : 'todos';
+      if (filtro === 'todos') return true;
+      var local = window.__ripackLocalDoRomaneio ? window.__ripackLocalDoRomaneio(id) : null;
+      return (local || String(st.romaneio.local || 'Matriz').toLowerCase()) === filtro;
     }).sort(function (a, b) { return String(situacao[b].em).localeCompare(String(situacao[a].em)); });
     var ancora = document.getElementById('pend-list');
     var cardCarreg = ancora && ancora.closest('.card');
