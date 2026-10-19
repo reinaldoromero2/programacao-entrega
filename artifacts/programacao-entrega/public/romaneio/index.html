@@ -1139,9 +1139,6 @@
       </script>
     </div>
 
-    <!-- Auditoria diária: aviso para o admin enquanto houver dia útil sem as 2 auditorias -->
-    <button type="button" class="add-btn btn-destaque-laranja" id="aud-aviso" hidden style="width:100%; padding:14px; font-size:16px; font-weight:800; border-radius:14px; margin:0 0 14px;"></button>
-
     <div class="card" data-role="admin" id="card-of-busca">
       <h2>Ordens de Fabricação</h2>
       <div class="field" style="margin-bottom:0;">
@@ -1628,7 +1625,7 @@
         <button type="button" class="menu-card-btn" data-clicar="leitor-abrir-btn"><span class="menu-card-ico">📷</span><span>Ler etiquetas</span></button>
         <button type="button" class="menu-card-btn" data-clicar="leituras-abrir-btn"><span class="menu-card-ico">📋</span><span>Leituras de etiquetas</span></button>
         <button type="button" class="menu-card-btn" data-clicar="saldo-local-abrir-btn"><span class="menu-card-ico">📦</span><span>Saldo por local</span></button>
-        <button type="button" class="menu-card-btn" data-clicar="aud-abrir-btn"><span class="menu-card-ico">📋</span><span>Auditoria diária</span></button>
+        <button type="button" class="menu-card-btn" data-clicar="aud-abrir-btn" style="position:relative;"><span class="menu-card-ico">📋</span><span>Auditoria diária</span><span id="aud-bolinha" hidden title="Auditorias pendentes" style="position:absolute; top:-8px; right:-8px; min-width:26px; height:26px; padding:0 7px; box-sizing:border-box; border-radius:13px; background:#dc2626; color:#fff; font-size:14px; font-weight:800; line-height:26px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.3); pointer-events:none;"></span></button>
       </div>
     </div>
     <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Ler etiquetas</button><button type="button" id="leituras-abrir-btn" hidden>Leituras de etiquetas</button><button type="button" id="saldo-local-abrir-btn" hidden>Saldo por local</button><button type="button" id="aud-abrir-btn" hidden>Auditoria diária</button></div>
@@ -13845,16 +13842,15 @@ var SIGNATURES = {
         (n > 1 ? 'romaneio com ' + n + ' linhas; usada a linha do RP ' + it.rp : 'romaneio com 1 única linha') + '. Feito pelo app.';
     }
 
-    // ---- aviso no topo (só admin) ----
+    // ---- bolinha vermelha no botão (só admin): quantas auditorias faltam ----
     function atualizarAviso(){
-      var el = document.getElementById('aud-aviso');
+      var el = document.getElementById('aud-bolinha');
       if (!el) return;
       var pend = (currentRole === 'admin') ? diasPendentes() : [];
-      el.hidden = !pend.length;
-      if (!pend.length) return;
-      var hoje = hojeSP();
-      el.textContent = pend.length === 1 && pend[0] === hoje ? '📋 Auditoria diária de hoje pendente — clique para fazer'
-        : '📋 Auditoria diária: ' + pend.length + ' dia(s) pendente(s) (' + pend.map(br).map(function(t){ return t.slice(0, 5); }).join(', ') + ') — clique para fazer';
+      var falta = pend.reduce(function(n, d){ return n + precisa(d); }, 0);
+      el.hidden = !falta;
+      el.textContent = falta > 99 ? '99+' : String(falta);
+      el.parentNode.title = falta ? falta + ' auditoria(s) pendente(s): ' + pend.map(br).map(function(t){ return t.slice(0, 5); }).join(', ') : '';
     }
     setInterval(atualizarAviso, 30000);
 
@@ -14051,9 +14047,8 @@ var SIGNATURES = {
       }).then(function(){ status('Excel gerado (' + lista.length + ' auditorias, ' + ordem.length + ' mês(es)).'); }, function(){ status('Não foi possível salvar o Excel.', true); });
     }
 
-    var btnAbrir = document.getElementById('aud-abrir-btn'), aviso = document.getElementById('aud-aviso');
+    var btnAbrir = document.getElementById('aud-abrir-btn');
     if (btnAbrir) btnAbrir.addEventListener('click', abrir);
-    if (aviso) aviso.addEventListener('click', abrir);
     claude.use('db').then(function(db){
       dbAud = db;
       db.collection('auditorias').orderBy('data', 'desc').limit(2000).onSnapshot(function(s){
