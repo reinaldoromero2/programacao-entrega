@@ -104,6 +104,28 @@
   var CONHECIDAS_KEY = 'ripack_romaneio_colecoes';
   var conhecidas = {};
   try { conhecidas = JSON.parse(localStorage.getItem(CONHECIDAS_KEY) || '{}') || {}; } catch (e) {}
+  // ---- ponto de sincronização guardado no aparelho ----
+  // Antes, toda vez que a página abria, cada tela baixava a lista inteira da coleção de novo (17
+  // listas por abertura) — foi o que esgotou a transferência do Render em 2026-10-19. Agora o
+  // aparelho guarda até onde já acompanhou as mudanças (cursor) e quando baixou cada lista por
+  // inteiro; ao abrir, busca só o que mudou desde então. Lista inteira de novo: no máximo 1x por dia.
+  var SYNC_KEY = 'ripack_romaneio_sync';
+  var LISTA_VALE_MS = 20 * 60 * 60 * 1000;
+  var sync = { c: null, f: {} };
+  try {
+    var lidoSync = JSON.parse(localStorage.getItem(SYNC_KEY) || 'null');
+    if (lidoSync && typeof lidoSync.c === 'number' && lidoSync.f && typeof lidoSync.f === 'object') sync = lidoSync;
+  } catch (e) {}
+  var cursorGuardado = sync.c; // de onde esta abertura continua (null = primeira vez neste aparelho)
+  function salvarSync() { try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) {} }
+  function listaEmDia(caminho) { var t = sync.f[caminho]; return cursorGuardado !== null && typeof t === 'number' && Date.now() - t < LISTA_VALE_MS; }
+  function marcarListaEmDia(caminho) { sync.f[caminho] = Date.now(); salvarSync(); }
+  // mudanças de uma coleção que este aparelho não aplicou: a próxima tela dela baixa tudo de novo
+  function esquecerColecao(col) {
+    var pref = '/docs/' + encodeURIComponent(col);
+    Object.keys(sync.f).forEach(function (k) { if (k === pref || k.indexOf(pref + '/') === 0 || k.indexOf(pref + '?') === 0) delete sync.f[k]; });
+    salvarSync();
+  }
   function marcarConhecida(col) {
     if (conhecidas[col]) return;
     conhecidas[col] = true;
@@ -263,14 +285,22 @@
       throw e;
     }).then(function (data) {
       if (!pendentes[k]) guardarLocal(col, id, data);
+      marcarListaEmDia(caminhoDoc(col, id));
     });
     lendoDoc[k] = p;
     p.then(function () { delete lendoDoc[k]; }, function () { delete lendoDoc[k]; });
     return p;
   }
+  var lendoQuery = {};
   function buscarQueryServidor(q) {
-    return http('GET', q._caminho() + (q._caminho().indexOf('?') >= 0 ? '&' : '?') + 'arq=1').then(function (r) {
+    var caminho = q._caminho();
+    if (!lendoQuery[caminho]) {
+      lendoQuery[caminho] = http('GET', caminho + (caminho.indexOf('?') >= 0 ? '&' : '?') + 'arq=1');
+      lendoQuery[caminho].then(function () { delete lendoQuery[caminho]; }, function () { delete lendoQuery[caminho]; });
+    }
+    return lendoQuery[caminho].then(function (r) {
       reconciliar(q, (r && r.docs) || []);
+      marcarListaEmDia(caminho);
     });
   }
 
@@ -290,22 +320,33 @@
   }
 
   // mudanças de outros aparelhos (long-poll): busca só os documentos que mudaram
+  // devolve uma promessa: true se a cópia desta coleção ficou em dia com essas mudanças
   function mudouNoServidor(col, ids, apagados) {
     var alvo = ouvintes.filter(function (o) { return o.col === col; });
-    if (ids.length > MAX_INCREMENTAL) {
-      alvo.forEach(function (o) { o.atualizar(); });
-      return;
+    apagados.forEach(function (id) { if (!pendentes[chave(col, id)]) guardarLocal(col, id, null); });
+    var mudados = ids.filter(function (id) { return apagados.indexOf(id) < 0; });
+    // ninguém mostrando esta coleção agora: não baixa nada; a tela dela, quando abrir, baixa a lista
+    if (!alvo.length) {
+      if (mudados.length) esquecerColecao(col);
+      if (apagados.length) notificar(col);
+      return Promise.resolve(true);
     }
-    Promise.all(ids.map(function (id) {
-      if (apagados.indexOf(id) >= 0) {
-        if (!pendentes[chave(col, id)]) guardarLocal(col, id, null);
-        return null;
-      }
-      return buscarDocServidor(col, id).catch(function () {});
-    })).then(function () { notificar(col); });
+    if (mudados.length > MAX_INCREMENTAL) {
+      esquecerColecao(col);
+      alvo.forEach(function (o) { o.atualizar(); });
+      return Promise.resolve(true);
+    }
+    var ok = true;
+    return Promise.all(mudados.map(function (id) {
+      return buscarDocServidor(col, id).catch(function () { ok = false; });
+    })).then(function () {
+      if (!ok) esquecerColecao(col);
+      notificar(col);
+      return true;
+    });
   }
 
-  var cursor = null, acompanhando = false, falhasSeguidas = 0;
+  var cursor = cursorGuardado, acompanhando = false, falhasSeguidas = 0;
   function acompanhar() {
     if (acompanhando) return;
     acompanhando = true;
@@ -320,9 +361,11 @@
           if (c.deleted) (apagados[c.collection] = apagados[c.collection] || []).push(c.id);
         });
         cursor = r.seq;
-        Object.keys(porColecao).forEach(function (col) { mudouNoServidor(col, porColecao[col], apagados[col] || []); });
-        // o servidor voltou: manda o que ficou na fila e confere as telas
-        if (voltou) { enviarFila(); ouvintes.forEach(function (o) { o.atualizar(); }); }
+        var seqLida = r.seq;
+        Promise.all(Object.keys(porColecao).map(function (col) { return mudouNoServidor(col, porColecao[col], apagados[col] || []); }))
+          .then(function () { if (typeof seqLida === 'number' && (sync.c === null || seqLida > sync.c)) { sync.c = seqLida; salvarSync(); } });
+        // o servidor voltou: manda o que ficou na fila (o que mudou enquanto estava fora vem pelo cursor)
+        if (voltou) enviarFila();
         laco();
       }, function (e) {
         falhasSeguidas++;
@@ -378,7 +421,9 @@
     pronto.then(function () {
       if (!ativo) return;
       if (docId || conhecidas[col]) o.entregar();
-      o.atualizar();
+      var caminho = docId ? caminhoDoc(col, docId) : q._caminho();
+      if (listaEmDia(caminho) && (docId || conhecidas[col])) { confirmado = true; o.entregar(); }
+      else o.atualizar();
       acompanhar();
     });
     return function () {

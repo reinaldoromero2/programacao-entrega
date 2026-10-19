@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { errorHandler } from "./middlewares/errorHandler";
+import { compressao } from "./middlewares/compressao";
 
 const app: Express = express();
 
@@ -27,6 +28,7 @@ app.use(
   }),
 );
 app.use(cors());
+app.use(compressao);
 // romaneios guardam assinatura e desenho da carga como imagem; o padrão de 100kb não basta
 app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true }));
