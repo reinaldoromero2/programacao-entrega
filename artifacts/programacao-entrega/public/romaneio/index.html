@@ -1139,6 +1139,9 @@
       </script>
     </div>
 
+    <!-- Auditoria diária: aviso para o admin enquanto houver dia útil sem as 2 auditorias -->
+    <button type="button" class="add-btn btn-destaque-laranja" id="aud-aviso" hidden style="width:100%; padding:14px; font-size:16px; font-weight:800; border-radius:14px; margin:0 0 14px;"></button>
+
     <div class="card" data-role="admin" id="card-of-busca">
       <h2>Ordens de Fabricação</h2>
       <div class="field" style="margin-bottom:0;">
@@ -1625,9 +1628,10 @@
         <button type="button" class="menu-card-btn" data-clicar="leitor-abrir-btn"><span class="menu-card-ico">📷</span><span>Ler etiquetas</span></button>
         <button type="button" class="menu-card-btn" data-clicar="leituras-abrir-btn"><span class="menu-card-ico">📋</span><span>Leituras de etiquetas</span></button>
         <button type="button" class="menu-card-btn" data-clicar="saldo-local-abrir-btn"><span class="menu-card-ico">📦</span><span>Saldo por local</span></button>
+        <button type="button" class="menu-card-btn" data-clicar="aud-abrir-btn"><span class="menu-card-ico">📋</span><span>Auditoria diária</span></button>
       </div>
     </div>
-    <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Ler etiquetas</button><button type="button" id="leituras-abrir-btn" hidden>Leituras de etiquetas</button><button type="button" id="saldo-local-abrir-btn" hidden>Saldo por local</button></div>
+    <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Ler etiquetas</button><button type="button" id="leituras-abrir-btn" hidden>Leituras de etiquetas</button><button type="button" id="saldo-local-abrir-btn" hidden>Saldo por local</button><button type="button" id="aud-abrir-btn" hidden>Auditoria diária</button></div>
 
     <div class="card" data-role="admin" id="card-historico">
       <div class="history-head">
@@ -13692,6 +13696,376 @@ var SIGNATURES = {
     }
     btn.addEventListener('click', abrirListaOs);
   })();
+  // ---- Auditoria diária de processo (Expedição) ----
+  // Era a skill "auditoria-diaria-expedicao" do Claude; agora é do app: avisa no topo enquanto houver
+  // dia útil sem as 2 auditorias, escolhe os itens (romaneio com não conformidade primeiro), abre o
+  // Google Forms já preenchido (quem envia é a pessoa) e guarda cada auditoria na coleção
+  // "auditorias" — é de lá que sai o Excel do mês e a conferência do que já foi auditado.
+  (function(){
+    var FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfx-tCztQqrsjVNUCY78JSeXBc06rG7KUeB3u15JiK7P7Q69g/viewform';
+    var INICIO = '2026-10-01';          // dias pendentes contam a partir daqui
+    var AUDITADOS = ['Rinaldo', 'Sinvaldo', 'Jean'];
+    var PERGUNTAS = ['Caminhão / carroceria', 'Produto (bolor, impurezas, identificação)', 'Documentos e EPIs', 'Fotos'];
+    var ASPECTOS = [
+      { k: 'of', nome: 'OF (Ordem de Fabricação)', entry: 'entry.291194143', padrao: 'Não Aplicável' },
+      { k: 'ficha', nome: 'Ficha Técnica', entry: 'entry.1141654515', padrao: 'Não Aplicável' },
+      { k: 'dim', nome: 'Dimensional', entry: 'entry.1085813259', padrao: 'Não Aplicável' },
+      { k: 'ident', nome: 'Identificação', entry: 'entry.101648278', padrao: 'Conforme' },
+      { k: 'acab', nome: 'Acabamento / Critério da Qualidade', entry: 'entry.379605638', padrao: 'Conforme' },
+      { k: 'pol', nome: 'Políticas da Organização', entry: 'entry.1554871028', padrao: 'Conforme' },
+      { k: 'amb', nome: 'Ambiente de Trabalho', entry: 'entry.1482284622', padrao: 'Conforme' },
+      { k: 'sau', nome: 'Ambiente Saúde e Segurança', entry: 'entry.216467715', padrao: 'Conforme' }
+    ];
+    var registros = [], dbAud = null, ov = null, diaSel = '', escolhaPorDia = {};
+
+    function hojeSP(){ return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
+    function diaUtil(iso){ var d = new Date(iso + 'T12:00:00'); var w = d.getDay(); return w >= 1 && w <= 5; }
+    function br(iso){ return String(iso || '').split('-').reverse().join('/'); }
+    function semAcento(t){ return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase(); }
+    function config(){ var c = registros.filter(function(r){ return r.tipo === 'config'; })[0] || {}; return { equip: c.equip || '2256', venc: c.venc || '2026-10-31' }; }
+    function auditoriasDe(dia){ return registros.filter(function(r){ return r.tipo === 'auditoria' && r.data === dia; }); }
+    function pulado(dia){ return registros.some(function(r){ return r.tipo === 'pulado' && r.data === dia; }); }
+
+    // romaneios concluídos (os mesmos da lista "Concluídos", os 200 mais recentes)
+    function concluidos(){
+      return (typeof allDoneDocs !== 'undefined' ? allDoneDocs : []).map(function(doc){ return { id: doc.id, r: doc.data() || {} }; })
+        .filter(function(x){ return x.r.docStatus === 'concluido' && x.r.data; });
+    }
+    function ehTatu(r){ return (r.clientes || []).some(function(c){ return semAcento(c.nome).indexOf('TATU') !== -1; }); }
+    // linha válida: RP no padrão da Ripack e um número de OF
+    function linhas(x){
+      var out = [];
+      (x.r.clientes || []).forEach(function(c){
+        (c.itens || []).forEach(function(it){
+          var rp = String(it.rp || '').trim().toUpperCase();
+          var of = (String(it.ofobs || '').match(/\b(\d{6})\b/) || [])[1];
+          if (/^\d{4}-\d{3}(\/\d{2}|[A-Z]\d{2})$/.test(rp) && of) out.push({ rp: rp, of: of, cliente: c.nome || '' });
+        });
+      });
+      return out;
+    }
+    function totalLinhas(x){ return (x.r.clientes || []).reduce(function(n, c){ return n + (c.itens || []).length; }, 0); }
+    function ncs(x){ return (x.r.qaObs || []).map(function(t, i){ return { p: i + 1, texto: String(t || '').trim() }; }).filter(function(n){ return n.texto; }); }
+    function jaAuditado(x){
+      var ls = linhas(x);
+      return registros.some(function(a){
+        if (a.tipo !== 'auditoria') return false;
+        if (a.romaneioId && a.romaneioId === x.id) return true;
+        return a.data === x.r.data && ls.some(function(l){ return l.rp === a.rp && semAcento(l.cliente) === semAcento(a.cliente); });
+      });
+    }
+    // aspecto(s) "Não Conforme" pela pergunta respondida "Não" (ponto de partida; a pessoa ajusta)
+    function aspectosDaNc(lista){
+      var ks = {};
+      lista.forEach(function(n){
+        var t = semAcento(n.texto);
+        if (n.p === 1) ks.sau = 1;
+        if (n.p === 2){ if (/IDENTIFIC|ETIQUET/.test(t)) ks.ident = 1; if (!/IDENTIFIC|ETIQUET/.test(t) || /BOLOR|PREGO|ACABAMENTO|IMPUREZ|TRATAMENT/.test(t)) ks.acab = 1; }
+        if (n.p === 3){ if (/EPI/.test(t)) ks.sau = 1; else ks.pol = 1; }
+        if (n.p === 4) ks.pol = 1;
+      });
+      return Object.keys(ks);
+    }
+    function auditadoDe(x, usados){
+      var emp = String(x.r.emp || '').split(/[,;+\/]| e /).map(function(s){ return s.trim(); });
+      var dos3 = AUDITADOS.filter(function(n){ return emp.some(function(e){ return semAcento(e) === semAcento(n); }); });
+      var livre = dos3.filter(function(n){ return usados.indexOf(n) === -1; });
+      if (livre.length) return livre[0];
+      if (dos3.length) return dos3[0];
+      return AUDITADOS.filter(function(n){ return usados.indexOf(n) === -1; })[0] || AUDITADOS[0];
+    }
+    function novoItem(x, l, usados){
+      var lista = ncs(x);
+      return { romId: x.id, x: x, rp: l.rp, of: l.of, cliente: l.cliente, auditado: auditadoDe(x, usados), nc: lista, aspectos: aspectosDaNc(lista) };
+    }
+
+    // candidatos de um dia: romaneios concluídos do dia (sem TATU) ainda não auditados, NC primeiro
+    function candidatos(dia){
+      return concluidos().filter(function(x){ return x.r.data === dia && !ehTatu(x.r) && linhas(x).length && !jaAuditado(x); })
+        .sort(function(a, b){ return (ncs(b).length ? 1 : 0) - (ncs(a).length ? 1 : 0) || String(a.r.criadoEm || '').localeCompare(String(b.r.criadoEm || '')); });
+    }
+    function precisa(dia){ return Math.max(0, Math.min(2, auditoriasDe(dia).length + candidatos(dia).length) - auditoriasDe(dia).length); }
+    function escolher(dia){
+      var feitas = auditoriasDe(dia), falta = precisa(dia), cand = candidatos(dia), itens = [];
+      var usados = feitas.map(function(a){ return a.auditado; }), clientes = feitas.map(function(a){ return semAcento(a.cliente); });
+      while (itens.length < falta && cand.length){
+        // prefere cliente diferente e empilhadeirista diferente do que já entrou
+        var melhor = null, nota = -1;
+        cand.forEach(function(x){
+          if (itens.some(function(i){ return i.romId === x.id; })) return;
+          var l = linhas(x)[0];
+          var n = (ncs(x).length ? 4 : 0) + (clientes.indexOf(semAcento(l.cliente)) === -1 ? 2 : 0) + (usados.indexOf(auditadoDe(x, usados)) === -1 ? 1 : 0);
+          if (n > nota){ nota = n; melhor = x; }
+        });
+        if (!melhor){
+          // só sobrou romaneio já usado: outra linha dele
+          var x0 = cand[0], l2 = linhas(x0).filter(function(l){ return !itens.some(function(i){ return i.rp === l.rp && i.of === l.of; }); })[0];
+          if (!l2) break;
+          itens.push(novoItem(x0, l2, usados));
+        } else {
+          itens.push(novoItem(melhor, linhas(melhor)[0], usados));
+        }
+        usados.push(itens[itens.length - 1].auditado); clientes.push(semAcento(itens[itens.length - 1].cliente));
+      }
+      return itens;
+    }
+    // dias úteis com romaneio para auditar e sem as 2 auditorias (do mais antigo ao mais novo)
+    function diasPendentes(){
+      var dias = {};
+      concluidos().forEach(function(x){ if (x.r.data >= INICIO && x.r.data <= hojeSP()) dias[x.r.data] = 1; });
+      return Object.keys(dias).sort().filter(function(d){
+        var temNc = candidatos(d).some(function(x){ return ncs(x).length; });
+        return (diaUtil(d) || temNc) && !pulado(d) && precisa(d) > 0;
+      });
+    }
+
+    function urlForm(it, dia){
+      var c = config(), p = new URLSearchParams();
+      var d = dia.split('-'), v = c.venc.split('-');
+      p.set('usp', 'pp_url');
+      p.set('entry.391948037_year', d[0]); p.set('entry.391948037_month', String(+d[1])); p.set('entry.391948037_day', String(+d[2]));
+      p.set('entry.1721859684', it.auditado);
+      p.set('entry.1815031006', it.rp);
+      p.set('entry.1071110206', it.cliente);
+      p.set('entry.1275037216', it.of);
+      p.set('entry.1829557190', 'Facilitador');
+      p.set('entry.872648143', 'Reinaldo');
+      p.set('entry.2113380245', 'Unidade I');
+      p.set('entry.892983629', 'Expedição');
+      p.set('entry.1065571627', c.equip);
+      p.set('entry.1965770354_year', v[0]); p.set('entry.1965770354_month', String(+v[1])); p.set('entry.1965770354_day', String(+v[2]));
+      ASPECTOS.forEach(function(a){ p.set(a.entry, it.aspectos.indexOf(a.k) !== -1 ? 'Não Conforme' : a.padrao); });
+      return FORM_URL + '?' + p.toString();
+    }
+    function obsDe(it){
+      var r = it.x.r, n = totalLinhas(it.x);
+      var nomes = ASPECTOS.filter(function(a){ return it.aspectos.indexOf(a.k) !== -1; }).map(function(a){ return a.nome.split(' /')[0]; });
+      return (it.nc.length ? 'NC ' + (nomes.join('/') || 'qualidade') + ': ' + it.nc.map(function(x){ return x.texto; }).join(' / ') + '; ' : '') +
+        'Placa ' + (r.placa || '?') + ', motorista ' + (r.motorista || '?') + '; ' +
+        (n > 1 ? 'romaneio com ' + n + ' linhas; usada a linha do RP ' + it.rp : 'romaneio com 1 única linha') + '. Feito pelo app.';
+    }
+
+    // ---- aviso no topo (só admin) ----
+    function atualizarAviso(){
+      var el = document.getElementById('aud-aviso');
+      if (!el) return;
+      var pend = (currentRole === 'admin') ? diasPendentes() : [];
+      el.hidden = !pend.length;
+      if (!pend.length) return;
+      var hoje = hojeSP();
+      el.textContent = pend.length === 1 && pend[0] === hoje ? '📋 Auditoria diária de hoje pendente — clique para fazer'
+        : '📋 Auditoria diária: ' + pend.length + ' dia(s) pendente(s) (' + pend.map(br).map(function(t){ return t.slice(0, 5); }).join(', ') + ') — clique para fazer';
+    }
+    setInterval(atualizarAviso, 30000);
+
+    // ---- tela ----
+    function abrir(){
+      if (ov) return;
+      var raiz = document.querySelector('.app-root') || document.body;
+      ov = document.createElement('div');
+      ov.className = 'rom-modal-overlay';
+      ov.style.zIndex = '600';
+      ov.innerHTML = '<div class="rom-modal-card" style="max-width:720px; max-height:94vh; overflow-y:auto;">' +
+        '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>📋 Auditoria diária de processo</h3><button class="rom-modal-close" type="button" data-aud-fechar>Sair</button></div>' +
+        '<div style="padding:12px 18px 18px;" data-aud-corpo></div></div>';
+      raiz.appendChild(ov);
+      ov.addEventListener('click', clique);
+      ov.addEventListener('change', mudou);
+      var pend = diasPendentes();
+      diaSel = pend.length ? pend[0] : hojeSP();
+      render();
+    }
+    function fechar(){ if (ov && ov.parentNode) ov.parentNode.removeChild(ov); ov = null; atualizarAviso(); }
+    function itensDoDia(dia){
+      if (!escolhaPorDia[dia]) escolhaPorDia[dia] = escolher(dia);
+      // tira o que já foi registrado (por este ou outro aparelho)
+      escolhaPorDia[dia] = escolhaPorDia[dia].filter(function(it){ return !jaAuditado(it.x) || it._salvando; });
+      return escolhaPorDia[dia];
+    }
+    function render(){
+      if (!ov) return;
+      var corpo = ov.querySelector('[data-aud-corpo]');
+      var pend = diasPendentes(), hoje = hojeSP(), c = config();
+      var dias = pend.slice(); if (dias.indexOf(diaSel) === -1) dias.push(diaSel); if (dias.indexOf(hoje) === -1) dias.push(hoje); dias.sort();
+      var feitas = auditoriasDe(diaSel), itens = itensDoDia(diaSel), cand = candidatos(diaSel);
+      var html = '';
+      if (hoje > c.venc) html += '<p class="foot-note" style="color:var(--critical); margin:0 0 8px;"><b>O vencimento do equipamento ' + escapeHtml(c.equip) + ' (' + br(c.venc) + ') já passou.</b> Atualize em "Equipamento" lá embaixo.</p>';
+      html += '<div style="display:flex; gap:6px; flex-wrap:wrap; margin:0 0 10px;">' + dias.map(function(d){
+        var p = pend.indexOf(d) !== -1, sel = d === diaSel;
+        return '<button type="button" class="add-btn" data-aud-dia="' + d + '" style="padding:6px 10px;' + (sel ? ' border:2px solid #f97316; font-weight:800;' : '') + (p ? ' color:#c2410c;' : auditoriasDe(d).length ? ' color:var(--good);' : '') + '">' + (d === hoje ? 'Hoje' : br(d).slice(0, 5)) + (p ? ' • pendente' : auditoriasDe(d).length || pulado(d) ? ' ✓' : '') + '</button>';
+      }).join('') + '</div>';
+      // o que já foi feito no dia
+      if (feitas.length) html += '<div style="margin:0 0 10px;">' + feitas.map(function(a){
+        return '<div style="padding:8px 10px; border:1px solid var(--good); border-radius:8px; margin:0 0 6px; background:rgba(22,163,74,0.08);">✅ <b>' + escapeHtml(a.rp) + '</b> · ' + escapeHtml(a.cliente) + ' · OF ' + escapeHtml(a.of) + ' · auditado ' + escapeHtml(a.auditado) + (a.nc ? ' · <b>NC</b>' : '') + '</div>';
+      }).join('') + '</div>';
+      if (pulado(diaSel)) html += '<p class="foot-note" style="margin:0 0 10px;">Dia marcado como "sem auditoria".</p>';
+      if (!itens.length){
+        html += '<p class="foot-note" style="margin:0 0 10px;">' + (feitas.length >= 2 || (feitas.length && !cand.length) ? 'Auditoria de ' + br(diaSel) + ' completa.' : 'Nenhum romaneio concluído (sem TATU, com RP e OF) para auditar em ' + br(diaSel) + ' ainda.') + '</p>';
+      }
+      html += itens.map(function(it, i){
+        var r = it.x.r, opcoes = [];
+        cand.forEach(function(x){ linhas(x).forEach(function(l, li){ opcoes.push({ v: x.id + '|' + li, t: (ncs(x).length ? '⚠ NC · ' : '') + (r === x.r && l.rp === it.rp && l.of === it.of ? '● ' : '') + l.rp + ' · ' + l.cliente + ' · OF ' + l.of + ' · ' + (x.r.placa || '') + ' ' + (x.r.motorista || '') }); }); });
+        var urlOk = it.aberto;
+        return '<div style="border:' + (it.nc.length ? '2px solid var(--critical)' : '1px solid var(--border)') + '; border-radius:10px; padding:10px 12px; margin:0 0 12px;">' +
+          '<div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:center;"><b>Item ' + (feitas.length + i + 1) + (it.nc.length ? ' · <span style="color:var(--critical);">não conformidade</span>' : '') + '</b>' +
+            '<select data-aud-trocar="' + i + '" style="max-width:100%; font-size:12px;"><option value="">Trocar por outra linha do dia…</option>' + opcoes.map(function(o){ return '<option value="' + escapeHtml(o.v) + '">' + escapeHtml(o.t) + '</option>'; }).join('') + '</select></div>' +
+          '<table style="width:100%; font-size:13px; margin:6px 0; border-collapse:collapse;">' +
+            '<tr><td style="color:var(--text-muted); width:110px;">Data</td><td><b>' + br(diaSel) + '</b></td></tr>' +
+            '<tr><td style="color:var(--text-muted);">RP</td><td><b>' + escapeHtml(it.rp) + '</b></td></tr>' +
+            '<tr><td style="color:var(--text-muted);">Cliente</td><td><b>' + escapeHtml(it.cliente) + '</b></td></tr>' +
+            '<tr><td style="color:var(--text-muted);">OF</td><td><b>' + escapeHtml(it.of) + '</b></td></tr>' +
+            '<tr><td style="color:var(--text-muted);">Auditado</td><td><select data-aud-auditado="' + i + '">' + AUDITADOS.map(function(n){ return '<option' + (n === it.auditado ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select> <span class="foot-note">(carregou: ' + escapeHtml(r.emp || '?') + ')</span></td></tr>' +
+            '<tr><td style="color:var(--text-muted);">Romaneio</td><td>' + escapeHtml((r.placa || '') + ' · ' + (r.motorista || '')) + ' · ' + totalLinhas(it.x) + ' linha(s)</td></tr>' +
+          '</table>' +
+          (it.nc.length ? '<div style="background:rgba(220,38,38,0.08); border-radius:8px; padding:8px 10px; margin:0 0 8px; font-size:13px;">' +
+            it.nc.map(function(n){ return '<div><b>Pergunta ' + n.p + ' (' + PERGUNTAS[n.p - 1] + '):</b> ' + escapeHtml(n.texto) + '</div>'; }).join('') +
+            '<div style="margin-top:6px;">Vai como <b>Não Conforme</b>: ' + ASPECTOS.filter(function(a){ return a.padrao === 'Conforme'; }).map(function(a){
+              return '<label style="display:inline-flex; gap:4px; align-items:center; margin:2px 8px 2px 0;"><input type="checkbox" data-aud-aspecto="' + i + '|' + a.k + '"' + (it.aspectos.indexOf(a.k) !== -1 ? ' checked' : '') + '> ' + a.nome + '</label>';
+            }).join('') + '</div>' +
+            '<div style="margin-top:6px;">Na página da não conformidade do formulário, cole este texto: <button type="button" class="add-btn" data-aud-copiar="' + i + '" style="padding:3px 10px; font-size:12px;">📋 Copiar texto</button></div>' +
+          '</div>' : '') +
+          '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+            '<button type="button" class="add-btn btn-destaque-azul" data-aud-abrir="' + i + '" style="flex:1 1 200px;">1. Abrir formulário preenchido</button>' +
+            '<button type="button" class="add-btn btn-destaque-verde" data-aud-enviei="' + i + '" style="flex:1 1 200px;"' + (urlOk ? '' : ' title="Abra o formulário e envie antes"') + '>2. Já enviei — registrar</button>' +
+          '</div>' +
+          (urlOk ? '' : '<p class="foot-note" style="margin:6px 0 0;">Confira os dados no formulário e clique em <b>Enviar</b> lá; depois volte e clique em "Já enviei".</p>') +
+        '</div>';
+      }).join('');
+      var outros = cand.filter(function(x){ return !itens.some(function(i){ return i.romId === x.id; }); });
+      if (outros.length) html += '<p class="foot-note" style="margin:0 0 10px;">Outros romaneios do dia: ' + outros.map(function(x){ return escapeHtml(linhas(x)[0].cliente + ' (' + (x.r.placa || '') + ')'); }).join(' · ') + '</p>';
+      html += '<div style="display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:10px; align-items:center;">' +
+        '<button type="button" class="add-btn btn-destaque-laranja" data-aud-excel>⬇ Baixar Excel das auditorias</button>' +
+        (pend.indexOf(diaSel) !== -1 ? '<button type="button" class="add-btn" data-aud-pular title="Tira este dia da lista de pendentes, sem auditoria">Não vou auditar este dia</button>' : '') +
+        (pulado(diaSel) ? '<button type="button" class="add-btn" data-aud-despular>Voltar a auditar este dia</button>' : '') +
+        '<span style="flex:1 1 auto;"></span>' +
+        '<label class="foot-note" style="margin:0;">Equipamento <input type="text" data-aud-equip value="' + escapeHtml(c.equip) + '" style="width:60px;"> vence <input type="date" data-aud-venc value="' + escapeHtml(c.venc) + '"></label>' +
+      '</div><p class="foot-note" data-aud-status style="margin:8px 0 0;"></p>';
+      corpo.innerHTML = html;
+      mostrarStatus();
+    }
+    // a mensagem fica guardada: a tela se redesenha quando chega a auditoria gravada
+    var msg = { t: '', ruim: false };
+    function mostrarStatus(){ var el = ov && ov.querySelector('[data-aud-status]'); if (el){ el.textContent = msg.t; el.style.color = msg.ruim ? 'var(--critical)' : 'var(--good)'; } }
+    function status(t, ruim){ msg = { t: t || '', ruim: !!ruim }; mostrarStatus(); }
+    function gravar(id, dados){ return dbAud ? dbAud.collection('auditorias').doc(id).set(dados) : Promise.reject(new Error('sem banco')); }
+    function idDe(t){ return String(t).replace(/[^A-Za-z0-9_\-.]/g, '-').slice(0, 180); }
+    function clique(ev){
+      var b = ev.target.closest ? ev.target.closest('button') : null;
+      if (ev.target === ov || (b && b.hasAttribute('data-aud-fechar'))){ fechar(); return; }
+      if (!b) return;
+      var itens = itensDoDia(diaSel);
+      if (b.hasAttribute('data-aud-dia')){ diaSel = b.getAttribute('data-aud-dia'); msg = { t: '', ruim: false }; render(); return; }
+      if (b.hasAttribute('data-aud-abrir')){
+        var it = itens[+b.getAttribute('data-aud-abrir')]; if (!it) return;
+        it.aberto = true;
+        window.open(urlForm(it, diaSel), '_blank');
+        render(); return;
+      }
+      if (b.hasAttribute('data-aud-copiar')){
+        var it2 = itens[+b.getAttribute('data-aud-copiar')]; if (!it2) return;
+        var txt = it2.nc.map(function(n){ return n.texto; }).join(' / ');
+        (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function(){ status('Texto da não conformidade copiado.'); }, function(){ window.prompt('Copie o texto:', txt); });
+        return;
+      }
+      if (b.hasAttribute('data-aud-enviei')){
+        var it3 = itens[+b.getAttribute('data-aud-enviei')]; if (!it3) return;
+        if (!it3.aberto && !window.confirm('Você ainda não abriu o formulário deste item por aqui. Registrar mesmo assim como enviado?')) return;
+        var nomes = ASPECTOS.filter(function(a){ return it3.aspectos.indexOf(a.k) !== -1; }).map(function(a){ return a.nome; });
+        var c = config();
+        it3._salvando = true;
+        gravar(idDe('aud_' + diaSel + '_' + it3.romId + '_' + it3.rp + '_' + it3.of), {
+          tipo: 'auditoria', data: diaSel, auditado: it3.auditado, rp: it3.rp, cliente: it3.cliente, of: it3.of,
+          romaneioId: it3.romId, placa: it3.x.r.placa || '', motorista: it3.x.r.motorista || '',
+          nc: it3.nc.length > 0, aspectosNc: nomes, obs: obsDe(it3), equip: c.equip, venc: c.venc,
+          feitoEm: new Date().toISOString(), feitoPor: (typeof currentSessionNome !== 'undefined' && currentSessionNome) || '', origem: 'app'
+        }).then(function(){
+          it3._salvando = false;
+          escolhaPorDia[diaSel] = itens.filter(function(x){ return x !== it3; });
+          render(); atualizarAviso();
+          status('Auditoria registrada: ' + it3.rp + ' · ' + it3.cliente + '.');
+        }, function(){ it3._salvando = false; status('Não foi possível registrar agora. Tente de novo.', true); });
+        return;
+      }
+      if (b.hasAttribute('data-aud-pular')){
+        if (!window.confirm('Tirar ' + br(diaSel) + ' da lista de pendentes, sem auditoria?')) return;
+        gravar('pulado_' + diaSel, { tipo: 'pulado', data: diaSel, feitoEm: new Date().toISOString(), feitoPor: (typeof currentSessionNome !== 'undefined' && currentSessionNome) || '' }).then(function(){ render(); atualizarAviso(); });
+        return;
+      }
+      if (b.hasAttribute('data-aud-despular')){ dbAud.collection('auditorias').doc('pulado_' + diaSel)['delete']().then(function(){ render(); atualizarAviso(); }); return; }
+      if (b.hasAttribute('data-aud-excel')){ baixarExcel(); return; }
+    }
+    function mudou(ev){
+      var el = ev.target, itens = itensDoDia(diaSel);
+      if (el.hasAttribute('data-aud-auditado')){ var it = itens[+el.getAttribute('data-aud-auditado')]; if (it){ it.auditado = el.value; it.aberto = false; } render(); return; }
+      if (el.hasAttribute('data-aud-aspecto')){
+        var p = el.getAttribute('data-aud-aspecto').split('|'), it2 = itens[+p[0]]; if (!it2) return;
+        it2.aspectos = it2.aspectos.filter(function(k){ return k !== p[1]; }); if (el.checked) it2.aspectos.push(p[1]);
+        it2.aberto = false; render(); return;
+      }
+      if (el.hasAttribute('data-aud-trocar') && el.value){
+        var i = +el.getAttribute('data-aud-trocar'), v = el.value.split('|');
+        var x = candidatos(diaSel).filter(function(c){ return c.id === v[0]; })[0]; if (!x) return;
+        var usados = auditoriasDe(diaSel).map(function(a){ return a.auditado; }).concat(itens.filter(function(_, k){ return k !== i; }).map(function(t){ return t.auditado; }));
+        itens[i] = novoItem(x, linhas(x)[+v[1]], usados);
+        render(); return;
+      }
+      if (el.hasAttribute('data-aud-equip') || el.hasAttribute('data-aud-venc')){
+        var c = config();
+        var eq = ov.querySelector('[data-aud-equip]').value.trim() || c.equip, ve = ov.querySelector('[data-aud-venc]').value || c.venc;
+        gravar('config', { tipo: 'config', equip: eq, venc: ve, feitoEm: new Date().toISOString() }).then(function(){ status('Equipamento atualizado.'); });
+      }
+    }
+
+    // ---- Excel: uma aba por mês, como a "Lista de Auditorias de Processo - Expedição" ----
+    var MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    function baixarExcel(){
+      if (typeof XLSX === 'undefined'){ status('O gerador de Excel não carregou. Recarregue a página.', true); return; }
+      var lista = registros.filter(function(r){ return r.tipo === 'auditoria'; })
+        .sort(function(a, b){ return a.data.localeCompare(b.data) || String(a.ordem || a.feitoEm || '').localeCompare(String(b.ordem || b.feitoEm || '')); });
+      if (!lista.length){ status('Nenhuma auditoria registrada ainda.', true); return; }
+      var porMes = {}, ordem = [];
+      lista.forEach(function(a){ var k = a.data.slice(0, 7); if (!porMes[k]){ porMes[k] = []; ordem.push(k); } porMes[k].push(a); });
+      var CAB = ['Data', 'Auditoria Diária', 'Nome do Auditor', 'Nome do Auditado', 'Código do Produto (RP)', 'Cliente / Fornecedor de MP', 'Nº OF/BI', 'Unidade', 'Linha', 'Equipamento de Medição', 'Vencimento do Equipamento', 'Observações'];
+      var LARG = [12, 14, 14, 16, 20, 26, 12, 12, 12, 18, 20, 40];
+      var BORDA = { style: 'thin', color: { rgb: 'FFD9D9D9' } }, BORDAS = { top: BORDA, bottom: BORDA, left: BORDA, right: BORDA };
+      var wb = XLSX.utils.book_new();
+      ordem.forEach(function(k){
+        var grid = [CAB].concat(porMes[k].map(function(a){
+          return [br(a.data), 'Facilitador', 'Reinaldo', a.auditado || '', a.rp || '', a.cliente || '', a.of || '', 'Unidade I', 'Expedição', a.equip || '2256', br(a.venc || '2026-10-31'), a.obs || ''];
+        }));
+        var ws = XLSX.utils.aoa_to_sheet(grid);
+        ws['!cols'] = LARG.map(function(w){ return { wch: w }; });
+        ws['!autofilter'] = { ref: 'A1:L' + grid.length };
+        for (var r = 0; r < grid.length; r++) for (var c = 0; c < CAB.length; c++){
+          var ref = XLSX.utils.encode_cell({ r: r, c: c });
+          if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+          ws[ref].s = r === 0 ? { fill: { fgColor: { rgb: 'FF1F4E78' } }, font: { bold: true, color: { rgb: 'FFFFFFFF' } }, border: BORDAS, alignment: { vertical: 'center', wrapText: true } }
+            : { border: BORDAS, alignment: { vertical: 'top', wrapText: c === 11 } };
+        }
+        var p = k.split('-');
+        XLSX.utils.book_append_sheet(wb, ws, MESES[+p[1] - 1] + ' ' + p[0]);
+      });
+      var blob = new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/octet-stream' });
+      claude.use('downloads').then(function(downloads){
+        return downloads.save({ filename: 'Lista de Auditorias de Processo - Expedição.xlsx', data: blob });
+      }).then(function(){ status('Excel gerado (' + lista.length + ' auditorias, ' + ordem.length + ' mês(es)).'); }, function(){ status('Não foi possível salvar o Excel.', true); });
+    }
+
+    var btnAbrir = document.getElementById('aud-abrir-btn'), aviso = document.getElementById('aud-aviso');
+    if (btnAbrir) btnAbrir.addEventListener('click', abrir);
+    if (aviso) aviso.addEventListener('click', abrir);
+    claude.use('db').then(function(db){
+      dbAud = db;
+      db.collection('auditorias').orderBy('data', 'desc').limit(2000).onSnapshot(function(s){
+        registros = (s.docs || []).map(function(d){ return Object.assign({ id: d.id }, d.data() || {}); });
+        atualizarAviso();
+        if (ov) render();
+      });
+    });
+    // a lista de concluídos chega depois do login: confere o aviso quando ela muda
+    window.addEventListener('ripack-gravou', function(){ setTimeout(atualizarAviso, 500); });
+    window.__ripackAuditoriaAviso = atualizarAviso;
+  })();
   function wizAbrirCalculadoraComCaminhao(d, itensSaldoTatu){
     if (!cfFardosModal) return;
     cfFardosModal.hidden = false;
@@ -18120,6 +18494,7 @@ var SIGNATURES = {
     tentativa = tentativa || 0;
     db.collection('romaneios').where('docStatus', '==', 'concluido').orderBy('assinadoEm', 'desc').limit(200).onSnapshot(function(snap){
       allDoneDocs = snap.docs || [];
+      if (window.__ripackAuditoriaAviso) window.__ripackAuditoriaAviso();
       reconciliarVerificacoesRecentes();
       renderFiltered();
       if (typeof renderNathanPendencias === 'function') renderNathanPendencias();
@@ -18220,6 +18595,7 @@ var SIGNATURES = {
   function applyRole(role){
     var leitorTopo = document.getElementById('leitor-topo-btn');
     if (leitorTopo) leitorTopo.hidden = (role === 'admin');
+    if (window.__ripackAuditoriaAviso) setTimeout(window.__ripackAuditoriaAviso, 0);
     var admEls = document.querySelectorAll('[data-role="admin"]');
     admEls.forEach(function(el){
       el.style.display = (role === 'admin') ? 'block' : 'none';

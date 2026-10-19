@@ -109,7 +109,8 @@
   // listas por abertura) — foi o que esgotou a transferência do Render em 2026-10-19. Agora o
   // aparelho guarda até onde já acompanhou as mudanças (cursor) e quando baixou cada lista por
   // inteiro; ao abrir, busca só o que mudou desde então. Lista inteira de novo: no máximo 1x por dia.
-  var SYNC_KEY = 'ripack_romaneio_sync';
+  var SYNC_KEY = 'ripack_romaneio_sync2';
+  try { localStorage.removeItem('ripack_romaneio_sync'); } catch (e) {}
   var LISTA_VALE_MS = 20 * 60 * 60 * 1000;
   var sync = { c: null, f: {} };
   try {
@@ -143,16 +144,16 @@
   }, function () {});
 
   // data null = apagado
+  // devolve a promessa da gravação no aparelho (para só marcar "em dia" depois de gravado)
   function guardarLocal(col, id, data) {
     var c = local[col] = local[col] || {};
     if (data === null || data === undefined) {
-      if (!(id in c)) return;
+      if (!(id in c)) return Promise.resolve();
       delete c[id];
-      idbFazer('docs', 'readwrite', function (s) { return s['delete'](chave(col, id)); });
-    } else {
-      c[id] = data;
-      idbFazer('docs', 'readwrite', function (s) { return s.put({ k: chave(col, id), col: col, id: id, data: data }); });
+      return idbFazer('docs', 'readwrite', function (s) { return s['delete'](chave(col, id)); });
     }
+    c[id] = data;
+    return idbFazer('docs', 'readwrite', function (s) { return s.put({ k: chave(col, id), col: col, id: id, data: data }); });
   }
 
   // ---- imagens guardadas à parte ----
@@ -257,10 +258,10 @@
   // resposta do servidor para uma busca: atualiza a cópia e tira dela o que o servidor não tem mais
   // (o que ainda está na fila deste aparelho fica como está: é mais novo que o servidor)
   function reconciliar(q, docs) {
-    var col = q.col, vistos = {};
+    var col = q.col, vistos = {}, gravando = [];
     docs.forEach(function (d) {
       vistos[d.id] = true;
-      if (!pendentes[chave(col, d.id)]) guardarLocal(col, d.id, d.data);
+      if (!pendentes[chave(col, d.id)]) gravando.push(guardarLocal(col, d.id, d.data));
     });
     var completo = !q._limite || docs.length < q._limite;
     var ultimo = docs[docs.length - 1], cmp = q._ordem ? comparar(q) : null;
@@ -268,9 +269,10 @@
       if (vistos[id] || pendentes[chave(col, id)]) return;
       var d = { id: id, data: local[col][id] };
       if (!entraNaBusca(q, d.data)) return;
-      if (completo || (cmp && ultimo && cmp(d, ultimo) < 0)) guardarLocal(col, id, null);
+      if (completo || (cmp && ultimo && cmp(d, ultimo) < 0)) gravando.push(guardarLocal(col, id, null));
     });
     marcarConhecida(col);
+    return Promise.all(gravando);
   }
 
   function caminhoDoc(col, id) { return '/docs/' + encodeURIComponent(col) + '/' + encodeURIComponent(id); }
@@ -284,7 +286,8 @@
       if (e.status === 404) return null;
       throw e;
     }).then(function (data) {
-      if (!pendentes[k]) guardarLocal(col, id, data);
+      return pendentes[k] ? null : guardarLocal(col, id, data);
+    }).then(function () {
       marcarListaEmDia(caminhoDoc(col, id));
     });
     lendoDoc[k] = p;
@@ -299,8 +302,9 @@
       lendoQuery[caminho].then(function () { delete lendoQuery[caminho]; }, function () { delete lendoQuery[caminho]; });
     }
     return lendoQuery[caminho].then(function (r) {
-      reconciliar(q, (r && r.docs) || []);
-      marcarListaEmDia(caminho);
+      var gravado = reconciliar(q, (r && r.docs) || []);
+      // marca "em dia" só depois de gravado no aparelho: fechar a página no meio não deixa cópia pela metade
+      gravado.then(function () { marcarListaEmDia(caminho); });
     });
   }
 
@@ -323,23 +327,23 @@
   // devolve uma promessa: true se a cópia desta coleção ficou em dia com essas mudanças
   function mudouNoServidor(col, ids, apagados) {
     var alvo = ouvintes.filter(function (o) { return o.col === col; });
-    apagados.forEach(function (id) { if (!pendentes[chave(col, id)]) guardarLocal(col, id, null); });
+    var apagando = apagados.map(function (id) { return pendentes[chave(col, id)] ? null : guardarLocal(col, id, null); });
     var mudados = ids.filter(function (id) { return apagados.indexOf(id) < 0; });
     // ninguém mostrando esta coleção agora: não baixa nada; a tela dela, quando abrir, baixa a lista
     if (!alvo.length) {
       if (mudados.length) esquecerColecao(col);
       if (apagados.length) notificar(col);
-      return Promise.resolve(true);
+      return Promise.all(apagando).then(function () { return true; });
     }
     if (mudados.length > MAX_INCREMENTAL) {
       esquecerColecao(col);
       alvo.forEach(function (o) { o.atualizar(); });
-      return Promise.resolve(true);
+      return Promise.all(apagando).then(function () { return true; });
     }
     var ok = true;
-    return Promise.all(mudados.map(function (id) {
+    return Promise.all(apagando.concat(mudados.map(function (id) {
       return buscarDocServidor(col, id).catch(function () { ok = false; });
-    })).then(function () {
+    }))).then(function () {
       if (!ok) esquecerColecao(col);
       notificar(col);
       return true;
