@@ -269,12 +269,51 @@ function pastaInclusor() {
 // lançamento automático quando um romaneio é criado (ver ofs-auto.js) — só Oracle, sem o servidor/Neon
 let ofsAuto = null;
 ipcMain.handle('ofs-oracle', (_evento, entrada) => {
+  if (entrada && entrada.acao === 'planilhaAuditoriaExiste') return { ok: fs.existsSync(planilhaAuditoria()) };
+  if (entrada && entrada.acao === 'planilhaAuditoria') return rodarPlanilhaAuditoria(entrada.linhas || []);
   if (entrada && entrada.acao === 'disponivel') return { ok: !!pastaInclusor() };
   if (entrada && entrada.acao === 'auto') return ofsAuto ? ofsAuto.lancar(String(entrada.id), entrada.romaneio || {}) : null;
   if (entrada && entrada.acao === 'status') return ofsAuto ? ofsAuto.status() : {};
   if (entrada && entrada.acao === 'registrar') return ofsAuto ? ofsAuto.registrar(String(entrada.id), entrada.linhas, entrada.completo) : null;
   return rodarOfsOracle(entrada);
 });
+
+// Auditoria diária: as auditorias registradas no app entram também na planilha
+// "Lista de Auditorias de Processo - Expedição.xlsx" (área de trabalho, pasta EXPEDIÇÃO), pelo próprio
+// Excel para manter a formatação. Só no PC que tem a planilha; uma gravação por vez.
+const AUD_SCRIPT = path.join(__dirname, 'auditoria-planilha.ps1');
+function planilhaAuditoria() {
+  return path.join(app.getPath('desktop'), 'EXPEDIÇÃO', 'Lista de Auditorias de Processo - Expedição.xlsx');
+}
+let filaPlanilha = Promise.resolve();
+function rodarPlanilhaAuditoria(linhas) {
+  const tarefa = filaPlanilha.then(() => new Promise((resolve) => {
+    const arquivo = planilhaAuditoria();
+    if (!fs.existsSync(arquivo)) { resolve({ ok: false, erro: 'Planilha não encontrada neste PC.' }); return; }
+    const copia = path.join(app.getPath('userData'), 'auditoria-planilha.ps1');
+    try {
+      const conteudo = fs.readFileSync(AUD_SCRIPT, 'utf8');
+      let atual = null;
+      try { atual = fs.readFileSync(copia, 'utf8'); } catch {}
+      if (atual !== conteudo) fs.writeFileSync(copia, conteudo, 'utf8');
+    } catch (e) { resolve({ ok: false, erro: 'Não foi possível preparar o script da planilha: ' + e.message }); return; }
+    const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', copia], {
+      windowsHide: true,
+      env: { ...process.env, RIPACK_AUD_ENTRADA: Buffer.from(JSON.stringify({ arquivo, linhas }), 'utf8').toString('base64') },
+    });
+    let saida = '';
+    child.stdout.on('data', (d) => { saida += d.toString('utf8'); });
+    const timer = setTimeout(() => child.kill(), 180 * 1000);
+    child.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, erro: e.message }); });
+    child.on('exit', () => {
+      clearTimeout(timer);
+      const json = saida.trim().split(/\r?\n/).reverse().find((l) => l.startsWith('{'));
+      try { resolve(JSON.parse(json)); } catch { resolve({ ok: false, erro: (saida || 'Sem resposta do Excel.').trim().slice(0, 300) }); }
+    });
+  }));
+  filaPlanilha = tarefa.catch(() => {});
+  return tarefa;
+}
 
 // O Romaneio roda num iframe da janela principal (rota #/romaneio). Pedidos de nova janela
 // dele chegam aqui: o botão "📗 Atualizar RQ C 008" roda o script e o app envia a planilha.
