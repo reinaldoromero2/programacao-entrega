@@ -1053,7 +1053,15 @@
     <button type="button" class="add-btn btn-destaque-verde" id="leitor-topo-btn" hidden onclick="document.getElementById('leitor-abrir-btn').click()" style="width:100%; padding:16px; font-size:18px; font-weight:800; border-radius:14px; margin:0 0 14px;">📷 Ler etiquetas</button>
 
     <div class="card card-cristal">
-      <h2>CARREGAMENTOS</h2>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h2 style="margin:0;">CARREGAMENTOS</h2>
+        <!-- só os romaneios carregados no local escolhido (o "Local carregado" de cada romaneio) -->
+        <div id="filtro-local" role="group" aria-label="Local carregado" style="display:inline-flex; border:1px solid var(--border); border-radius:999px; overflow:hidden;">
+          <button type="button" data-filtro-local="matriz" style="border:none; padding:6px 14px; font:inherit; font-size:13px; font-weight:700; cursor:pointer;">Matriz</button>
+          <button type="button" data-filtro-local="filial" style="border:none; border-left:1px solid var(--border); padding:6px 14px; font:inherit; font-size:13px; font-weight:700; cursor:pointer;">Filial</button>
+          <button type="button" data-filtro-local="todos" style="border:none; border-left:1px solid var(--border); padding:6px 14px; font:inherit; font-size:13px; font-weight:700; cursor:pointer;">Todos</button>
+        </div>
+      </div>
       <p class="foot-note" id="pend-status" style="margin:6px 0 4px;"></p>
 
       <div id="pend-list"></div>
@@ -2357,6 +2365,7 @@
               <div id="cf-itens-lista" style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;"></div>
               <button type="button" class="add-btn btn-destaque-azul" id="cf-item-add" style="margin-bottom:18px;">+ Add</button>
               <datalist id="cf-fardos-datalist"></datalist>
+              <datalist id="cf-codigos-datalist"></datalist>
 
               <button type="button" id="cf-empilhamento-toggle-btn" title="Empilhamento de sobras" style="width:auto; margin:18px 0 0; padding:6px 12px; font-size:12px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px;">📚 Empilhamento de sobras</button>
               <div id="cf-empilhamento-painel" hidden style="margin-top:10px;">
@@ -4270,8 +4279,15 @@ var SIGNATURES = {
         var rpResolvido = rp ? resolverCodigoRpCompleto(rp) : '';
         var rpKey = rpResolvido ? findKeyCI(RP_MAP, rpResolvido) : null;
         if (rp && !rpKey){
-          priceHint.textContent = 'RP n\u00e3o encontrado';
-          priceHint.style.color = 'var(--critical)';
+          // qualquer código vale (mesmo sem preço cadastrado): entra com preço zero
+          var rpLivre = rpComZeros(rp.toUpperCase());
+          priceHint.textContent = 'sem pre\u00e7o cadastrado';
+          priceHint.style.color = 'var(--text-muted)';
+          if (qtd > 0){
+            itensDoCliente.push({ rp: rpLivre, qtd: qtd, qtdLabel: qtdLabel, preco: 0, subtotal: 0, ofobs: ofobs });
+          } else if (qtdPendente){
+            itensDoCliente.push({ rp: rpLivre, qtd: 0, qtdLabel: qtdLabel, preco: 0, subtotal: 0, ofobs: ofobs });
+          }
         } else if (rpKey){
           var preco = RP_MAP[rpKey];
           total += preco * qtd;
@@ -8990,6 +9006,9 @@ var SIGNATURES = {
       if (it.cliente && it.cliente.trim()){ adicionar(it.cliente); return; }
       var fardo = fardosMapa[it.fardoId];
       var codigoTexto = fardo ? fardo.codigo : (it.codigoSemFardo || '');
+      // código livre (sem medida) só indica cliente quando tem o formato de RP ("0530-007/02");
+      // "0910015" (insumo) não é do cliente 0910
+      if (codigoTexto && !fardo && !/^\d{3,4}-/.test(codigoTexto)) return;
       if (codigoTexto) adicionar(codigoTexto);
     });
     return grupos;
@@ -9492,7 +9511,7 @@ var SIGNATURES = {
         // linha única: RP (prioridade de espaço, nunca cortado) + Qtd +
         // Preencher (ícone) + OF — tudo mais compacto pra caber lado a lado.
         '<div style="display:flex; gap:6px; align-items:flex-end;">' +
-          '<div class="field" style="flex:1.7; min-width:64px; margin-bottom:0;"><label style="margin-bottom:3px;">RP</label><div class="rp-wrap"><input type="text" class="cf-item-fardo rp-input" autocomplete="off" placeholder="Buscar fardo..." value="' + escapeHtml(valorFardoAtual) + '">' +
+          '<div class="field" style="flex:1.7; min-width:64px; margin-bottom:0;"><label style="margin-bottom:3px;">RP</label><div class="rp-wrap"><input type="text" class="cf-item-fardo rp-input" list="cf-codigos-datalist" autocomplete="off" placeholder="Buscar fardo ou código..." value="' + escapeHtml(valorFardoAtual) + '">' +
             '<button type="button" class="rp-copy-btn cf-item-fardo-copy" title="Copiar código RP">' +
               '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="5" width="9" height="9" rx="1.5"></rect><path d="M3.5 10.5H2.8A1.3 1.3 0 0 1 1.5 9.2V2.8A1.3 1.3 0 0 1 2.8 1.5h6.4A1.3 1.3 0 0 1 10.5 2.8v0.7"></path></svg>' +
             '</button>' +
@@ -9744,6 +9763,8 @@ var SIGNATURES = {
           var item = cfItens.filter(function(i){ return i.id === id; })[0];
           if (!item) return;
           var val = selFardo.value.trim();
+          cfCarregarCodigosMat();
+          cfAtualizarSugestoesRp(val);
           var novoFardoId = cfFardoLabelToId[val] || '';
           if (novoFardoId){
             // já bate exatamente com um fardo cadastrado (ex: escolheu da
@@ -10205,6 +10226,49 @@ var SIGNATURES = {
   // item entre no romaneio/total mesmo sem desenhar nada, com aviso pra
   // cadastrar o fardo depois. Devolve o RP completo já resolvido, ou ''
   // se nem na tabela de preço esse código existe.
+  // ---- todos os códigos de material do sistema (codigos-materiais.js, ~88 mil, carregado na 1ª vez
+  // que se digita no RP) — só para sugerir; qualquer código digitado vale, mesmo fora da lista ----
+  var cfCodigosMat = null, cfCodigosMatMapa = null, cfCodigosMatCarregando = false;
+  function cfCarregarCodigosMat(){
+    if (cfCodigosMat || cfCodigosMatCarregando) return;
+    cfCodigosMatCarregando = true;
+    var sc = document.createElement('script');
+    sc.src = 'codigos-materiais.js';
+    sc.onload = function(){
+      var t = window.__ripackCodigosMateriais || '';
+      cfCodigosMat = t ? t.split('\n') : [];
+      cfCodigosMatMapa = {};
+      cfCodigosMat.forEach(function(c){ cfCodigosMatMapa[c.toUpperCase()] = c; });
+      window.__ripackCodigosMateriais = null;
+    };
+    sc.onerror = function(){ cfCodigosMatCarregando = false; };
+    document.head.appendChild(sc);
+  }
+  // sugestões do campo RP: fardos cadastrados que batem com o texto e depois os códigos do sistema
+  // (começando pelo texto primeiro, depois contendo), no máximo 30
+  function cfAtualizarSugestoesRp(texto){
+    var dl = document.getElementById('cf-codigos-datalist');
+    if (!dl) return;
+    var t = rpComZeros(String(texto || '').trim().toUpperCase());
+    if (t.length < 2){ dl.innerHTML = ''; return; }
+    var lista = [], vistos = {};
+    cfFardosOrdenados().forEach(function(f){
+      if (lista.length >= 15 || !f.codigo || f.codigo.toUpperCase().indexOf(t) === -1) return;
+      var rot = cfFardoLabel(f); if (vistos[rot]) return; vistos[rot] = 1; lista.push(rot);
+      vistos[cfCodigoParaRp(f.codigo).toUpperCase()] = 1;
+    });
+    if (cfCodigosMat && t.length >= 3){
+      var comeca = [], contem = [];
+      for (var i = 0; i < cfCodigosMat.length && comeca.length < 30; i++){
+        var c = cfCodigosMat[i], cu = c.toUpperCase();
+        if (vistos[cu]) continue;
+        var pos = cu.indexOf(t);
+        if (pos === 0) comeca.push(c); else if (pos > 0 && contem.length < 30) contem.push(c);
+      }
+      comeca.concat(contem).slice(0, 30 - Math.min(lista.length, 15)).forEach(function(c){ lista.push(c); });
+    }
+    dl.innerHTML = lista.map(function(v){ return '<option value="' + escapeHtml(v) + '"></option>'; }).join('');
+  }
   function cfResolverRpSemFardo(textoDigitado){
     var termo = rpComZeros(String(textoDigitado || '').trim().toUpperCase());
     if (!termo) return '';
@@ -10216,7 +10280,9 @@ var SIGNATURES = {
     // cadastrado é "0774-002C03").
     var base = cfCodigoBase(termo);
     var achadoPelaBase = RP_LIST.filter(function(rp){ return cfCodigoBase(String(rp).toUpperCase()) === base; })[0];
-    return achadoPelaBase || '';
+    if (achadoPelaBase) return achadoPelaBase;
+    // sem medida e sem preço: vale o código como está no sistema, ou como foi digitado
+    return (cfCodigosMatMapa && cfCodigosMatMapa[termo]) || termo;
   }
   // acha, entre as linhas da Calculadora, a 1ª com quantidade preenchida
   // cujo código digitado não bateu com NADA (nem fardo cadastrado, nem RP
@@ -12209,7 +12275,7 @@ var SIGNATURES = {
         // (sem dimensão) — o item entra no romaneio/total (ver
         // cfMontarItensAtuais), só não é desenhado; avisa aqui pra lembrar
         // de cadastrar o fardo depois.
-        totalEl.innerHTML = '<strong style="color:var(--warning);">Código sem fardo cadastrado — cadastre em Fardos.</strong>';
+        totalEl.innerHTML = '<span style="color:var(--text-muted);">Sem medida cadastrada: entra no romaneio, só não aparece no desenho.</span>';
       } else {
         totalEl.textContent = '';
       }
@@ -15874,11 +15940,43 @@ var SIGNATURES = {
       }
     }
 
+    // OF/OBS que não cabe na largura da coluna continua nas linhas de baixo (só a coluna OF/OBS
+    // preenchida); as linhas vazias do fim são usadas primeiro, para o quadro seguir com 9 linhas
+    var FONTE_OFOBS = '14px Arial, Helvetica, sans-serif', LARGURA_OFOBS = 228;
+    var medidor = document.createElement('canvas').getContext('2d');
+    medidor.font = FONTE_OFOBS;
+    function quebrarOfobs(texto){
+      var saida = [];
+      String(texto || '').split('\n').map(function(t){ return t.trim(); }).filter(Boolean).forEach(function(par){
+        var atual = '';
+        par.split(/\s+/).forEach(function(palavra){
+          var tenta = atual ? atual + ' ' + palavra : palavra;
+          if (!atual || medidor.measureText(tenta).width <= LARGURA_OFOBS){ atual = tenta; return; }
+          saida.push(atual); atual = palavra;
+        });
+        if (atual) saida.push(atual);
+      });
+      return saida;
+    }
+    var expandidas = [];
+    linhas.forEach(function(l){
+      var partes = quebrarOfobs(l.ofobs);
+      expandidas.push(Object.assign({}, l, { ofobs: partes[0] || '' }));
+      partes.slice(1).forEach(function(t){ expandidas.push({ cliente: '', rp: '', qtd: '', ofobs: t, continuacao: true }); });
+    });
+    while (expandidas.length > 9){
+      var ultima = expandidas[expandidas.length - 1];
+      if (ultima.cliente || ultima.rp || ultima.qtd !== '' || ultima.ofobs) break;
+      expandidas.pop();
+    }
+    linhas = expandidas;
+
     var esc = escapeHtml;
     var linhasHtml = linhas.map(function(l){
       var ofobsTxt = String(l.ofobs||'');
       var ofobsEhAglotec = ofobsTxt.indexOf('BASE AGLOTEC FILIAL') !== -1;
-      var ofobsStyle = 'border:1px solid #000;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;' +
+      // uma linha de texto por linha da tabela (o resto já foi para as linhas de baixo), letra maior
+      var ofobsStyle = 'border:1px solid #000;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;text-align:center;' +
         (ofobsEhAglotec ? 'font-weight:bold;color:#d00000;' : '');
       return '<tr>' +
         '<td style="border:1px solid #000;padding:4px 6px;height:20px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">' + esc(String(l.cliente||'')) + '</td>' +
@@ -18186,7 +18284,27 @@ var SIGNATURES = {
     }
   });
 
+  // filtro de local carregado dos CARREGAMENTOS: 'matriz', 'filial' ou 'todos' (romaneio sem local = Matriz)
+  var filtroLocalAtual = 'matriz';
+  function pintarFiltroLocal(){
+    document.querySelectorAll('[data-filtro-local]').forEach(function(b){
+      var on = b.getAttribute('data-filtro-local') === filtroLocalAtual;
+      b.style.background = on ? 'var(--accent-blue, #2563eb)' : 'transparent';
+      b.style.color = on ? '#fff' : 'var(--text-primary)';
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  function usarFiltroLocal(v){
+    filtroLocalAtual = v === 'filial' || v === 'todos' ? v : 'matriz';
+    pintarFiltroLocal();
+    if (typeof renderFiltered === 'function') renderFiltered();
+  }
+  document.querySelectorAll('[data-filtro-local]').forEach(function(b){
+    b.addEventListener('click', function(){ usarFiltroLocal(b.getAttribute('data-filtro-local')); });
+  });
+  pintarFiltroLocal();
   function docMatchesFiltro(d, textoFiltro, dataFiltro){
+    if (filtroLocalAtual !== 'todos' && String(d.local || 'Matriz').trim().toLowerCase() !== filtroLocalAtual) return false;
     if (dataFiltro && d.data !== dataFiltro) return false;
     if (textoFiltro){
       var alvo = (resumoClientesTxt(d.clientes, d.cliente) + ' ' + (d.placa || '') + ' ' + (d.motorista || '')).toLowerCase();
@@ -18408,6 +18526,7 @@ var SIGNATURES = {
     setLocalCarregado(localPadrao());
     if (typeof wizState !== 'undefined' && wizState && !(wizState.clientes && wizState.clientes.length)) wizState.localCarregado = localPadrao();
     applyRole(session.role);
+    usarFiltroLocal(localPadrao().toLowerCase());
     if (typeof aplicarVisualModoRomaneio === 'function') aplicarVisualModoRomaneio();
     // a lista de pendentes/concluídos pode já ter sido renderizada antes do
     // login terminar (o app conecta no banco independente da tela de login) —
