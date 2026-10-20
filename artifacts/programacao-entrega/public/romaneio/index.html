@@ -1502,6 +1502,14 @@
           <label class="qa-radio" style="display:none;"><input type="checkbox" id="rom-extra-aglotec"><span>BASE AGLOTEC FILIAL</span></label>
         </div>
       </div>
+      <!-- só com o cliente 1046 TATU: troca o tipo de entrega também depois de gerado (Editar romaneio) -->
+      <div class="field" id="campo-entrega-tatu" style="margin-bottom:14px; display:none;">
+        <label>Entrega TATU</label>
+        <div style="display:flex; gap:12px; padding-top:8px; flex-wrap:wrap;">
+          <label class="qa-radio"><input type="checkbox" id="rom-tatu-romaneio"><span>Romaneio</span></label>
+          <label class="qa-radio"><input type="checkbox" id="rom-tatu-aglotec"><span>Base Aglotec Filial</span></label>
+        </div>
+      </div>
       <div class="field" id="campo-qa-resumo" style="margin-bottom:14px;">
         <label style="display:block; margin-bottom:6px;">Qualidade e meio ambiente</label>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -4230,7 +4238,28 @@ var SIGNATURES = {
     return block;
   }
 
+  // ---- Entrega TATU no "Gerar romaneio": mostra o campo quando tem o cliente 1046 TATU e reflete o
+  // tipo atual (o mesmo que o pop-up "Romaneio / Nota Fiscal (Base Aglotec Filial)" grava) ----
+  function sincronizarEntregaTatu(){
+    var campo = document.getElementById('campo-entrega-tatu');
+    if (!campo || typeof clientsWrap === 'undefined' || !clientsWrap) return;
+    var temTatu = Array.prototype.slice.call(clientsWrap.querySelectorAll('.client-name-input')).some(function(i){
+      return ENTREGA_NUMERO_CLIENTES.indexOf(String(i.value || '').trim().toUpperCase()) !== -1;
+    });
+    campo.style.display = temTatu ? '' : 'none';
+    var ehAglotec = document.getElementById('rom-tipo-entrega-tatu').value === 'nf_aglotec' || document.getElementById('rom-extra-aglotec').checked;
+    document.getElementById('rom-tatu-romaneio').checked = temTatu && !ehAglotec;
+    document.getElementById('rom-tatu-aglotec').checked = temTatu && ehAglotec;
+  }
+  function escolherEntregaTatu(aglotec){
+    document.getElementById('rom-tipo-entrega-tatu').value = aglotec ? 'nf_aglotec' : 'romaneio';
+    document.getElementById('rom-extra-aglotec').checked = !!aglotec;
+    calc();
+  }
+  document.getElementById('rom-tatu-romaneio').addEventListener('change', function(){ escolherEntregaTatu(false); });
+  document.getElementById('rom-tatu-aglotec').addEventListener('change', function(){ escolherEntregaTatu(true); });
   function calc(){
+    sincronizarEntregaTatu();
     var blocks = Array.prototype.slice.call(clientsWrap.querySelectorAll('.client-block'));
     var modo = (document.querySelector('input[name="modo-frete"]:checked') || {}).value || 'frete';
     var qtdPendenteEl = document.getElementById('qtd-pendente-check');
