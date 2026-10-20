@@ -425,6 +425,11 @@
     saldo: function (codigo) { return oracle({ acao: 'saldo', codigo: codigo }); },
     ofsDoRp: function (codigos) { return oracle({ acao: 'ofsDoRp', codigos: codigos }); },
     planilhaAuditoriaExiste: function () { return oracle({ acao: 'planilhaAuditoriaExiste' }); },
+    // arquivo mensal dos romaneios (só no PC com a pasta EXPEDIÇÃO na área de trabalho)
+    arquivoPastaExiste: function () { return oracle({ acao: 'arquivoPastaExiste' }); },
+    arquivoIniciar: function (mes) { return oracle({ acao: 'arquivoIniciar', mes: mes }); },
+    arquivoGravar: function (mes, caminho, base64) { return oracle({ acao: 'arquivoGravar', mes: mes, caminho: caminho, base64: base64 }); },
+    arquivoFechar: function (mes, esperado) { return oracle({ acao: 'arquivoFechar', mes: mes, esperado: esperado }); },
     planilhaAuditoria: function (linhas) { return oracle({ acao: 'planilhaAuditoria', linhas: linhas }); },
     consultarOs: function (agrupa) { return oracle({ acao: 'buscar', agrupas: [agrupa], dias: 60 }); },
     listarOs: function (dias) { return oracle({ acao: 'listarOs', dias: dias }); },

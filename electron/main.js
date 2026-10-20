@@ -270,6 +270,10 @@ function pastaInclusor() {
 let ofsAuto = null;
 ipcMain.handle('ofs-oracle', (_evento, entrada) => {
   if (entrada && entrada.acao === 'planilhaAuditoriaExiste') return { ok: fs.existsSync(planilhaAuditoria()) };
+  if (entrada && entrada.acao === 'arquivoPastaExiste') return { ok: fs.existsSync(pastaExpedicao()) };
+  if (entrada && entrada.acao === 'arquivoIniciar') return arquivoIniciar(entrada.mes);
+  if (entrada && entrada.acao === 'arquivoGravar') return arquivoGravar(entrada.mes, entrada.caminho, entrada.base64);
+  if (entrada && entrada.acao === 'arquivoFechar') return arquivoFechar(entrada.mes, entrada.esperado);
   if (entrada && entrada.acao === 'planilhaAuditoria') return rodarPlanilhaAuditoria(entrada.linhas || []);
   if (entrada && entrada.acao === 'disponivel') return { ok: !!pastaInclusor() };
   if (entrada && entrada.acao === 'auto') return ofsAuto ? ofsAuto.lancar(String(entrada.id), entrada.romaneio || {}) : null;
@@ -313,6 +317,68 @@ function rodarPlanilhaAuditoria(linhas) {
   }));
   filaPlanilha = tarefa.catch(() => {});
   return tarefa;
+}
+
+// Arquivo mensal dos romaneios: a página manda cada arquivo (PDF, desenho, dados) e no fim o
+// Windows monta "Romaneios AAAA-MM.zip" em Área de trabalho\EXPEDIÇÃO\Romaneios arquivados.
+// O .zip é aberto de novo e conferido (quantidade de arquivos) antes de a página apagar algo.
+function pastaExpedicao() { return path.join(app.getPath('desktop'), 'EXPEDIÇÃO'); }
+function pastaTempArquivo(mes) { return path.join(app.getPath('userData'), 'arquivo-romaneios', String(mes).replace(/[^0-9-]/g, '')); }
+function arquivoIniciar(mes) {
+  try {
+    if (!/^\d{4}-\d{2}$/.test(String(mes))) return { ok: false, erro: 'Mês inválido.' };
+    if (!fs.existsSync(pastaExpedicao())) return { ok: false, erro: 'Pasta EXPEDIÇÃO não encontrada na área de trabalho deste PC.' };
+    const dir = pastaTempArquivo(mes);
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    return { ok: true };
+  } catch (e) { return { ok: false, erro: e.message }; }
+}
+function arquivoGravar(mes, caminho, base64) {
+  try {
+    const dir = pastaTempArquivo(mes);
+    // só caminhos relativos simples ("2026-10-15/0530 3M SUMARÉ - SUL2F81.pdf")
+    const rel = String(caminho || '').replace(/\\/g, '/').split('/').filter((x) => x && x !== '.' && x !== '..').map((x) => x.replace(/[<>:"|?*]/g, '')).join(path.sep);
+    if (!rel) return { ok: false, erro: 'Nome de arquivo vazio.' };
+    const destino = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(destino), { recursive: true });
+    fs.writeFileSync(destino, Buffer.from(String(base64 || ''), 'base64'));
+    return { ok: true };
+  } catch (e) { return { ok: false, erro: e.message }; }
+}
+function arquivoFechar(mes, esperado) {
+  return new Promise((resolve) => {
+    try {
+      const dir = pastaTempArquivo(mes);
+      const saidaDir = path.join(pastaExpedicao(), 'Romaneios arquivados');
+      fs.mkdirSync(saidaDir, { recursive: true });
+      let zip = path.join(saidaDir, 'Romaneios ' + mes + '.zip');
+      for (let n = 2; fs.existsSync(zip); n++) zip = path.join(saidaDir, 'Romaneios ' + mes + ' (' + n + ').zip');
+      // entradas com "/" (o CreateFromDirectory do Windows grava "\\", que outros programas leem como nome)
+      const ps = "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; " +
+        "$base = (Get-Item -LiteralPath $env:RIPACK_ARQ_DIR).FullName.TrimEnd('\\') + '\\'; " +
+        "$zw = [IO.Compression.ZipFile]::Open($env:RIPACK_ARQ_ZIP, 'Create'); " +
+        "Get-ChildItem -LiteralPath $env:RIPACK_ARQ_DIR -Recurse -File | ForEach-Object { [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zw, $_.FullName, $_.FullName.Substring($base.Length).Replace('\\', '/').TrimStart('/')) }; " +
+        "$zw.Dispose(); " +
+        "$z = [IO.Compression.ZipFile]::OpenRead($env:RIPACK_ARQ_ZIP); $n = @($z.Entries | Where-Object { $_.Length -gt 0 }).Count; $z.Dispose(); Write-Output $n";
+      const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+        windowsHide: true, env: { ...process.env, RIPACK_ARQ_DIR: dir, RIPACK_ARQ_ZIP: zip },
+      });
+      let out = '', err = '';
+      child.stdout.on('data', (d) => { out += d.toString('utf8'); });
+      child.stderr.on('data', (d) => { err += d.toString('utf8'); });
+      child.on('error', (e) => resolve({ ok: false, erro: e.message }));
+      child.on('exit', () => {
+        const n = parseInt(String(out).trim().split(/\s+/).pop(), 10);
+        if (!(n >= 0)) { resolve({ ok: false, erro: (err || out || 'Não foi possível montar o .zip.').trim().slice(0, 300) }); return; }
+        if (Number(esperado) !== n) { resolve({ ok: false, erro: 'O .zip ficou com ' + n + ' arquivo(s), eram esperados ' + esperado + '. Nada foi apagado.', caminho: zip }); return; }
+        let bytes = 0;
+        try { bytes = fs.statSync(zip).size; } catch {}
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+        resolve({ ok: true, caminho: zip, arquivos: n, bytes });
+      });
+    } catch (e) { resolve({ ok: false, erro: e.message }); }
+  });
 }
 
 // O Romaneio roda num iframe da janela principal (rota #/romaneio). Pedidos de nova janela

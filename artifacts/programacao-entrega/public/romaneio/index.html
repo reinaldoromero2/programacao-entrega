@@ -1642,9 +1642,10 @@
         <button type="button" class="menu-card-btn" data-clicar="leituras-abrir-btn"><span class="menu-card-ico">📋</span><span>Leituras de etiquetas</span></button>
         <button type="button" class="menu-card-btn" data-clicar="saldo-local-abrir-btn"><span class="menu-card-ico">📦</span><span>Saldo por local</span></button>
         <button type="button" class="menu-card-btn" data-clicar="aud-abrir-btn" style="position:relative;"><span class="menu-card-ico">📋</span><span>Auditoria diária</span><span id="aud-bolinha" hidden title="Auditorias pendentes" style="position:absolute; top:-8px; right:-8px; min-width:26px; height:26px; padding:0 7px; box-sizing:border-box; border-radius:13px; background:#dc2626; color:#fff; font-size:14px; font-weight:800; line-height:26px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.3); pointer-events:none;"></span></button>
+        <button type="button" class="menu-card-btn" data-clicar="arq-abrir-btn"><span class="menu-card-ico">🗄️</span><span>Arquivar romaneios</span></button>
       </div>
     </div>
-    <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Ler etiquetas</button><button type="button" id="leituras-abrir-btn" hidden>Leituras de etiquetas</button><button type="button" id="saldo-local-abrir-btn" hidden>Saldo por local</button><button type="button" id="aud-abrir-btn" hidden>Auditoria diária</button></div>
+    <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Ler etiquetas</button><button type="button" id="leituras-abrir-btn" hidden>Leituras de etiquetas</button><button type="button" id="saldo-local-abrir-btn" hidden>Saldo por local</button><button type="button" id="aud-abrir-btn" hidden>Auditoria diária</button><button type="button" id="arq-abrir-btn" hidden>Arquivar romaneios</button></div>
 
     <div class="card" data-role="admin" id="card-historico">
       <div class="history-head">
@@ -16832,6 +16833,221 @@ var SIGNATURES = {
     });
   }
 
+  // ---- Arquivo mensal dos romaneios ----
+  // Na virada do mês (e pelo botão "Arquivar romaneios"), os romaneios concluídos dos meses anteriores
+  // viram "Romaneios AAAA-MM.zip" em Área de trabalho\EXPEDIÇÃO\Romaneios arquivados, uma pasta por
+  // dia (PDF de cada romaneio + o desenho da carga) e dados-romaneios.json com tudo. Só depois de o
+  // .zip ser conferido (quantidade de arquivos) os romaneios saem do app. Pendentes não são arquivados.
+  // Só no app do PC que tem a pasta EXPEDIÇÃO na área de trabalho.
+  (function(){
+    var rodando = false, ovArq = null, cardProgresso = null;
+    function mesAtualSP(){ return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 7); }
+    function mesDoRomaneio(d){ return String(d.data || d.criadoEm || '').slice(0, 7); }
+    function diaDoRomaneio(d){ return String(d.data || d.criadoEm || '').slice(0, 10) || 'sem-data'; }
+    var NOMES_MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    function nomeMes(k){ var p = k.split('-'); return NOMES_MES[+p[1] - 1] + ' de ' + p[0]; }
+    function ponteOk(){ return !!(window.ripackOfs && window.ripackOfs.arquivoIniciar); }
+    function base64DeTexto(txt){
+      var bytes = new TextEncoder().encode(txt), partes = [];
+      for (var i = 0; i < bytes.length; i += 0x8000) partes.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)));
+      return btoa(partes.join(''));
+    }
+    // a mesma imagem do "Romaneio" (pré-visualização) de um romaneio salvo
+    function canvasDoRomaneio(d){
+      return new Promise(function(ok, falha){
+        if (typeof html2canvas === 'undefined'){ falha(new Error('gerador de imagem não carregou')); return; }
+        var result = { cliente: d.cliente, total: d.total, frete: d.frete, saldo: d.saldo, status: d.status, modo: d.modo, clientes: d.clientes || [] };
+        var extra = {
+          dataRaw: d.data || '', placa: d.placa || '', motorista: d.motorista || '', local: d.local || '', emp: d.emp || '',
+          extraMatriz: !!d.extraMatriz, extraFilial: !!d.extraFilial, extraAglotec: !!d.extraAglotec,
+          complementoTexto: textoComplementoDoRomaneio(d), qa: d.qa || [], tipoVeiculo: d.tipoVeiculo || '', lm01: !!d.lm01,
+          assinaturaKey: d.assinaturaKey || '', assinatura2DataUrl: d.assinatura || null
+        };
+        var node = buildRomaneioNode(result, extra);
+        node.style.position = 'fixed'; node.style.left = '-9999px'; node.style.top = '0';
+        document.body.appendChild(node);
+        html2canvas(node, { scale: 2, backgroundColor: '#ffffff' }).then(function(c){ document.body.removeChild(node); ok(c); },
+          function(e){ if (node.parentNode) document.body.removeChild(node); falha(e); });
+      });
+    }
+    // o mesmo PDF do "Baixar PDF" (metade de cima de uma A4), com a imagem comprimida dentro do PDF (bem menor, mesma nitidez)
+    function pdfLeveDoCanvas(canvas){
+      var jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+      if (!jsPDFCtor) return null;
+      var W = 210, H = 297, margin = 6, boxW = W - margin * 2, boxH = H / 2 - margin * 2;
+      var doc = new jsPDFCtor({ orientation: 'portrait', unit: 'mm', format: [W, H] });
+      var scale = Math.min(boxW / canvas.width, boxH / canvas.height);
+      var w = canvas.width * scale, h = canvas.height * scale;
+      doc.addImage(canvas.toDataURL('image/png'), 'PNG', (W - w) / 2, margin + (boxH - h) / 2, w, h, undefined, 'FAST');
+      return doc;
+    }
+    function nomeArquivo(d){
+      var cli = (d.clientes || []).map(function(c){ return c.nome; }).filter(Boolean).join(' + ') || d.cliente || 'romaneio';
+      return (sanitizeSegment(cli + ' - ' + (d.placa || 'sem placa')) || 'romaneio').slice(0, 120);
+    }
+    // romaneios concluídos de meses anteriores ao atual, por mês (do mais antigo ao mais novo)
+    function buscarParaArquivar(){
+      if (!dbApi) return Promise.reject(new Error('banco indisponível'));
+      return dbApi.collection('romaneios').where('docStatus', '==', 'concluido').orderBy('assinadoEm', 'desc').limit(5000).get().then(function(snap){
+        var atual = mesAtualSP(), porMes = {};
+        (snap.docs || []).forEach(function(doc){
+          var d = doc.data() || {}, m = mesDoRomaneio(d);
+          if (!/^\d{4}-\d{2}$/.test(m) || m >= atual) return;
+          (porMes[m] = porMes[m] || []).push({ id: doc.id, d: d });
+        });
+        return Object.keys(porMes).sort().map(function(m){ return { mes: m, docs: porMes[m] }; });
+      });
+    }
+    function chamar(p){
+      return p.then(function(r){ if (!r || !r.ok) throw new Error((r && (r.erro || (r.erros || []).join(' / '))) || 'sem resposta do app'); return r; });
+    }
+    // arquiva um mês: grava os arquivos, monta e confere o .zip e só então apaga os romaneios do app
+    function arquivarMes(grupo, progresso){
+      var mes = grupo.mes, docs = grupo.docs.slice().sort(function(a, b){ return diaDoRomaneio(a.d).localeCompare(diaDoRomaneio(b.d)); });
+      var esperado = 0, usados = {};
+      return chamar(window.ripackOfs.arquivoIniciar(mes)).then(function(){
+        var i = 0;
+        function proximo(){
+          if (i >= docs.length) return Promise.resolve();
+          var item = docs[i++], d = item.d, dia = diaDoRomaneio(d);
+          var base = nomeArquivo(d), nome = base, n = 2;
+          while (usados[dia + '/' + nome]) nome = base + ' (' + (n++) + ')';
+          usados[dia + '/' + nome] = 1;
+          progresso('Romaneio ' + i + ' de ' + docs.length + ' (' + nomeMes(mes) + ')…');
+          return canvasDoRomaneio(d).then(function(canvas){
+            var pdf = pdfLeveDoCanvas(canvas);
+            if (!pdf) throw new Error('gerador de PDF não carregou');
+            var b64 = String(pdf.output('datauristring')).split(',')[1];
+            return chamar(window.ripackOfs.arquivoGravar(mes, dia + '/' + nome + '.pdf', b64)).then(function(){ esperado++; });
+          }).then(function(){
+            var img = String(d.cfDesenhoImg || '');
+            var m = /^data:image\/(jpeg|jpg|png);base64,(.+)$/.exec(img);
+            if (!m) return;
+            return chamar(window.ripackOfs.arquivoGravar(mes, dia + '/' + nome + ' - desenho.' + (m[1] === 'png' ? 'png' : 'jpg'), m[2])).then(function(){ esperado++; });
+          }).then(proximo);
+        }
+        return proximo();
+      }).then(function(){
+        progresso('Guardando os dados de ' + nomeMes(mes) + '…');
+        var dados = JSON.stringify({ mes: mes, arquivadoEm: new Date().toISOString(), romaneios: docs.map(function(x){ return { id: x.id, data: x.d }; }) });
+        return chamar(window.ripackOfs.arquivoGravar(mes, 'dados-romaneios.json', base64DeTexto(dados))).then(function(){ esperado++; });
+      }).then(function(){
+        progresso('Montando e conferindo o .zip de ' + nomeMes(mes) + '…');
+        return chamar(window.ripackOfs.arquivoFechar(mes, esperado));
+      }).then(function(zip){
+        progresso('.zip conferido (' + zip.arquivos + ' arquivos). Tirando os romaneios de ' + nomeMes(mes) + ' do app…');
+        return Promise.all(docs.map(function(x){ return dbApi.collection('romaneios').doc(x.id)['delete'](); })).then(function(){ return zip; });
+      }).then(function(zip){
+        return { mes: mes, romaneios: docs.length, caminho: zip.caminho, bytes: zip.bytes };
+      });
+    }
+    function limparImagensSoltas(){
+      try { return fetch(window.__ripackApiBase + '/api/romaneio/arquivos/limpar', { method: 'POST' }).catch(function(){}); } catch (e){ return Promise.resolve(); }
+    }
+    // mesSo: só esse mês ("2026-09"); sem ele, todos os meses anteriores ao atual
+    function arquivarTudo(progresso, mesSo){
+      if (rodando) return Promise.reject(new Error('já está arquivando'));
+      rodando = true;
+      var feitos = [];
+      return buscarParaArquivar().then(function(grupos){
+        if (mesSo) grupos = grupos.filter(function(g){ return g.mes === mesSo; });
+        var k = 0;
+        function proximoMes(){
+          if (k >= grupos.length) return Promise.resolve();
+          return arquivarMes(grupos[k++], progresso).then(function(r){ feitos.push(r); }).then(proximoMes);
+        }
+        return proximoMes();
+      }).then(function(){
+        if (feitos.length) return limparImagensSoltas();
+      }).then(function(){ rodando = false; return feitos; }, function(e){ rodando = false; throw e; });
+    }
+    function textoFeitos(feitos){
+      return feitos.map(function(f){ return nomeMes(f.mes) + ': ' + f.romaneios + ' romaneio(s) → ' + String(f.caminho || '').split(/[\\/]/).slice(-2).join('\\') + (f.bytes ? ' (' + (f.bytes / 1048576).toFixed(1) + ' MB)' : ''); }).join(' · ');
+    }
+
+    // ---- tela do botão "Arquivar romaneios" ----
+    function abrirTela(){
+      if (ovArq) return;
+      var raiz = document.querySelector('.app-root') || document.body;
+      ovArq = document.createElement('div');
+      ovArq.className = 'rom-modal-overlay';
+      ovArq.style.zIndex = '600';
+      ovArq.innerHTML = '<div class="rom-modal-card" style="max-width:520px;">' +
+        '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>🗄️ Arquivar romaneios</h3><button class="rom-modal-close" type="button" data-arq-fechar>Sair</button></div>' +
+        '<div style="padding:12px 18px 18px;">' +
+          '<p class="foot-note" style="margin:0 0 10px;">Os romaneios <b>concluídos</b> dos meses anteriores vão para um .zip em <b>Área de trabalho\\EXPEDIÇÃO\\Romaneios arquivados</b> (uma pasta por dia, com o PDF e o desenho de cada romaneio) e, depois de o .zip ser conferido, saem do app. Na virada do mês isso é feito sozinho.</p>' +
+          '<div data-arq-corpo><p class="foot-note">Verificando…</p></div>' +
+        '</div></div>';
+      raiz.appendChild(ovArq);
+      ovArq.addEventListener('click', function(ev){
+        var b = ev.target.closest ? ev.target.closest('button') : null;
+        if (ev.target === ovArq || (b && b.hasAttribute('data-arq-fechar'))){ if (!rodando){ ovArq.parentNode.removeChild(ovArq); ovArq = null; } return; }
+        if (b && b.hasAttribute('data-arq-ir')) rodarPelaTela(b.getAttribute('data-arq-ir') || '');
+      });
+      var corpo = ovArq.querySelector('[data-arq-corpo]');
+      if (!ponteOk()){ corpo.innerHTML = '<p class="foot-note" style="color:var(--critical);">Só funciona no app instalado no PC da expedição.</p>'; return; }
+      window.ripackOfs.arquivoPastaExiste().then(function(r){
+        if (!(r && r.ok)){ corpo.innerHTML = '<p class="foot-note" style="color:var(--critical);">Este PC não tem a pasta EXPEDIÇÃO na área de trabalho. Use o PC da expedição.</p>'; return; }
+        buscarParaArquivar().then(function(grupos){
+          if (!grupos.length){ corpo.innerHTML = '<p style="margin:0; color:var(--good);"><b>✓ Nada para arquivar:</b> o app só tem romaneios de ' + nomeMes(mesAtualSP()) + '.</p>'; return; }
+          corpo.innerHTML = grupos.map(function(g){
+              return '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin:0 0 6px;">' +
+                '<span><b>' + nomeMes(g.mes) + '</b> — ' + g.docs.length + ' romaneio(s)</span>' +
+                '<button type="button" class="add-btn btn-destaque-laranja" data-arq-ir="' + g.mes + '" style="margin:0; flex:0 0 auto;">Arquivar ' + nomeMes(g.mes).split(' ')[0] + '</button></div>';
+            }).join('') +
+            (grupos.length > 1 ? '<button type="button" class="add-btn" data-arq-ir="" style="margin-top:4px;">Arquivar todos os meses</button>' : '') +
+            '<p class="foot-note" data-arq-status style="margin:8px 0 0;"></p>';
+        }, function(e){ corpo.innerHTML = '<p class="foot-note" style="color:var(--critical);">Não deu para consultar os romaneios agora: ' + escapeHtml(e.message) + '</p>'; });
+      });
+    }
+    function rodarPelaTela(mesSo){
+      var st = ovArq && ovArq.querySelector('[data-arq-status]');
+      var botoes = ovArq ? Array.prototype.slice.call(ovArq.querySelectorAll('[data-arq-ir]')) : [];
+      if (!window.confirm('Arquivar ' + (mesSo ? nomeMes(mesSo) : 'todos os meses anteriores') + '? Os romaneios vão para o .zip na pasta EXPEDIÇÃO e saem do app.')) return;
+      botoes.forEach(function(x){ x.disabled = true; });
+      var btn = { set disabled(v){ botoes.forEach(function(x){ x.disabled = v; }); } };
+      arquivarTudo(function(t){ if (st){ st.textContent = t; st.style.color = ''; } }, mesSo).then(function(feitos){
+        if (st){ st.textContent = 'Pronto. ' + textoFeitos(feitos); st.style.color = 'var(--good)'; }
+        try { localStorage.setItem('ripack_arquivo_ultimo', JSON.stringify({ em: new Date().toISOString(), feitos: feitos })); } catch (e){}
+      }, function(e){
+        if (btn) btn.disabled = false;
+        if (st){ st.textContent = 'Não foi possível arquivar: ' + e.message + ' Nada foi apagado do mês que deu erro.'; st.style.color = 'var(--critical)'; }
+      });
+    }
+
+    // ---- automático na virada do mês (só no PC da expedição, uma tentativa por dia) ----
+    function mostrarCard(texto, cor, fecharDepois){
+      if (!cardProgresso){
+        cardProgresso = document.createElement('div');
+        cardProgresso.style.cssText = 'position:fixed; right:16px; bottom:16px; z-index:9000; max-width:360px; padding:12px 14px; border-radius:12px; background:var(--surface-1, #fff); border:1px solid var(--border); box-shadow:0 6px 24px rgba(0,0,0,.25); font-size:13px;';
+        document.body.appendChild(cardProgresso);
+      }
+      cardProgresso.innerHTML = '<b>🗄️ Arquivo dos romaneios</b><div style="margin-top:4px; color:' + (cor || 'var(--text-primary)') + ';">' + escapeHtml(texto) + '</div>';
+      if (fecharDepois) setTimeout(function(){ if (cardProgresso){ cardProgresso.remove(); cardProgresso = null; } }, fecharDepois);
+    }
+    function tentarAutomatico(){
+      if (rodando || currentRole !== 'admin' || !ponteOk() || !dbApi) return;
+      var hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+      try { if (localStorage.getItem('ripack_arquivo_tentou') === hoje) return; } catch (e){}
+      window.ripackOfs.arquivoPastaExiste().then(function(r){
+        if (!(r && r.ok)) return;
+        buscarParaArquivar().then(function(grupos){
+          try { localStorage.setItem('ripack_arquivo_tentou', hoje); } catch (e){}
+          if (!grupos.length) return;
+          mostrarCard('Mês novo: arquivando ' + grupos.map(function(g){ return nomeMes(g.mes) + ' (' + g.docs.length + ')'; }).join(', ') + '. Pode continuar usando o app.');
+          arquivarTudo(function(t){ mostrarCard(t); }).then(function(feitos){
+            mostrarCard('Pronto. ' + textoFeitos(feitos), 'var(--good)', 60000);
+            try { localStorage.setItem('ripack_arquivo_ultimo', JSON.stringify({ em: new Date().toISOString(), feitos: feitos })); } catch (e){}
+          }, function(e){ mostrarCard('Não foi possível arquivar: ' + e.message + ' Nada foi apagado do mês que deu erro. Tente pelo botão "Arquivar romaneios".', 'var(--critical)'); });
+        }, function(){});
+      });
+    }
+    var btnArq = document.getElementById('arq-abrir-btn');
+    if (btnArq) btnArq.addEventListener('click', abrirTela);
+    // só dentro do app do PC (a página no celular/navegador não tem onde gravar)
+    if (window.parent !== window && ponteOk()) setTimeout(tentarAutomatico, 90000);
+    setInterval(tentarAutomatico, 60 * 60 * 1000);
+  })();
   // ---- botão "Imprimir" independente: gera o romaneio e abre a
   // pré-visualização em PDF (metade de uma folha A4 retrato) ----
   var imprimirBtn = document.getElementById('imprimir-romaneio');

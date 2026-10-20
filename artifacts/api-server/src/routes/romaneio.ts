@@ -286,6 +286,29 @@ router.get("/romaneio/arquivos/:hash", async (req, res): Promise<void> => {
   res.type("text/plain").send(conteudo);
 });
 
+// Depois do arquivo mensal (romaneios apagados do app): tira do banco as imagens guardadas à parte
+// que nenhum documento usa mais. Só apaga o que não aparece em documento nenhum.
+router.post("/romaneio/arquivos/limpar", async (_req, res): Promise<void> => {
+  const usados = new Set<string>();
+  const docs = await pool.query<{ data: Record<string, unknown> }>(
+    `SELECT data FROM romaneio_docs WHERE NOT deleted AND strpos(data::text, $1) > 0`, [MARCA],
+  );
+  for (const r of docs.rows) juntarMarcas(r.data, usados);
+  const todos = await pool.query<{ hash: string }>(`SELECT hash FROM romaneio_arquivos`);
+  const sobrando = todos.rows.map((r) => r.hash).filter((h) => !usados.has(h));
+  if (sobrando.length) {
+    await pool.query(`DELETE FROM romaneio_arquivos WHERE hash = ANY($1::text[])`, [sobrando]);
+    for (const h of sobrando) {
+      const c = cacheArquivos.get(h);
+      if (c !== undefined) { cacheArquivos.delete(h); cacheArquivosBytes -= c.length; }
+    }
+  }
+  // marcas de "apagado" com mais de 30 dias: os aparelhos já ficaram sabendo (e quem ficou fora esse
+  // tempo todo refaz a lista inteira ao abrir) — sai a linha do banco de vez
+  const marcas = await pool.query(`DELETE FROM romaneio_docs WHERE deleted AND updated_at < NOW() - INTERVAL '30 days'`);
+  res.json({ apagados: sobrando.length, emUso: usados.size, marcasApagadas: marcas.rowCount || 0 });
+});
+
 router.post("/romaneio/docs/:col", async (req, res): Promise<void> => {
   const col = req.params.col;
   const data = req.body?.data;
