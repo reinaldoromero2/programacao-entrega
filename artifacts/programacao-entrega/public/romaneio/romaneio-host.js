@@ -490,6 +490,18 @@
     })();
   }
   pronto.then(function () { if (fila.length) enviarFila(); });
+  // espera a fila de gravações chegar ao servidor (ex.: o arquivo mensal só limpa as imagens depois que
+  // as exclusões dos romaneios chegaram lá); resolve false se passar do tempo
+  window.__ripackFilaVazia = function (tempoMs) {
+    var limite = Date.now() + (tempoMs || 300000);
+    return new Promise(function (resolve) {
+      (function ver() {
+        if (!fila.length) { resolve(true); return; }
+        if (Date.now() > limite) { resolve(false); return; }
+        setTimeout(ver, 1000);
+      })();
+    });
+  };
   window.addEventListener('online', function () { falhasFila = 0; enviarFila(); });
 
   // mesmo formato dos ids automáticos do Firestore (20 caracteres), criado aqui para gravar sem servidor

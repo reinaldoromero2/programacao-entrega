@@ -549,6 +549,8 @@
   /* perguntas da TATU também aparecem por cima da grade RQ C 008 (Programação → calculadora) */
   #tipo-entrega-modal.rom-modal-overlay, #entrega-numero-modal.rom-modal-overlay, #saldo-tatu-modal.rom-modal-overlay{ z-index:500 !important; }
   #placa-nova-modal.rom-modal-overlay, #confirmar-acao-modal.rom-modal-overlay{ z-index:520 !important; }
+  /* pré-visualização do romaneio: quase a tela toda, pro romaneio ficar grande */
+  #rom-pdf-modal.rom-modal-overlay{ padding:6px; }
   .rom-modal-overlay[hidden]{ display:none; }
   .rom-modal-card{ background:var(--surface-1); border-radius:10px; max-width:960px; width:100%; max-height:92vh; display:flex; flex-direction:column; overflow:hidden; }
   /* telas de Configurações (menu + cada cadastro) — ocupam a tela
@@ -1133,7 +1135,6 @@
         <h2 style="margin:0;">Inserir romaneio</h2>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
           <button type="button" class="modo-simples-btn" style="flex:0 0 auto; font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary); cursor:pointer;">Modo simples</button>
-          <button type="button" class="modo-preenchendo-btn" style="flex:0 0 auto; font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary); cursor:pointer;">Preenchendo o romaneio</button>
         </div>
       </div>
       <p class="foot-note" style="margin-top:0;">Preenchimento guiado, por etapas.</p>
@@ -1414,7 +1415,6 @@
         <h2 style="margin:0;">Dados do romaneio</h2>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
           <button type="button" class="modo-fechar-simples-btn" style="flex:0 0 auto; font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary); cursor:pointer;">✕ Fechar modo simples</button>
-          <button type="button" class="modo-preenchendo-btn" style="flex:0 0 auto; font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary); cursor:pointer;">Preenchendo o romaneio</button>
         </div>
       </div>
       <div class="header-fields">
@@ -1483,7 +1483,6 @@
         <h2 style="margin:0;">Gerar romaneio</h2>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
           <button type="button" class="modo-fechar-simples-btn" style="flex:0 0 auto; font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary); cursor:pointer;">✕ Fechar modo simples</button>
-          <button type="button" class="modo-preenchendo-btn" style="flex:0 0 auto; font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-secondary); cursor:pointer;">Preenchendo o romaneio</button>
         </div>
       </div>
       <div id="anchor-campo-assinatura" hidden></div>
@@ -1635,14 +1634,11 @@
         <button type="button" class="menu-card-btn" data-clicar="abrir-tatu-entregas"><span class="menu-card-ico">📦</span><span>Entregas do TATU</span></button>
         <button type="button" class="menu-card-btn" data-clicar="abrir-painel-frete"><span class="menu-card-ico">📊</span><span>Gráfico de apresentação</span></button>
         <button type="button" class="menu-card-btn" data-clicar="nc-abrir-btn"><span class="menu-card-ico">⚠️</span><span>Não Conformidades</span></button>
-        <button type="button" class="menu-card-btn" data-clicar="patio-abrir-btn"><span class="menu-card-ico">⏱️</span><span>Tempo de Pátio</span></button>
-        <button type="button" class="menu-card-btn" data-clicar="bloq-abrir-btn"><span class="menu-card-ico">🔒</span><span>Bloqueados Qualidade</span></button>
         <button type="button" class="menu-card-btn" data-clicar="abrir-carga-facil"><span class="menu-card-ico">🚛</span><span>Carga Fácil</span></button>
         <button type="button" class="menu-card-btn" data-clicar="leitor-abrir-btn"><span class="menu-card-ico">📷</span><span>Ler etiquetas</span></button>
         <button type="button" class="menu-card-btn" data-clicar="leituras-abrir-btn"><span class="menu-card-ico">📋</span><span>Leituras de etiquetas</span></button>
         <button type="button" class="menu-card-btn" data-clicar="saldo-local-abrir-btn"><span class="menu-card-ico">📦</span><span>Saldo por local</span></button>
         <button type="button" class="menu-card-btn" data-clicar="aud-abrir-btn" style="position:relative;"><span class="menu-card-ico">📋</span><span>Auditoria diária</span><span id="aud-bolinha" hidden title="Auditorias pendentes" style="position:absolute; top:-8px; right:-8px; min-width:26px; height:26px; padding:0 7px; box-sizing:border-box; border-radius:13px; background:#dc2626; color:#fff; font-size:14px; font-weight:800; line-height:26px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.3); pointer-events:none;"></span></button>
-        <button type="button" class="menu-card-btn" data-clicar="arq-abrir-btn"><span class="menu-card-ico">🗄️</span><span>Arquivar romaneios</span></button>
       </div>
     </div>
     <div id="menu-cards-holder" style="display:none"><button type="button" id="patio-abrir-btn" hidden>Tempo de Pátio</button><button type="button" id="bloq-abrir-btn" hidden>Bloqueados Qualidade</button><button type="button" id="prog-abrir-btn" hidden>Programação</button><button type="button" id="leitor-abrir-btn" hidden>Ler etiquetas</button><button type="button" id="leituras-abrir-btn" hidden>Leituras de etiquetas</button><button type="button" id="saldo-local-abrir-btn" hidden>Saldo por local</button><button type="button" id="aud-abrir-btn" hidden>Auditoria diária</button><button type="button" id="arq-abrir-btn" hidden>Arquivar romaneios</button></div>
@@ -2442,21 +2438,18 @@
   </div>
 
   <div class="rom-modal-overlay" id="rom-pdf-modal" hidden>
-    <div class="rom-modal-card" style="max-width:900px; height:96vh;">
-      <div class="rom-modal-head" style="padding:8px 16px;">
-        <h3 style="font-size:12.5px;">Imprimir romaneio</h3>
+    <div class="rom-modal-card" style="max-width:min(1700px, 99vw); height:98vh; max-height:98vh;">
+      <div class="rom-modal-head" style="order:9; padding:6px 12px; gap:8px; flex-wrap:wrap; align-items:center; border-bottom:none; border-top:1px solid var(--border);">
+        <h3 style="font-size:12.5px; margin-right:6px;">Imprimir romaneio</h3>
+        <button class="add-btn btn-destaque-azul" id="rom-pdf-copy" type="button" style="margin:0;">Copiar imagem</button>
+        <button class="add-btn" id="rom-pdf-save-img" type="button" style="margin:0;">Salvar imagem</button>
+        <button class="add-btn" id="rom-pdf-download" type="button" style="border-style:solid; margin:0;">Baixar PDF</button>
+        <p class="foot-note" id="rom-pdf-status" style="margin:0; flex:1 1 160px; text-align:right; font-size:11px; line-height:1.25;">Pré-visualização — "Baixar PDF" salva o arquivo.</p>
         <button class="rom-modal-close" id="rom-pdf-close" type="button" aria-label="Fechar">Sair</button>
       </div>
       <div id="rom-pdf-recado" hidden style="margin:6px 16px 0; font-size:11.5px; font-weight:600; background:var(--critical); color:#ffffff; border:1px solid var(--critical); border-radius:6px; padding:6px 10px; white-space:pre-wrap; max-height:56px; overflow-y:auto; line-height:1.3; flex:0 0 auto;"></div>
-      <div class="rom-modal-body" id="rom-pdf-body" style="flex:1; min-height:0; padding:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#525659; touch-action:none;">
+      <div class="rom-modal-body" id="rom-pdf-body" title="Roda do mouse ou pinça com dois dedos para zoom · clique/toque e arraste para mover · duplo clique pra voltar ao normal" style="flex:1; min-height:0; padding:4px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#525659; touch-action:none;">
         <img id="rom-pdf-img" alt="Pré-visualização do romaneio" draggable="false" style="width:auto; height:auto; max-width:100%; max-height:100%; object-fit:contain; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,.4); touch-action:none; user-select:none;" />
-      </div>
-      <p class="foot-note" id="rom-pdf-zoom-hint" style="margin:0; padding:2px 16px 0; text-align:center;">Roda do mouse ou pinça com dois dedos para zoom &middot; clique/toque e arraste para mover &middot; duplo clique pra voltar ao normal</p>
-      <div class="rom-modal-actions" style="padding:8px 16px; align-items:center; flex-wrap:wrap;">
-        <button class="add-btn btn-destaque-azul" id="rom-pdf-copy" type="button" style="margin-top:0;">Copiar imagem</button>
-        <button class="add-btn" id="rom-pdf-save-img" type="button" style="margin-top:0;">Salvar imagem</button>
-        <button class="add-btn" id="rom-pdf-download" type="button" style="border-style:solid; margin-top:0;">Baixar PDF</button>
-        <p class="foot-note" id="rom-pdf-status" style="margin:0 0 0 auto; flex:1 1 160px; text-align:right;">Pré-visualização — "Baixar PDF" salva o arquivo.</p>
       </div>
     </div>
   </div>
@@ -2668,6 +2661,7 @@
         <button class="add-btn btn-destaque-azul" id="config-menu-empilhadeiristas" type="button">Empilhadeiristas</button>
         <button class="add-btn btn-destaque-azul" id="config-menu-nathan" type="button">Nathan</button>
         <button class="add-btn btn-destaque-azul" id="config-menu-regras" type="button">Regras</button>
+        <button class="add-btn btn-destaque-laranja" id="config-menu-arquivar" type="button">🗄️ Arquivar romaneios</button>
       </div>
     </div>
   </div>
@@ -6272,6 +6266,14 @@ var SIGNATURES = {
     configMenuNathanEl.addEventListener('click', function(){
       fecharConfigMenu();
       if (typeof abrirNathanModal === 'function') abrirNathanModal();
+    });
+  }
+  var configMenuArquivarEl = document.getElementById('config-menu-arquivar');
+  if (configMenuArquivarEl){
+    configMenuArquivarEl.addEventListener('click', function(){
+      fecharConfigMenu();
+      var b = document.getElementById('arq-abrir-btn');
+      if (b) b.click();
     });
   }
   var configMenuRegrasEl = document.getElementById('config-menu-regras');
@@ -13589,13 +13591,11 @@ var SIGNATURES = {
     });
   }
   if (wizOrigemManualBtn){
+    // "Preenchendo o romaneio" (passo a passo manual: frete → placa → cliente → itens) foi tirado em
+    // 2026-10-20 — não é mais usado; o romaneio nasce pela calculadora ("+ Inserir romaneio")
     wizOrigemManualBtn.addEventListener('click', function(){
-      wizItensCalculadora = null;
-      wizPendenteDesenho = null; wizPendenteDesenhoImagem = null;
       if (wizOrigemModal) wizOrigemModal.hidden = true;
-      resetWizState();
-      wizFecharTodos();
-      if (wizFreteModal) wizFreteModal.hidden = false;
+      if (wizOrigemCalculadoraBtn) wizOrigemCalculadoraBtn.click();
     });
   }
   // abre a Carga Fácil de vez, já com um caminhão escolhido (vindo do
@@ -16650,7 +16650,7 @@ var SIGNATURES = {
     document.getElementById('print-only-img').src = imgData;
     romPdfModal.hidden = false;
     romPdfStatus.style.color = '';
-    romPdfStatus.textContent = 'Esta é a pré-visualização — clique em "Baixar PDF" para salvar o arquivo e imprimir pelo seu leitor de PDF (ou aperte Ctrl+P pra imprimir direto).';
+    romPdfStatus.textContent = 'Pré-visualização — "Baixar PDF" salva o arquivo para imprimir (ou Ctrl+P). Roda do mouse dá zoom.';
     if (statusEl){ statusEl.textContent = ''; }
   }
 
@@ -16936,7 +16936,11 @@ var SIGNATURES = {
         return chamar(window.ripackOfs.arquivoFechar(mes, esperado));
       }).then(function(zip){
         progresso('.zip conferido (' + zip.arquivos + ' arquivos). Tirando os romaneios de ' + nomeMes(mes) + ' do app…');
-        return Promise.all(docs.map(function(x){ return dbApi.collection('romaneios').doc(x.id)['delete'](); })).then(function(){ return zip; });
+        return Promise.all(docs.map(function(x){ return dbApi.collection('romaneios').doc(x.id)['delete'](); })).then(function(){
+          // as exclusões sobem para o servidor uma por uma: espera chegarem antes de seguir (e limpar as imagens)
+          progresso('Tirando os romaneios de ' + nomeMes(mes) + ' do servidor…');
+          return window.__ripackFilaVazia ? window.__ripackFilaVazia(600000) : true;
+        }).then(function(){ return zip; });
       }).then(function(zip){
         return { mes: mes, romaneios: docs.length, caminho: zip.caminho, bytes: zip.bytes };
       });
@@ -17877,6 +17881,8 @@ var SIGNATURES = {
     topRow.style.cssText = 'display:flex; align-items:center; gap:10px; justify-content:space-between; flex-wrap:wrap;';
     var carregando = d.carregStatus === 'carregando';
     var ofPendente = romaneioTemOfPendente(d);
+    // Filial: não passa pelo "Iniciar Carregamento" + assinatura do empilhadeirista
+    var ehFilial = String(d.local || 'Matriz').trim().toLowerCase() === 'filial';
     var info = document.createElement('div');
     info.style.cssText = 'font-size:17px;';
     info.innerHTML = (carregando
@@ -17914,7 +17920,42 @@ var SIGNATURES = {
       btnWrap.appendChild(ofsNoCard);
       btnWrap.appendChild(window.ripackOfs.botao(doc.id, d, dbApi, currentSessionNome, true));
     }
-    if (!carregando && podeIniciarCarregamento()){
+    if (ehFilial && !d.qtdPendente && podeIniciarCarregamento()){
+      var finalizarBtn = document.createElement('button');
+      finalizarBtn.type = 'button';
+      finalizarBtn.className = 'add-btn btn-destaque-verde';
+      finalizarBtn.textContent = 'FINALIZAR/CARREGADO';
+      finalizarBtn.title = 'Romaneio da Filial: entra a assinatura do Cleiton na 2ª conferência e vai para concluídos';
+      finalizarBtn.addEventListener('click', function(){
+        if (!dbApi) return;
+        if (romaneioTemOfPendente(d)){
+          pendStatusEl.textContent = 'Este romaneio ainda tem OF pendente — preencha o OF de todos os itens antes de finalizar (em "Editar romaneio").';
+          pendStatusEl.style.color = 'var(--critical)';
+          return;
+        }
+        abrirConfirmarAcao('Finalizar carregamento', 'Marcar este romaneio da Filial como carregado? Entra a assinatura do Cleiton na 2ª conferência e ele vai para concluídos.', function(){
+          finalizarBtn.disabled = true;
+          var agora = new Date().toISOString();
+          dbApi.collection('romaneios').doc(doc.id).update({
+            carregStatus: 'carregando',
+            carregIniciadoEm: d.carregIniciadoEm || agora,
+            docStatus: 'concluido',
+            assinatura: SIGNATURES.cleiton,
+            assinadoEm: agora,
+            assinadoPor: 'Cleiton',
+            recado: ''
+          }).then(function(){
+            marcarCgDaEntrega(d);
+          }).catch(function(){
+            finalizarBtn.disabled = false;
+            pendStatusEl.textContent = 'Não foi possível finalizar agora. Tente novamente.';
+            pendStatusEl.style.color = 'var(--critical)';
+          });
+        });
+      });
+      btnWrap.appendChild(finalizarBtn);
+    }
+    if (!ehFilial && !carregando && podeIniciarCarregamento()){
       var startBtn = document.createElement('button');
       startBtn.type = 'button';
       startBtn.className = 'add-btn btn-destaque-azul';
@@ -17948,7 +17989,7 @@ var SIGNATURES = {
         btnWrap.appendChild(editarBtnPend);
       }
     } else if (carregando){
-      if (!ofPendente){
+      if (!ofPendente && !ehFilial){
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'add-btn btn-destaque-verde';
@@ -18042,7 +18083,7 @@ var SIGNATURES = {
     // Assinar / Definir quantidade final, que destravam o romaneio). O resto
     // vai para um pop-up aberto pelo botão "+" no canto do cartão.
     (function(){
-      var principal = /^Romaneio$|Desenho$|Iniciar Carregamento|^Assinar$|Definir quantidade final/;
+      var principal = /^Romaneio$|Desenho$|Iniciar Carregamento|FINALIZAR\/CARREGADO|^Assinar$|Definir quantidade final/;
       var extras = Array.prototype.slice.call(btnWrap.children).filter(function(b){ return !principal.test(b.textContent) && !b.hasAttribute('data-ofs-card'); });
       if (!extras.length) return;
       extras.forEach(function(b){
@@ -18100,7 +18141,7 @@ var SIGNATURES = {
       ofNoteEl.style.cssText = 'margin-top:8px; font-size:11.5px; color:var(--text-muted);';
       ofNoteEl.textContent = 'Este romaneio ainda não pode ser assinado — preencha o OF de todos os itens primeiro (em "Editar romaneio").';
       row.appendChild(ofNoteEl);
-    } else if (!carregando){
+    } else if (!carregando && !ehFilial){
       var carregNoteEl = document.createElement('div');
       carregNoteEl.style.cssText = 'margin-top:8px; font-size:11.5px; color:var(--text-muted);';
       carregNoteEl.textContent = podeIniciarCarregamento() ? 'Este romaneio ainda não pode ser assinado — clique em "Iniciar Carregamento" primeiro.' : 'Este romaneio ainda não pode ser assinado — aguardando um administrador iniciar o carregamento.';
@@ -19309,6 +19350,7 @@ var SIGNATURES = {
    os 3 KRs: KR1 (2ª viagem perdida), KR2 (% vista antes do caminhão),
    KR3 (espera média por NC < 30 min). */
 (function(){
+  return; // DESLIGADO em 2026-10-20: o Tempo de Pátio não é mais usado (não carrega nem fica ouvindo o banco)
   var COL = 'patio_ocorrencias';
   var META_MIN = 30;
   var modal = document.getElementById('patio-modal');
@@ -19747,6 +19789,7 @@ var SIGNATURES = {
    bloqueado (Estq BLQ) que precisa ser liberado para atender as entregas
    programadas. Não grava nada no banco. */
 (function(){
+  return; // DESLIGADO em 2026-10-20: o Bloqueados Qualidade não é mais usado (não carrega nem fica ouvindo o banco)
   var modal = document.getElementById('bloq-modal');
   if (!modal) return;
   function $(id){ return document.getElementById(id); }

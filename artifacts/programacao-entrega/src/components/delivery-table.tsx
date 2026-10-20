@@ -111,6 +111,27 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
   const [conjugarId, setConjugarId] = useState<number | null>(null);
   // a linha guarda o que foi digitado só ao montar: depois de conjugar, remonta a linha do alvo pra mostrar o cliente novo
   const [versaoLinha, setVersaoLinha] = useState<Record<number, number>>({});
+
+  // "S" do cabeçalho: volta todos os quadradinhos S do dia para branco (grava em cada entrega marcada)
+  const limparColunaS = () => {
+    const marcadas = entregas.filter((e) => e.checked && e.checked !== "none");
+    if (!marcadas.length) return;
+    if (!window.confirm("Limpar a coluna S? " + marcadas.length + " linha(s) marcada(s) voltam para branco.")) return;
+    const queryKey = getListEntregasQueryKey({ date });
+    const ids = new Set(marcadas.map((e) => e.id));
+    queryClient.setQueryData<Entrega[]>(queryKey, (old) => old?.map((e) => (ids.has(e.id) ? { ...e, checked: "none" } : e)) ?? []);
+    setVersaoLinha((v) => {
+      const n = { ...v };
+      marcadas.forEach((e) => { n[e.id] = (n[e.id] ?? 0) + 1; });
+      return n;
+    });
+    let pendentes = marcadas.length;
+    marcadas.forEach((e) => {
+      updateEntregaTabela.mutate({ id: e.id, data: { checked: "none" } }, {
+        onSettled: () => { if (--pendentes === 0) queryClient.invalidateQueries({ queryKey }); },
+      });
+    });
+  };
   useEffect(() => {
     if (conjugarId === null) return;
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") setConjugarId(null); };
@@ -269,7 +290,19 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
                 i === 2 || i === 4 || i === 5 ? "justify-start" : "justify-center"
               )}
             >
-              <span className="truncate">{label}</span>
+              {i === 0 ? (
+                <button
+                  type="button"
+                  onClick={limparColunaS}
+                  className="truncate cursor-pointer hover:text-blue-600 print:pointer-events-none"
+                  title="Limpar a coluna S (todas as linhas voltam para branco)"
+                  data-testid="button-limpar-coluna-s"
+                >
+                  {label}
+                </button>
+              ) : (
+                <span className="truncate">{label}</span>
+              )}
 
               {/* Resize handle — not on last column */}
               {i < COL_LABELS.length - 1 && (
