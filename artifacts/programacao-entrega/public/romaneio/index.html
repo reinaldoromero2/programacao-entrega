@@ -5365,7 +5365,8 @@ var SIGNATURES = {
             // diretamente nele; senão usa o motorista/placa do romaneio.
             motorista: it.motorista || d.motorista || '', placa: it.placa || d.placa || '',
             criadoEm: d.criadoEm, entregaNumero: entregaNumero, entregaLabel: entregaLabel,
-            extraAglotec: !!d.extraAglotec, tipoEntregaTatu: d.tipoEntregaTatu || ''
+            extraAglotec: !!d.extraAglotec, tipoEntregaTatu: d.tipoEntregaTatu || '',
+            grupo: doc.id
           });
         });
       });
@@ -5562,16 +5563,34 @@ var SIGNATURES = {
       return a._idx - b._idx;
     });
 
-    var saidasHtml = linhas.map(function(l){
-      var temQtd = l.qtd !== '' && l.qtd != null;
-      // título = código (RP, ou o OF quando não há RP próprio) + quantidade,
-      // sempre na cor de destaque (texto principal); o resto (motorista,
-      // placa) vai embaixo, em cor secundária/apagada, e o número da
-      // entrega ganha um card destacado por baixo de tudo.
-      var tituloParts = [];
-      if (l.codigo) tituloParts.push(escapeHtml(String(l.codigo)));
-      if (temQtd) tituloParts.push('Qtd ' + escapeHtml(String(l.qtd)));
-      var titulo = tituloParts.length ? tituloParts.join(' &middot; ') : 'Entrega';
+    // um card por entrega (o mesmo romaneio): os itens juntos, motorista/placa e as etiquetas uma vez só;
+    // o número da entrega vale para o card mesmo que só um dos itens tenha "Nª ENTREGA" na OF
+    var gruposSaida = [], porGrupo = {};
+    linhas.forEach(function(l){
+      var g = porGrupo[l.grupo];
+      if (!g){ g = porGrupo[l.grupo] = Object.assign({}, l, { itens: [] }); gruposSaida.push(g); }
+      g.itens.push(l);
+      if (g.entregaNumero == null && l.entregaNumero != null){ g.entregaNumero = l.entregaNumero; g.entregaLabel = l.entregaLabel; }
+      if (!g.motorista && l.motorista) g.motorista = l.motorista;
+      if (!g.placa && l.placa) g.placa = l.placa;
+    });
+    gruposSaida.forEach(function(g, i){ g._idx = i; });
+    gruposSaida.sort(function(a, b){
+      var an = a.entregaNumero, bn = b.entregaNumero;
+      if (an == null && bn == null) return a._idx - b._idx;
+      if (an == null) return 1;
+      if (bn == null) return -1;
+      if (an !== bn) return an - bn;
+      return a._idx - b._idx;
+    });
+    var saidasHtml = gruposSaida.map(function(l){
+      // uma linha por item: código (RP, ou o OF quando não há RP próprio) + quantidade
+      var titulo = l.itens.map(function(it){
+        var tituloParts = [];
+        if (it.codigo) tituloParts.push(escapeHtml(String(it.codigo)));
+        if (it.qtd !== '' && it.qtd != null) tituloParts.push('Qtd ' + escapeHtml(String(it.qtd)));
+        return tituloParts.length ? tituloParts.join(' &middot; ') : 'Entrega';
+      }).join('<br>');
       var detalhesParts = [];
       if (l.motorista) detalhesParts.push(escapeHtml(l.motorista));
       if (l.placa) detalhesParts.push(escapeHtml(l.placa));
