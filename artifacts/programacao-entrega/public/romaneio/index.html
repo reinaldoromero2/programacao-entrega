@@ -21595,6 +21595,9 @@ var SIGNATURES = {
     var agora = Date.now();
     if (origem === 'camera' && visto[codigo] && agora - visto[codigo] < 4000){ visto[codigo] = agora; return; }
     visto[codigo] = agora;
+    // as etiquetas da RIPACK são sempre E + 8 números + Q (ex.: E02086114Q): leitura fora disso
+    // é erro da câmera ou outro código — não guarda e pede para bipar de novo
+    if (!/^E[0-9]{8}Q$/.test(codigo)){ som(false); pop('erro', 'Leitura errada — bipe a etiqueta novamente', codigo); return; }
     var dia = hojeISO();
     var ja = docs.filter(function(x){ return x.data === dia && String(x.codigo).toUpperCase() === codigo; })[0];
     if (ja){ som(false); pop('ja', 'Já lida hoje às ' + horaCurta(ja.lidoEm), codigo); return; }
