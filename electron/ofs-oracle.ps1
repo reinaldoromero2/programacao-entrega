@@ -142,6 +142,37 @@ elseif ($entrada.acao -eq 'ofsDoRp') {
       $saida.erros += "${empresa}: " + $_.Exception.Message
     } finally { if ($a) { $a.conexao.Close() } }
   }
+  # RP sem nenhuma OF no mês atual: a última OF que existir dele, de qualquer data (Matriz ou Filial,
+  # a de Prev. Início mais recente) — vem marcada com "ultima"
+  $comOf = @($saida.linhas | ForEach-Object { $_.codpro })
+  $semOf = @($codigos | Where-Object { $comOf -notcontains $_ })
+  $ultimas = @{}
+  foreach ($empresa in 'matriz', 'filial') {
+    if (-not $semOf.Count) { break }
+    $a = $null
+    try {
+      $a = Abrir $empresa
+      $u = $a.usuario
+      foreach ($cod in $semOf) {
+        $cmd = $a.conexao.CreateCommand()
+        $cmd.CommandText = "SELECT * FROM (SELECT TRIM(F.COF_OFCATI), UPPER(TRIM(F.COF_CODPRO)), F.COF_STATUS, F.COF_QTPROG, F.COF_QTREAL, TO_CHAR(F.COF_DTPREV, 'YYYY-MM-DD'), TO_CHAR(F.COF_DTENCE, 'YYYY-MM-DD') FROM $u.F_OF F WHERE UPPER(TRIM(F.COF_CODPRO)) = ? ORDER BY F.COF_DTPREV DESC NULLS LAST, F.COF_OFCATI DESC) WHERE ROWNUM <= 1"
+        [void]$cmd.Parameters.AddWithValue('c', $cod)
+        $r = $cmd.ExecuteReader()
+        if ($r.Read()) {
+          $linha = [pscustomobject]@{
+            empresa = $empresa; of = (Texto $r[0]); codpro = (Texto $r[1]); status = (Texto $r[2])
+            qtprog = $(if ($r[3] -is [DBNull]) { 0 } else { [double]$r[3] }); qtreal = $(if ($r[4] -is [DBNull]) { 0 } else { [double]$r[4] })
+            previnicio = (Texto $r[5]); encerrada = (Texto $r[6]); ultima = $true
+          }
+          if (-not $ultimas.ContainsKey($cod) -or [string]$linha.previnicio -gt [string]$ultimas[$cod].previnicio) { $ultimas[$cod] = $linha }
+        }
+        $r.Close()
+      }
+    } catch {
+      $saida.erros += "${empresa}: " + $_.Exception.Message
+    } finally { if ($a) { $a.conexao.Close() } }
+  }
+  foreach ($k in $ultimas.Keys) { $saida.linhas += $ultimas[$k] }
 }
 elseif ($entrada.acao -eq 'listarOs') {
   # só leitura: as OS ainda abertas no sistema — status C (coleta) e S (separada); E = encerrada fica de fora
