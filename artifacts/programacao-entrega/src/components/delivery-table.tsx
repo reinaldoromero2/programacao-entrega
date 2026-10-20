@@ -116,15 +116,10 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
   const limparColunaS = () => {
     const marcadas = entregas.filter((e) => e.checked && e.checked !== "none");
     if (!marcadas.length) return;
-    if (!window.confirm("Limpar a coluna S? " + marcadas.length + " linha(s) marcada(s) voltam para branco.")) return;
     const queryKey = getListEntregasQueryKey({ date });
     const ids = new Set(marcadas.map((e) => e.id));
+    // as linhas acompanham a lista: ficam brancas na hora, sem esperar o servidor
     queryClient.setQueryData<Entrega[]>(queryKey, (old) => old?.map((e) => (ids.has(e.id) ? { ...e, checked: "none" } : e)) ?? []);
-    setVersaoLinha((v) => {
-      const n = { ...v };
-      marcadas.forEach((e) => { n[e.id] = (n[e.id] ?? 0) + 1; });
-      return n;
-    });
     let pendentes = marcadas.length;
     marcadas.forEach((e) => {
       updateEntregaTabela.mutate({ id: e.id, data: { checked: "none" } }, {
@@ -384,17 +379,8 @@ interface DeliveryRowProps {
   onToggleSelection: () => void;
 }
 
-function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection, conjugando, conjugarAtivo, onConjugar }: DeliveryRowProps) {
-  const colWidths = useColWidths();
-  const queryClient = useQueryClient();
-  const updateEntrega = useUpdateEntrega();
-  const deleteEntrega = useDeleteEntrega();
-
-  const [isSaving, setIsSaving] = useState(false);
-  const [editingDivergencias, setEditingDivergencias] = useState(false);
-  const divergenciasEditingRef = useRef(false);
-  const { data: motivos } = useMotivosCancelamento();
-  const [localState, setLocalState] = useState({
+function estadoDaEntrega(entrega: Entrega) {
+  return {
     checked: entrega.checked,
     cliente: entrega.cliente ?? "",
     hrs: entrega.hrs || "",
@@ -407,7 +393,20 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
     divergencias: entrega.divergencias || "",
     v: entrega.v ?? null,
     frete: (entrega.frete ?? null) as FreteOption | null,
-  });
+  };
+}
+
+function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection, conjugando, conjugarAtivo, onConjugar }: DeliveryRowProps) {
+  const colWidths = useColWidths();
+  const queryClient = useQueryClient();
+  const updateEntrega = useUpdateEntrega();
+  const deleteEntrega = useDeleteEntrega();
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingDivergencias, setEditingDivergencias] = useState(false);
+  const divergenciasEditingRef = useRef(false);
+  const { data: motivos } = useMotivosCancelamento();
+  const [localState, setLocalState] = useState(() => estadoDaEntrega(entrega));
 
   const lastSavedRef = useRef(localState);
   const initRef = useRef<number | null>(null);
@@ -430,26 +429,25 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
     });
   }, [entrega.id, queryClient]);
 
+  // o que veio da lista na última vez: quando um campo muda lá (S limpo pelo cabeçalho, carga
+  // conjugada, outro PC), a linha mostra o valor novo; o que está sendo digitado e não mudou na lista fica
+  const ultimaDaListaRef = useRef(estadoDaEntrega(entrega));
   useEffect(() => {
+    const novo = estadoDaEntrega(entrega);
     if (initRef.current !== entrega.id) {
       initRef.current = entrega.id;
-      const newState = {
-        checked: entrega.checked,
-        cliente: entrega.cliente ?? "",
-        hrs: entrega.hrs || "",
-        obs: entrega.obs || "",
-        motorista: entrega.motorista || "",
-        placa: entrega.placa || "",
-        unidade: entrega.unidade,
-        nf: entrega.nf,
-        cg: entrega.cg,
-        divergencias: entrega.divergencias || "",
-        v: entrega.v ?? null,
-        frete: (entrega.frete ?? null) as FreteOption | null,
-      };
-      setLocalState(newState);
-      lastSavedRef.current = newState;
+      ultimaDaListaRef.current = novo;
+      setLocalState(novo);
+      lastSavedRef.current = novo;
+      return;
     }
+    const antes = ultimaDaListaRef.current;
+    ultimaDaListaRef.current = novo;
+    const mudou = (Object.keys(novo) as (keyof typeof novo)[]).filter((k) => novo[k] !== antes[k]);
+    if (!mudou.length) return;
+    const parte = Object.fromEntries(mudou.map((k) => [k, novo[k]])) as Partial<typeof novo>;
+    setLocalState((atual) => ({ ...atual, ...parte }));
+    lastSavedRef.current = { ...lastSavedRef.current, ...parte };
   }, [entrega.id, entrega]);
 
   const saveField = useCallback((field: keyof typeof localState, value: unknown) => {

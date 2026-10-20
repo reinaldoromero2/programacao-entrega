@@ -336,7 +336,9 @@ export default function Home() {
     }
   };
 
+  // o Atualizar recarrega e volta para o dia que está na tela (não pula para hoje)
   const handleRefresh = () => {
+    try { sessionStorage.setItem("ripack_dia_apos_recarregar", dateStr); } catch { /* sem sessionStorage: volta para hoje */ }
     window.location.reload();
   };
 
