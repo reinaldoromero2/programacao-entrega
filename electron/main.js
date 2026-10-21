@@ -138,6 +138,19 @@ function configureAutoUpdates() {
   setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL);
 }
 
+// "Imprimir" do romaneio: grava o PDF na pasta temporária e abre no leitor de PDF (igual à Programação)
+async function abrirPdfParaImprimir(nome, base64) {
+  try {
+    const limpo = String(nome || 'romaneio').replace(/[^0-9A-Za-zÀ-ÿ _.-]+/g, ' ').trim().slice(0, 80) || 'romaneio';
+    const pdfPath = path.join(app.getPath('temp'), `${limpo.replace(/\.pdf$/i, '')}-${Date.now()}.pdf`);
+    fs.writeFileSync(pdfPath, Buffer.from(String(base64 || ''), 'base64'));
+    const erro = await shell.openPath(pdfPath);
+    return erro ? { ok: false, erros: [erro] } : { ok: true };
+  } catch (e) {
+    return { ok: false, erros: [String((e && e.message) || e)] };
+  }
+}
+
 ipcMain.handle('print-window', async () => {
   const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
 
@@ -274,6 +287,7 @@ ipcMain.handle('ofs-oracle', (_evento, entrada) => {
   if (entrada && entrada.acao === 'arquivoIniciar') return arquivoIniciar(entrada.mes);
   if (entrada && entrada.acao === 'arquivoGravar') return arquivoGravar(entrada.mes, entrada.caminho, entrada.base64);
   if (entrada && entrada.acao === 'arquivoFechar') return arquivoFechar(entrada.mes, entrada.esperado);
+  if (entrada && entrada.acao === 'abrirPdf') return abrirPdfParaImprimir(entrada.nome, entrada.base64);
   if (entrada && entrada.acao === 'planilhaAuditoria') return rodarPlanilhaAuditoria(entrada.linhas || []);
   if (entrada && entrada.acao === 'disponivel') return { ok: !!pastaInclusor() };
   if (entrada && entrada.acao === 'auto') return ofsAuto ? ofsAuto.lancar(String(entrada.id), entrada.romaneio || {}) : null;

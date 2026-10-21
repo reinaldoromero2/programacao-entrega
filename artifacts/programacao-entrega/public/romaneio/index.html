@@ -2443,7 +2443,7 @@
       <button class="rom-modal-close" id="rom-pdf-close" type="button" aria-label="Fechar" style="position:absolute; top:10px; right:12px; z-index:5; box-shadow:0 2px 8px rgba(0,0,0,.3);">Sair</button>
       <div class="rom-modal-head" style="order:9; padding:6px 12px; gap:8px; flex-wrap:wrap; align-items:center; justify-content:center; border-bottom:none; border-top:1px solid var(--border);">
         <button class="add-btn btn-destaque-azul" id="rom-pdf-copy" type="button" style="margin:0;">Copiar imagem</button>
-        <button class="add-btn" id="rom-pdf-save-img" type="button" style="margin:0;">Salvar imagem</button>
+        <button class="add-btn" id="rom-pdf-imprimir" type="button" style="margin:0;">🖨️ Imprimir</button>
         <button class="add-btn" id="rom-pdf-download" type="button" style="border-style:solid; margin:0;">Baixar PDF</button>
         <p class="foot-note" id="rom-pdf-status" style="margin:0; flex:0 0 100%; text-align:center; font-size:11px; line-height:1.25;"></p>
       </div>
@@ -16821,7 +16821,28 @@ var SIGNATURES = {
       }, 'image/png');
     });
   }
-  romPdfSaveImgBtn.addEventListener('click', doSaveImg);
+  if (romPdfSaveImgBtn) romPdfSaveImgBtn.addEventListener('click', doSaveImg);
+  // Imprimir: no app do PC abre o PDF do romaneio no leitor de PDF (como o Imprimir da Programação);
+  // fora dele, a impressão do navegador (sai só o romaneio, do bloco print-only-img)
+  var romPdfImprimirBtn = document.getElementById('rom-pdf-imprimir');
+  if (romPdfImprimirBtn) romPdfImprimirBtn.addEventListener('click', function(){
+    if (!lastPdfDoc) return;
+    romPdfStatus.className = 'foot-note';
+    romPdfStatus.style.color = '';
+    if (!(window.ripackOfs && window.ripackOfs.abrirPdf)){ window.print(); return; }
+    romPdfImprimirBtn.disabled = true;
+    romPdfStatus.textContent = 'Abrindo o PDF para imprimir...';
+    var b64 = String(lastPdfDoc.output('datauristring')).split(',')[1] || '';
+    var nome = buildPdfFilename(lastResult || { clientes: [] }).filename;
+    window.ripackOfs.abrirPdf(nome, b64).then(function(res){
+      romPdfImprimirBtn.disabled = false;
+      if (res && res.ok){ romPdfStatus.textContent = ''; return; }
+      // app antigo (sem a ação nova) ou erro ao abrir: cai na impressão do navegador
+      if (!res || !res.erros || /demorou|desconhecid/i.test(res.erros.join(' '))){ romPdfStatus.textContent = ''; window.print(); return; }
+      romPdfStatus.textContent = 'Não foi possível abrir o PDF: ' + res.erros.join(' / ');
+      romPdfStatus.style.color = 'var(--critical)';
+    });
+  });
 
   function showSaveError(err, statusEl){
     var el = statusEl || romPdfStatus;

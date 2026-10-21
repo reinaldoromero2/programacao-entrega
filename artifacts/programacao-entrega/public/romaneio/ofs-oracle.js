@@ -429,6 +429,7 @@
     arquivoPastaExiste: function () { return oracle({ acao: 'arquivoPastaExiste' }); },
     arquivoIniciar: function (mes) { return oracle({ acao: 'arquivoIniciar', mes: mes }); },
     arquivoGravar: function (mes, caminho, base64) { return oracle({ acao: 'arquivoGravar', mes: mes, caminho: caminho, base64: base64 }); },
+    abrirPdf: function (nome, base64) { return oracle({ acao: 'abrirPdf', nome: nome, base64: base64 }); },
     arquivoFechar: function (mes, esperado) { return oracle({ acao: 'arquivoFechar', mes: mes, esperado: esperado }); },
     planilhaAuditoria: function (linhas) { return oracle({ acao: 'planilhaAuditoria', linhas: linhas }); },
     consultarOs: function (agrupa) { return oracle({ acao: 'buscar', agrupas: [agrupa], dias: 60 }); },
