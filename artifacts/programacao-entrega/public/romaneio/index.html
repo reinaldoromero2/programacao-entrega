@@ -13964,13 +13964,16 @@ var SIGNATURES = {
           '<p class="foot-note" style="margin:10px 0 0;">A auditoria é feita pelo Claude no chat. Aqui é só o lembrete.</p>'
         : '<p style="margin:0; font-size:16px; color:var(--good);"><b>✓ Nenhuma auditoria pendente.</b></p>';
       ov.querySelector('[data-aud-corpo]').innerHTML +=
-        '<button type="button" class="add-btn btn-destaque-azul" data-aud-feitas style="margin-top:12px; width:100%;">📊 Auditorias feitas</button>';
+        '<div style="margin:16px 0 8px; padding-top:12px; border-top:1px solid var(--border); font-weight:800; font-size:15px;">📊 Auditorias feitas</div>' +
+        '<div data-aud-feitas-corpo></div>';
+      renderFeitas();
     }
 
     // ---- modal separado: tabela das auditorias já registradas, por mês ----
     var ovFeitas = null, mesFeitas = '';
     function renderFeitas(){
-      if (!ovFeitas) return;
+      var alvo = ovFeitas || ov;
+      if (!alvo || !alvo.querySelector('[data-aud-feitas-corpo]')) return;
       var feitas = registros.filter(function(r){ return r.tipo === 'auditoria' && r.data; })
         .sort(function(a, b){ return String(b.data).localeCompare(String(a.data)) || String(b.feitoEm || '').localeCompare(String(a.feitoEm || '')); });
       var meses = [];
@@ -13985,7 +13988,7 @@ var SIGNATURES = {
       doMes.forEach(function(r){ dias[r.data] = 1; });
       var th = 'text-align:left; padding:7px 8px; font-size:12px; color:var(--text-secondary); border-bottom:1px solid var(--border); white-space:nowrap;';
       var td = 'padding:7px 8px; font-size:13px; border-bottom:1px solid var(--border); vertical-align:top;';
-      ovFeitas.querySelector('[data-aud-feitas-corpo]').innerHTML =
+      alvo.querySelector('[data-aud-feitas-corpo]').innerHTML =
         '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 10px;">' +
           (meses.length ? '<select data-aud-feitas-mes style="padding:6px 10px; border-radius:8px;">' + meses.map(function(m){ return '<option value="' + m + '"' + (m === mesFeitas ? ' selected' : '') + '>' + nomeMes(m) + '</option>'; }).join('') + '</select>' : '') +
           '<span class="foot-note" style="margin:0;">' + doMes.length + ' auditoria(s) em ' + Object.keys(dias).length + ' dia(s)</span>' +
@@ -14010,7 +14013,7 @@ var SIGNATURES = {
               }).join('') +
             '</tbody></table></div>'
           : '<p class="foot-note">Nenhuma auditoria registrada ainda.</p>');
-      var sel = ovFeitas.querySelector('[data-aud-feitas-mes]');
+      var sel = alvo.querySelector('[data-aud-feitas-mes]');
       if (sel) sel.addEventListener('change', function(){ mesFeitas = sel.value; renderFeitas(); });
     }
     function abrirFeitas(){
@@ -14035,7 +14038,7 @@ var SIGNATURES = {
       ov = document.createElement('div');
       ov.className = 'rom-modal-overlay';
       ov.style.zIndex = '600';
-      ov.innerHTML = '<div class="rom-modal-card" style="max-width:480px; max-height:90vh; overflow-y:auto;">' +
+      ov.innerHTML = '<div class="rom-modal-card" style="max-width:900px; max-height:90vh; overflow-y:auto;">' +
         '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>📋 Auditoria diária</h3><button class="rom-modal-close" type="button" data-aud-fechar>Sair</button></div>' +
         '<div style="padding:12px 18px 18px;" data-aud-corpo></div></div>';
       raiz.appendChild(ov);
