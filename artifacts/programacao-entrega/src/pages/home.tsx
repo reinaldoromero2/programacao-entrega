@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useListEntregas, useCreateEntrega, useUpdateEntrega, useDeleteEntrega, getListEntregasQueryKey, type Entrega } from "@workspace/api-client-react";
 import { DeliveryTable } from "@/components/delivery-table";
+import { confirmarNoApp } from "@/components/confirmar-app";
 import { PrintView } from "@/components/print-view";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Calendar } from "@/components/ui/calendar";
@@ -314,7 +315,13 @@ export default function Home() {
 
     const nomes = (entregas ?? []).filter((e) => selectedIds.has(e.id)).map((e) => `• ${e.cliente || "(sem cliente)"}`);
     const qtd = selectedIds.size;
-    if (!window.confirm(`Excluir ${qtd} carga${qtd !== 1 ? "s" : ""} de ${format(date, "dd/MM/yyyy")}?\n\n${nomes.join("\n")}\n\nIsso não pode ser desfeito.`)) return;
+    if (!(await confirmarNoApp({
+      titulo: `Excluir ${qtd} carga${qtd !== 1 ? "s" : ""} de ${format(date, "dd/MM/yyyy")}?`,
+      destaque: nomes.join("\n"),
+      texto: "Isso não pode ser desfeito.",
+      botao: "Excluir",
+      tipo: "perigo",
+    }))) return;
 
     setMovingDeliveries(true);
     // uma de cada vez: se uma falhar, só as que faltam continuam selecionadas para tentar de novo

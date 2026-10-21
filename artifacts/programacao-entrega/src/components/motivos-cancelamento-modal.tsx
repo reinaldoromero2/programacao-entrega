@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { confirmarNoApp } from "@/components/confirmar-app";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2, Pencil, Plus, Check, X, Ban } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -98,7 +99,7 @@ export function MotivosCancelamentoModal({ open: controlledOpen, onOpenChange: c
   };
 
   const handleDelete = async (id: number, motivo: string) => {
-    if (!window.confirm(`Excluir motivo "${motivo}"?`)) return;
+    if (!(await confirmarNoApp({ titulo: "Excluir motivo?", destaque: motivo, botao: "Excluir", tipo: "perigo" }))) return;
     try {
       const res = await fetch(`${API_BASE}/api/motivos-cancelamento/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();

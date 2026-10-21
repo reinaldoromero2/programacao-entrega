@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { confirmarNoApp } from "@/components/confirmar-app";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Plus, Building2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -92,7 +93,7 @@ export function ClientesCadastroModal({
   };
 
   const handleDelete = async (id: number, nome: string) => {
-    if (!window.confirm(`Excluir cliente "${nome}" do cadastro?`)) return;
+    if (!(await confirmarNoApp({ titulo: "Excluir cliente do cadastro?", destaque: nome, botao: "Excluir", tipo: "perigo" }))) return;
     try {
       const res = await fetch(`${API_BASE}/api/clientes-cadastro/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);

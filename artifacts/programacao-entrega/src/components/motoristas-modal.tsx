@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { confirmarNoApp } from "@/components/confirmar-app";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2, Pencil, Plus, Check, X, Users } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -105,8 +106,8 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
     );
   };
 
-  const handleDelete = (id: number, nome: string) => {
-    if (!window.confirm(`Excluir motorista "${nome}"?`)) return;
+  const handleDelete = async (id: number, nome: string) => {
+    if (!(await confirmarNoApp({ titulo: "Excluir motorista?", destaque: nome, botao: "Excluir", tipo: "perigo" }))) return;
     deleteMotorista.mutate(
       { id },
       {

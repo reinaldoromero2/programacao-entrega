@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { Loader2, Trash2, GripVertical, Link2 } from "lucide-react";
+import { Loader2, Trash2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CampoPopup, semAcento, type OpcaoPopup } from "@/components/campo-popup";
 import { getCurrentSegment, isInsideParens, replaceLastSegment, splitByPlusOutsideParens, validateValue } from "@/components/cliente-autocomplete";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
+import { confirmarNoApp } from "@/components/confirmar-app";
 import { abrirGradeComCliente } from "@/components/romaneio-frame";
 import {
   Entrega,
@@ -185,11 +186,16 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
 
   const handleDragStart = (id: number) => setDraggedId(id);
   const handleDragEnter = (id: number) => { if (id !== draggedId) setDragOverId(id); };
-  const handleDragEnd = () => { setDraggedId(null); setDragOverId(null); };
+  // arrastar o cliente de uma linha para cima de outra = conjugar (sem precisar do botão)
+  const conjugarPorArrastoRef = useRef(false);
+  const handleDragEnd = () => {
+    setDraggedId(null); setDragOverId(null);
+    if (conjugarPorArrastoRef.current) { conjugarPorArrastoRef.current = false; setConjugarId(null); }
+  };
 
   // junta a linha `origemId` na linha `alvoId`: cliente, OBS e HRS somados com " + "; motorista e placa
   // ficam os do alvo (ou os da origem, se o alvo não tiver); a linha de origem é apagada
-  const conjugar = (origemId: number, alvoId: number) => {
+  const conjugar = async (origemId: number, alvoId: number) => {
     const origem = sortedEntregas.find(e => e.id === origemId);
     const alvo = sortedEntregas.find(e => e.id === alvoId);
     if (!origem || !alvo) return;
@@ -204,7 +210,12 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
       motorista: (alvo.motorista ?? "").trim() || origem.motorista || null,
       placa: (alvo.placa ?? "").trim() || origem.placa || null,
     };
-    if (!window.confirm(`Conjugar a carga?\n\n${origem.cliente || "(sem cliente)"}  →  ${alvo.cliente || "(sem cliente)"}\n\nFica uma linha só: ${data.cliente}`)) return;
+    if (!(await confirmarNoApp({
+      titulo: "Conjugar a carga?",
+      texto: `${origem.cliente || "(sem cliente)"}  →  ${alvo.cliente || "(sem cliente)"}\nFica uma linha só:`,
+      destaque: data.cliente,
+      botao: "Conjugar",
+    }))) return;
     const queryKey = getListEntregasQueryKey({ date });
     const previous = queryClient.getQueryData<Entrega[]>(queryKey);
     queryClient.setQueryData<Entrega[]>(queryKey, (old) =>
@@ -338,6 +349,7 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
               conjugando={conjugarId === entrega.id}
               conjugarAtivo={conjugarId !== null}
               onConjugar={() => setConjugarId((atual) => (atual === entrega.id ? null : entrega.id))}
+              onArrastarCliente={() => { conjugarPorArrastoRef.current = true; setConjugarId(entrega.id); }}
             />
           ))}
 
@@ -368,6 +380,8 @@ interface DeliveryRowProps {
   conjugando?: boolean;
   conjugarAtivo?: boolean;
   onConjugar?: () => void;
+  /** começou a arrastar o cliente desta linha (soltar em cima de outra linha conjuga) */
+  onArrastarCliente?: () => void;
   onDragEnter: () => void;
   onDrop: () => void;
   onDragEnd: () => void;
@@ -457,7 +471,7 @@ function estadoDaEntrega(entrega: Entrega) {
   };
 }
 
-function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection, conjugando, conjugarAtivo, onConjugar }: DeliveryRowProps) {
+function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection, conjugando, conjugarAtivo, onConjugar, onArrastarCliente }: DeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const updateEntrega = useUpdateEntrega();
@@ -602,8 +616,8 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
     saveField("unidade", value);
   };
 
-  const handleDelete = () => {
-    if (window.confirm("Deseja excluir esta entrega?")) {
+  const handleDelete = async () => {
+    if (await confirmarNoApp({ titulo: "Excluir esta entrega?", destaque: localState.cliente || "(sem cliente)", botao: "Excluir", tipo: "perigo" })) {
       const queryKey = getListEntregasQueryKey({ date });
       const previous = queryClient.getQueryData<Entrega[]>(queryKey);
       queryClient.setQueryData<Entrega[]>(queryKey, (old) =>
@@ -681,7 +695,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         isDragOver && conjugarAtivo && !conjugando && "ring-2 ring-inset ring-emerald-500 bg-emerald-50",
         conjugando && "ring-2 ring-inset ring-blue-600 bg-blue-100 cursor-grab",
       )}
-      title={conjugando ? "Arraste esta linha para cima da carga com que ela vai ser conjugada (Esc cancela)" : undefined}
+      title={conjugando ? "Solte em cima do cliente com que esta carga vai ser conjugada" : undefined}
       style={{
         display: "grid",
         gridTemplateColumns: template,
@@ -729,6 +743,13 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       >
         <button
           type="button"
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", String(entrega.id));
+            onArrastarCliente?.();
+          }}
+          title="Clique para editar · segure e arraste até outro cliente para conjugar a carga"
           onClick={(e) => { if (e.button === 0) setPopupAberto("cliente"); }}
           className="w-full min-h-8 px-2 py-1.5 text-left text-sm font-medium text-slate-800 bg-transparent rounded hover:bg-white/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
           data-testid={`input-cliente-${entrega.id}`}
@@ -1082,9 +1103,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
           >
             <GripVertical className="w-4 h-4" />
           </div>
-          <Button variant="ghost" size="icon" onClick={onConjugar} title={conjugando ? "Cancelar conjugar carga" : "Conjugar carga: marque esta linha e arraste para cima de outra"} className={cn("w-6 h-6 rounded", conjugando ? "text-blue-700 bg-blue-100" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50")} data-testid={`button-conjugar-${entrega.id}`}>
-            <Link2 className="w-3 h-3" />
-          </Button>
+
           <Button variant="ghost" size="icon" onClick={handleDelete} className="w-6 h-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded" data-testid={`button-delete-${entrega.id}`}>
             <Trash2 className="w-3 h-3" />
           </Button>
