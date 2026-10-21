@@ -736,6 +736,10 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
           if (valor) salvarCliente(valor);
         }}
         aoLimpar={() => salvarCliente("")}
+        varios={{
+          aoConcluir: (nomes) => salvarCliente(nomes.join(" + ")),
+          validarLivre: (texto) => (!navigator.onLine || !podeConferirCliente ? texto.trim() : validateValue(texto, nomesClientes)),
+        }}
         aoFechar={fecharPopup}
         linha={<LinhaResumo numero={rowIndex} estado={localState} editando="cliente" />}
         testId={`popup-cliente-${entrega.id}`}
@@ -1153,6 +1157,10 @@ function NewDeliveryRow({ date, index, backgroundImageEnabled, acrylicEnabled }:
           aoTextoLivre={(texto) => {
             const valor = !navigator.onLine || !podeConferirCliente ? texto.trim() : validateValue(texto, nomesClientes);
             if (valor) { setPopupNovo(false); handleCreate(valor); }
+          }}
+          varios={{
+            aoConcluir: (nomes) => { setPopupNovo(false); handleCreate(nomes.join(" + ")); },
+            validarLivre: (texto) => (!navigator.onLine || !podeConferirCliente ? texto.trim() : validateValue(texto, nomesClientes)),
           }}
           aoFechar={() => setPopupNovo(false)}
           testId={`popup-new-cliente-${index}`}

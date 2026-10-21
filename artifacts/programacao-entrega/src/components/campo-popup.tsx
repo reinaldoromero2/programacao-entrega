@@ -47,6 +47,9 @@ interface CampoPopupProps {
   linha?: ReactNode;
   /** poucas opções fixas (ex.: unidade): sem campo de digitar, todas à vista para um clique */
   semDigitacao?: boolean;
+  /** vários de uma vez (cliente conjugado): o botão "+" abre mais uma linha; cada escolha preenche uma
+   *  linha e passa para a próxima, e com todas preenchidas chama aoConcluir com os nomes */
+  varios?: { aoConcluir: (nomes: string[]) => void; validarLivre?: (texto: string) => string };
   testId?: string;
 }
 
@@ -57,15 +60,32 @@ const filtroPadrao = (texto: string, op: OpcaoPopup) => {
 
 export function CampoPopup({
   aberto, titulo, opcoes, filtrar = filtroPadrao, textoDeBusca = (t) => t, aoEscolher, aoTextoLivre, aoFechar, aoLimpar,
-  minAuto = 2, semAutoSe, placeholder, dica, avisoSemOpcao, aoMudarTexto, children, linha, semDigitacao, testId,
+  minAuto = 2, semAutoSe, placeholder, dica, avisoSemOpcao, aoMudarTexto, children, linha, semDigitacao, varios, testId,
 }: CampoPopupProps) {
   const [texto, setTexto] = useState("");
   const [ativo, setAtivo] = useState(-1);
   const digitouRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // cliente conjugado: quantas linhas e os nomes já escolhidos
+  const [qtdLinhas, setQtdLinhas] = useState(1);
+  const [escolhidos, setEscolhidos] = useState<string[]>([]);
 
   useEffect(() => {
-    if (aberto) { setTexto(""); setAtivo(-1); digitouRef.current = false; }
+    if (aberto) { setTexto(""); setAtivo(-1); digitouRef.current = false; setQtdLinhas(1); setEscolhidos([]); }
   }, [aberto]);
+
+  const limparDigitacao = () => { setTexto(""); setAtivo(-1); digitouRef.current = false; window.setTimeout(() => inputRef.current?.focus(), 0); };
+  const juntarNome = (nome: string) => {
+    const lista = [...escolhidos, nome];
+    if (lista.length >= qtdLinhas) { varios!.aoConcluir(lista); return; }
+    setEscolhidos(lista);
+    limparDigitacao();
+  };
+  // com mais de uma linha, a escolha vai para a linha da vez em vez de salvar e fechar
+  const escolher = (op: OpcaoPopup, t: string) => {
+    if (varios && qtdLinhas > 1) juntarNome(op.rotulo);
+    else aoEscolher(op, t);
+  };
 
   const filtradas = useMemo(
     () => (texto.trim() ? opcoes.filter((op) => filtrar(texto, op)) : opcoes),
@@ -96,13 +116,18 @@ export function CampoPopup({
   useEffect(() => {
     if (!aberto || !digitouRef.current || !reconhecida) return;
     if (semAcento(texto).length < minAuto || (semAutoSe && semAutoSe.test(texto))) return;
-    const t = window.setTimeout(() => aoEscolher(reconhecida, texto), 550);
+    const t = window.setTimeout(() => escolher(reconhecida, texto), 550);
     return () => window.clearTimeout(t);
-  }, [aberto, reconhecida, texto, minAuto, semAutoSe, aoEscolher]);
+  });
 
   const confirmar = () => {
-    if (ativo >= 0 && lista[ativo]) { aoEscolher(lista[ativo]!, texto); return; }
-    if (reconhecida) { aoEscolher(reconhecida, texto); return; }
+    if (ativo >= 0 && lista[ativo]) { escolher(lista[ativo]!, texto); return; }
+    if (reconhecida) { escolher(reconhecida, texto); return; }
+    if (varios && qtdLinhas > 1) {
+      const valor = varios.validarLivre ? varios.validarLivre(texto) : texto.trim();
+      if (valor) juntarNome(valor);
+      return;
+    }
     if (aoTextoLivre && texto.trim()) aoTextoLivre(texto);
   };
 
@@ -113,7 +138,25 @@ export function CampoPopup({
           <DialogTitle>{titulo}</DialogTitle>
         </DialogHeader>
         {linha}
-        {!semDigitacao && <input
+        {varios && qtdLinhas > 1 && (
+          <div className={cn("flex flex-col gap-1", linha && "sm:max-w-md sm:mx-auto sm:w-full")} data-testid={testId ? `${testId}-linhas` : undefined}>
+            {Array.from({ length: qtdLinhas }, (_, i) => (
+              <div key={i} className={cn("flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm",
+                escolhidos[i] ? "border-green-300 bg-green-50 text-slate-800" : i === escolhidos.length ? "border-blue-400 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-400")}>
+                <span className="text-xs font-bold w-16 flex-shrink-0">Cliente {i + 1}</span>
+                <span className="flex-1 truncate font-medium">{escolhidos[i] || (i === escolhidos.length ? "digitando..." : "")}</span>
+                {escolhidos[i] && (
+                  <button type="button" className="text-slate-400 hover:text-red-600 text-xs font-bold" title="Tirar este cliente"
+                    onClick={() => { setEscolhidos(escolhidos.filter((_, j) => j !== i)); limparDigitacao(); }}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {!semDigitacao && (
+        <div className={cn("flex gap-2 items-stretch", linha && "sm:max-w-md sm:mx-auto sm:w-full")}>
+        <input
+          ref={inputRef}
           autoFocus
           value={texto}
           placeholder={placeholder}
@@ -124,9 +167,17 @@ export function CampoPopup({
             else if (e.key === "ArrowUp") { e.preventDefault(); setAtivo((i) => Math.max(i - 1, -1)); }
             else if (e.key === "Enter") { e.preventDefault(); confirmar(); }
           }}
-          className={cn("w-full rounded-md border border-slate-300 px-3 py-3 text-center text-2xl font-bold tracking-wide uppercase outline-none focus:ring-2 focus:ring-blue-500", linha && "sm:max-w-md sm:mx-auto")}
+          className="w-full min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-3 text-center text-2xl font-bold tracking-wide uppercase outline-none focus:ring-2 focus:ring-blue-500"
           data-testid={testId}
-        />}
+        />
+        {varios && (
+          <button type="button" title="Mais um cliente conjugado (abre outra linha de cliente)"
+            onClick={() => { setQtdLinhas((n) => Math.max(n, escolhidos.length + 1) + 1); limparDigitacao(); }}
+            className="flex-shrink-0 w-14 rounded-md border border-blue-400 bg-blue-600 text-white text-2xl font-bold hover:bg-blue-700"
+            data-testid={testId ? `${testId}-mais` : undefined}>+</button>
+        )}
+        </div>
+        )}
         <p className="text-center text-sm text-slate-500">
           {reconhecida && texto.trim()
             ? <>Reconhecido: <b className="text-slate-900">{reconhecida.rotulo}</b>{reconhecida.detalhe ? ` · ${reconhecida.detalhe}` : ""}</>
@@ -141,7 +192,7 @@ export function CampoPopup({
             <button
               key={op.chave}
               type="button"
-              onClick={() => aoEscolher(op, texto)}
+              onClick={() => escolher(op, texto)}
               className={cn(
                 "w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm border-b border-slate-100 last:border-b-0",
                 i === ativo || op === reconhecida ? "bg-blue-600 text-white" : "text-slate-800 hover:bg-blue-50",
@@ -161,6 +212,9 @@ export function CampoPopup({
         {children}
         <div className={cn("flex gap-2", linha && "sm:max-w-md sm:mx-auto sm:w-full")}>
           {aoLimpar && <Button type="button" variant="outline" className="flex-1" onClick={aoLimpar} data-testid={testId ? `${testId}-limpar` : undefined}>Limpar</Button>}
+          {varios && qtdLinhas > 1 && escolhidos.length > 0 && (
+            <Button type="button" className="flex-1" onClick={() => varios.aoConcluir(escolhidos)} data-testid={testId ? `${testId}-salvar` : undefined}>Salvar {escolhidos.length}</Button>
+          )}
           <Button type="button" variant="outline" className="flex-1" onClick={aoFechar}>Fechar</Button>
         </div>
       </DialogContent>
