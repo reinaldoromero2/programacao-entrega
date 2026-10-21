@@ -15968,7 +15968,7 @@ var SIGNATURES = {
     if (extraAglotec) extraParts.push('BASE AGLOTEC FILIAL');
     // completar carga: com quem este romaneio divide o caminhão ("+ PRADA SP")
     var textoCompl = ('complementoTexto' in extra) ? extra.complementoTexto
-      : ((typeof romComplementoInfo !== 'undefined' && romComplementoInfo && romComplementoInfo.cliente) ? '+ ' + nomeSemCodigoCliente(romComplementoInfo.cliente) : '');
+      : ((typeof romComplementoInfo !== 'undefined' && romComplementoInfo && romComplementoInfo.cliente) ? textoComplementoClientes([romComplementoInfo.cliente], clientesDoRomaneio(result)) : '');
     if (textoCompl) extraParts.push(textoCompl);
     var extraLocal = extraParts.join('  ');
 
@@ -16805,11 +16805,31 @@ var SIGNATURES = {
   // complementos que entraram depois (guardados em complementosClientes na original)
   // "0629 PRADA SP" -> "PRADA SP" (vários clientes juntos: tira o código de cada um)
   function nomeSemCodigoCliente(n){ return String(n || '').split(' + ').map(function(x){ return x.trim().replace(/^\d+\s+/, ''); }).join(' + '); }
+  // com quem divide o caminhão: o mesmo cliente deste romaneio vira só "COMPLEMENTO";
+  // cliente diferente sai "+ NOME" (como antes)
+  function textoComplementoClientes(nomes, clientesProprios){
+    var norm = function(x){ return nomeSemCodigoCliente(x).toUpperCase().replace(/\s+/g, ' ').trim(); };
+    var proprios = [];
+    (clientesProprios || []).forEach(function(c){ String(c || '').split(' + ').forEach(function(x){ var n = norm(x); if (n) proprios.push(n); }); });
+    var partes = [];
+    (nomes || []).forEach(function(n){
+      String(n || '').split(' + ').forEach(function(x){
+        if (!norm(x)) return;
+        var t = proprios.indexOf(norm(x)) !== -1 ? 'COMPLEMENTO' : '+ ' + nomeSemCodigoCliente(x);
+        if (partes.indexOf(t) === -1) partes.push(t);
+      });
+    });
+    // o COMPLEMENTO vem antes dos outros clientes
+    return partes.sort(function(x, y){ return (y === 'COMPLEMENTO') - (x === 'COMPLEMENTO'); }).join('  ');
+  }
+  function clientesDoRomaneio(r){
+    return (r && r.clientes && r.clientes.length) ? r.clientes.map(function(c){ return c && c.nome; }) : [r && r.cliente];
+  }
   function textoComplementoDoRomaneio(d){
     var nomes = [];
     if (d && d.complementoDeCliente) nomes.push(d.complementoDeCliente);
     ((d && d.complementosClientes) || []).forEach(function(n){ if (n && nomes.indexOf(n) === -1) nomes.push(n); });
-    return nomes.map(function(n){ return '+ ' + nomeSemCodigoCliente(n); }).join('  ');
+    return textoComplementoClientes(nomes, clientesDoRomaneio(d));
   }
   function previewRomaneioFromDoc(d, statusEl){
     if (typeof html2canvas === 'undefined'){
@@ -18690,6 +18710,22 @@ var SIGNATURES = {
     return true;
   }
 
+  // faixa "Hoje · terça, 21/10/2026 · 3 romaneios" entre os dias da lista de pendentes
+  function separadorDiaPend(dia, qtd){
+    var el = document.createElement('div');
+    el.className = 'pend-separador-dia';
+    var hoje = todayLocalStr();
+    var ontem = dateKeyLocal(Date.now() - 86400000);
+    var dt = dia ? new Date(dia + 'T12:00:00') : null;
+    var semana = dt ? ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][dt.getDay()] : '';
+    var rotulo = dia === hoje ? 'Hoje' : dia === ontem ? 'Ontem' : semana.charAt(0).toUpperCase() + semana.slice(1);
+    el.style.cssText = 'display:flex; align-items:center; gap:10px; margin:14px 0 4px; padding:7px 12px; border-radius:9px; ' +
+      'background:var(--accent-blue, #2563eb); color:#fff; font-size:13px; font-weight:800; letter-spacing:0.02em;';
+    el.innerHTML = '<span>' + escapeHtml(rotulo) + (dia && rotulo !== semana.charAt(0).toUpperCase() + semana.slice(1) ? ' · ' + escapeHtml(semana) : '') +
+      (dia ? ', ' + escapeHtml(dia.split('-').reverse().join('/')) : 'Sem data') + '</span>' +
+      '<span style="margin-left:auto; font-weight:600; opacity:.9;">' + qtd + (qtd === 1 ? ' romaneio' : ' romaneios') + '</span>';
+    return el;
+  }
   function renderFiltered(){
     var textoFiltro = (filtroClienteEl.value || '').trim().toLowerCase();
     var dataFiltro = filtroDataEl.value || '';
@@ -18703,7 +18739,21 @@ var SIGNATURES = {
       p1.textContent = ativo ? 'Nenhum romaneio pendente encontrado com esse filtro.' : 'Nenhum romaneio pendente de assinatura no momento.';
       pendListEl.appendChild(p1);
     } else {
-      pendFiltrados.forEach(function(doc){ pendListEl.appendChild(renderPendRow(doc)); });
+      // Filial: os pendentes separados por dia (data em que o romaneio foi criado)
+      var porDia = filtroLocalAtual === 'filial';
+      var diaAnterior = null;
+      pendFiltrados.forEach(function(doc){
+        if (porDia){
+          var d = doc.data() || {};
+          var dia = dateKeyLocal(d.criadoEm) || d.data || '';
+          if (dia !== diaAnterior){
+            diaAnterior = dia;
+            var qtdDia = pendFiltrados.filter(function(x){ var y = x.data() || {}; return (dateKeyLocal(y.criadoEm) || y.data || '') === dia; }).length;
+            pendListEl.appendChild(separadorDiaPend(dia, qtdDia));
+          }
+        }
+        pendListEl.appendChild(renderPendRow(doc));
+      });
     }
 
     var doneFiltrados = allDoneDocs.filter(function(doc){
