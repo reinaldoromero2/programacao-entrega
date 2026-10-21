@@ -13963,6 +13963,69 @@ var SIGNATURES = {
           }).join('') +
           '<p class="foot-note" style="margin:10px 0 0;">A auditoria é feita pelo Claude no chat. Aqui é só o lembrete.</p>'
         : '<p style="margin:0; font-size:16px; color:var(--good);"><b>✓ Nenhuma auditoria pendente.</b></p>';
+      ov.querySelector('[data-aud-corpo]').innerHTML +=
+        '<button type="button" class="add-btn btn-destaque-azul" data-aud-feitas style="margin-top:12px; width:100%;">📊 Auditorias feitas</button>';
+    }
+
+    // ---- modal separado: tabela das auditorias já registradas, por mês ----
+    var ovFeitas = null, mesFeitas = '';
+    function renderFeitas(){
+      if (!ovFeitas) return;
+      var feitas = registros.filter(function(r){ return r.tipo === 'auditoria' && r.data; })
+        .sort(function(a, b){ return String(b.data).localeCompare(String(a.data)) || String(b.feitoEm || '').localeCompare(String(a.feitoEm || '')); });
+      var meses = [];
+      feitas.forEach(function(r){ var m = String(r.data).slice(0, 7); if (meses.indexOf(m) === -1) meses.push(m); });
+      if (!mesFeitas || meses.indexOf(mesFeitas) === -1) mesFeitas = meses[0] || '';
+      var NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+      var nomeMes = function(m){ var pp = m.split('-'); return NOMES_MES[parseInt(pp[1], 10) - 1] + ' ' + pp[0]; };
+      var doMes = feitas.filter(function(r){ return String(r.data).slice(0, 7) === mesFeitas; });
+      var dias = {};
+      doMes.forEach(function(r){ dias[r.data] = 1; });
+      var th = 'text-align:left; padding:7px 8px; font-size:12px; color:var(--text-secondary); border-bottom:1px solid var(--border); white-space:nowrap;';
+      var td = 'padding:7px 8px; font-size:13px; border-bottom:1px solid var(--border); vertical-align:top;';
+      ovFeitas.querySelector('[data-aud-feitas-corpo]').innerHTML =
+        '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 10px;">' +
+          (meses.length ? '<select data-aud-feitas-mes style="padding:6px 10px; border-radius:8px;">' + meses.map(function(m){ return '<option value="' + m + '"' + (m === mesFeitas ? ' selected' : '') + '>' + nomeMes(m) + '</option>'; }).join('') + '</select>' : '') +
+          '<span class="foot-note" style="margin:0;">' + doMes.length + ' auditoria(s) em ' + Object.keys(dias).length + ' dia(s)</span>' +
+        '</div>' +
+        (doMes.length
+          ? '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse;">' +
+              '<thead><tr><th style="' + th + '">Data</th><th style="' + th + '">Auditado</th><th style="' + th + '">RP</th><th style="' + th + '">Cliente</th><th style="' + th + '">OF</th><th style="' + th + '">Placa</th><th style="' + th + '">Resultado</th></tr></thead><tbody>' +
+              doMes.map(function(r){
+                var w = DIAS_SEMANA[new Date(r.data + 'T12:00:00').getDay()].slice(0, 3);
+                var nc = r.nc || (r.aspectosNc && r.aspectosNc.length);
+                return '<tr>' +
+                  '<td style="' + td + ' white-space:nowrap;"><b>' + br(r.data) + '</b> <span class="foot-note" style="margin:0;">' + w + '</span></td>' +
+                  '<td style="' + td + '">' + escapeHtml(r.auditado || '') + '</td>' +
+                  '<td style="' + td + ' white-space:nowrap; font-family:ui-monospace, Consolas, monospace;">' + escapeHtml(r.rp || '') + '</td>' +
+                  '<td style="' + td + '">' + escapeHtml(r.cliente || '') + '</td>' +
+                  '<td style="' + td + ' font-family:ui-monospace, Consolas, monospace;">' + escapeHtml(r.of || '') + '</td>' +
+                  '<td style="' + td + ' white-space:nowrap;">' + escapeHtml(r.placa || '') + '</td>' +
+                  '<td style="' + td + '">' + (nc
+                    ? '<b style="color:var(--critical);">Não conforme</b>' + ((r.aspectosNc && r.aspectosNc.length) || /^NC\b/.test(String(r.obs || '')) ? '<div class="foot-note" style="margin:2px 0 0;">' + escapeHtml(r.aspectosNc && r.aspectosNc.length ? r.aspectosNc.join(', ') : String(r.obs).split(';')[0].replace(/^NC\s*/, '')) + '</div>' : '')
+                    : '<span style="color:var(--good); font-weight:700;">Conforme</span>') + '</td>' +
+                '</tr>';
+              }).join('') +
+            '</tbody></table></div>'
+          : '<p class="foot-note">Nenhuma auditoria registrada ainda.</p>');
+      var sel = ovFeitas.querySelector('[data-aud-feitas-mes]');
+      if (sel) sel.addEventListener('change', function(){ mesFeitas = sel.value; renderFeitas(); });
+    }
+    function abrirFeitas(){
+      if (ovFeitas) return;
+      var raiz = document.querySelector('.app-root') || document.body;
+      ovFeitas = document.createElement('div');
+      ovFeitas.className = 'rom-modal-overlay';
+      ovFeitas.style.zIndex = '610';
+      ovFeitas.innerHTML = '<div class="rom-modal-card" style="max-width:900px; max-height:90vh; overflow-y:auto;">' +
+        '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>📊 Auditorias feitas</h3><button class="rom-modal-close" type="button" data-aud-feitas-fechar>Sair</button></div>' +
+        '<div style="padding:12px 18px 18px;" data-aud-feitas-corpo></div></div>';
+      raiz.appendChild(ovFeitas);
+      ovFeitas.addEventListener('click', function(ev){
+        var b = ev.target.closest ? ev.target.closest('button') : null;
+        if (ev.target === ovFeitas || (b && b.hasAttribute('data-aud-feitas-fechar'))){ if (ovFeitas.parentNode) ovFeitas.parentNode.removeChild(ovFeitas); ovFeitas = null; }
+      });
+      renderFeitas();
     }
     function abrir(){
       if (ov) return;
@@ -13976,7 +14039,8 @@ var SIGNATURES = {
       raiz.appendChild(ov);
       ov.addEventListener('click', function(ev){
         var b = ev.target.closest ? ev.target.closest('button') : null;
-        if (ev.target === ov || (b && b.hasAttribute('data-aud-fechar'))){ if (ov.parentNode) ov.parentNode.removeChild(ov); ov = null; }
+        if (ev.target === ov || (b && b.hasAttribute('data-aud-fechar'))){ if (ov.parentNode) ov.parentNode.removeChild(ov); ov = null; return; }
+        if (b && b.hasAttribute('data-aud-feitas')) abrirFeitas();
       });
       render();
     }
@@ -13990,6 +14054,7 @@ var SIGNATURES = {
         atualizarAviso();
         setTimeout(sincronizarPlanilha, 3000);
         if (ov) render();
+        if (ovFeitas) renderFeitas();
       });
     });
     // a lista de concluídos chega depois do login: confere o aviso quando ela muda

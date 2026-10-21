@@ -379,6 +379,20 @@ interface DeliveryRowProps {
   onToggleSelection: () => void;
 }
 
+// hora digitada no pop-up da HRS: "7" -> "07:00", "730"/"0730"/"7:30"/"7h30" -> "07:30", "14" -> "14:00";
+// várias horas separadas por "+" (carga conjugada) são tratadas uma a uma; o que não for hora fica como digitado
+function normalizarHora(texto: string): string {
+  return texto.split("+").map((parte) => {
+    const t = parte.trim();
+    if (!t) return "";
+    const m = t.match(/^(\d{1,2})(?:\s*[:hH.,]\s*(\d{1,2})?)?\s*[hH]?$/) || t.match(/^(\d{1,2})(\d{2})$/);
+    if (!m) return t.toUpperCase();
+    const h = parseInt(m[1], 10), min = m[2] ? parseInt(m[2], 10) : 0;
+    if (h > 23 || min > 59) return t.toUpperCase();
+    return String(h).padStart(2, "0") + ":" + String(min).padStart(2, "0");
+  }).filter(Boolean).join(" + ");
+}
+
 function estadoDaEntrega(entrega: Entrega) {
   return {
     checked: entrega.checked,
@@ -404,6 +418,14 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const [isSaving, setIsSaving] = useState(false);
   const [editingDivergencias, setEditingDivergencias] = useState(false);
+  // pop-up da hora: o que está sendo digitado (null = fechado)
+  const [horaDigitada, setHoraDigitada] = useState<string | null>(null);
+  const salvarHora = (texto: string) => {
+    const valor = normalizarHora(texto);
+    setLocalState(prev => ({ ...prev, hrs: valor }));
+    saveField("hrs", valor);
+    setHoraDigitada(null);
+  };
   const divergenciasEditingRef = useRef(false);
   const { data: motivos } = useMotivosCancelamento();
   const [localState, setLocalState] = useState(() => estadoDaEntrega(entrega));
@@ -636,15 +658,42 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         "p-1 border-r border-slate-200 flex flex-col justify-center transition-colors overflow-hidden",
         localState.hrs ? "bg-yellow-200" : ""
       )}>
-        <input
-          type="text"
-          value={localState.hrs}
-          onChange={handleChange("hrs")}
-          onBlur={handleBlur("hrs")}
-          className="w-full px-2 py-1.5 text-sm font-bold text-center bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white uppercase"
+        <button
+          type="button"
+          onClick={() => setHoraDigitada("")}
+          title="Clique para digitar a hora"
+          className="w-full min-h-8 px-2 py-1.5 text-sm font-bold text-center bg-transparent rounded hover:bg-white/60 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
           data-testid={`input-hrs-${entrega.id}`}
-        />
+        >
+          <span className="block truncate">{localState.hrs}</span>
+        </button>
       </div>
+      <Dialog open={horaDigitada !== null} onOpenChange={(open) => { if (!open) setHoraDigitada(null); }}>
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Hora{localState.cliente ? ` — ${localState.cliente}` : ""}</DialogTitle>
+          </DialogHeader>
+          <input
+            autoFocus
+            inputMode="numeric"
+            value={horaDigitada ?? ""}
+            placeholder={localState.hrs || "ex.: 7"}
+            onChange={(e) => setHoraDigitada(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); salvarHora(e.currentTarget.value || localState.hrs); }
+            }}
+            className="w-full rounded-md border border-slate-300 px-3 py-3 text-center text-3xl font-bold tracking-wider outline-none focus:ring-2 focus:ring-blue-500"
+            data-testid={`popup-hrs-${entrega.id}`}
+          />
+          <p className="text-center text-sm text-slate-500">
+            {horaDigitada ? <>Vai ficar <b className="text-slate-900">{normalizarHora(horaDigitada) || "(vazio)"}</b> · Enter para salvar</> : "Digite só a hora (7) ou hora e minutos (730) e aperte Enter"}
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => salvarHora("")} data-testid={`popup-hrs-limpar-${entrega.id}`}>Limpar</Button>
+            <Button type="button" className="flex-1" onClick={() => salvarHora(horaDigitada || localState.hrs)} data-testid={`popup-hrs-salvar-${entrega.id}`}>Salvar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* OBS — select nativo de motivos quando começa com "cancelad" ou "devolução", senão input livre */}
       <div className="p-1 border-r border-slate-200 flex items-center gap-1">
