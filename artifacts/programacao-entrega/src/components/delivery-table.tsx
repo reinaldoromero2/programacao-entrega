@@ -396,8 +396,6 @@ function normalizarHora(texto: string): string {
 }
 
 const UNIDADE_OPTIONS = ["MATRIZ", "FILIAL", "MATRIZ + FILIAL"] as const;
-// frete e unidade: a opção que começa com o que foi digitado ("r" = RIPACK, "3" = 3º, "f" = FILIAL)
-const filtrarPeloComeco = (texto: string, op: OpcaoPopup) => semAcento(op.rotulo).startsWith(semAcento(texto));
 
 // cliente: as sugestões olham só o último cliente digitado (depois do último "+"), fora dos parênteses
 function useOpcoesClientes() {
@@ -891,10 +889,8 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         aberto={popupAberto === "frete"}
         titulo="Frete"
         opcoes={FRETE_OPTIONS.map((o) => ({ chave: o, rotulo: o }))}
-        filtrar={filtrarPeloComeco}
-        minAuto={1}
-        placeholder={localState.frete || "R, T, 3 ou C"}
-        dica="Digite a primeira letra ou clique na opção"
+        semDigitacao
+        dica="Clique no frete"
         aoEscolher={(op) => { handleFreteChange(op.rotulo); fecharPopup(); }}
         aoLimpar={() => { handleFreteChange(""); fecharPopup(); }}
         aoFechar={fecharPopup}

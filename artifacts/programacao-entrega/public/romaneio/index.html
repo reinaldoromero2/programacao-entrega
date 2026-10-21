@@ -13979,6 +13979,8 @@ var SIGNATURES = {
       var NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
       var nomeMes = function(m){ var pp = m.split('-'); return NOMES_MES[parseInt(pp[1], 10) - 1] + ' ' + pp[0]; };
       var doMes = feitas.filter(function(r){ return String(r.data).slice(0, 7) === mesFeitas; });
+      // dentro do mês: do dia mais antigo para o mais novo
+      doMes.reverse();
       var dias = {};
       doMes.forEach(function(r){ dias[r.data] = 1; });
       var th = 'text-align:left; padding:7px 8px; font-size:12px; color:var(--text-secondary); border-bottom:1px solid var(--border); white-space:nowrap;';
