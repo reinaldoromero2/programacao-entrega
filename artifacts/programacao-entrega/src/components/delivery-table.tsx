@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useCallback, createContext, useCont
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Loader2, Trash2, GripVertical, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MotoristaCombobox } from "@/components/motorista-combobox";
-import { ClienteAutocomplete } from "@/components/cliente-autocomplete";
+import { CampoPopup, semAcento, type OpcaoPopup } from "@/components/campo-popup";
+import { getCurrentSegment, isInsideParens, replaceLastSegment, validateValue } from "@/components/cliente-autocomplete";
+import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 import { abrirGradeComCliente } from "@/components/romaneio-frame";
 import {
   Entrega,
@@ -12,6 +13,7 @@ import {
   useCreateEntrega,
   useDeleteEntrega,
   useReorderEntregas,
+  useListMotoristas,
   getListEntregasQueryKey
 } from "@workspace/api-client-react";
 import {
@@ -393,6 +395,26 @@ function normalizarHora(texto: string): string {
   }).filter(Boolean).join(" + ");
 }
 
+const UNIDADE_OPTIONS = ["MATRIZ", "FILIAL", "MATRIZ + FILIAL"] as const;
+// frete e unidade: a opção que começa com o que foi digitado ("r" = RIPACK, "3" = 3º, "f" = FILIAL)
+const filtrarPeloComeco = (texto: string, op: OpcaoPopup) => semAcento(op.rotulo).startsWith(semAcento(texto));
+
+// cliente: as sugestões olham só o último cliente digitado (depois do último "+"), fora dos parênteses
+function useOpcoesClientes() {
+  const { data: clientes = [] } = useClientesCadastro();
+  const opcoes = React.useMemo(() => clientes.map((c) => ({ chave: String(c.id), rotulo: c.nome })), [clientes]);
+  const nomes = React.useMemo(() => new Set(clientes.map((c) => c.nome.toUpperCase())), [clientes]);
+  return { opcoes, nomes, podeConferir: clientes.length > 0 };
+}
+const segmentoCliente = (texto: string) => {
+  const seg = getCurrentSegment(texto);
+  return isInsideParens(seg) ? "" : seg.replace(/\([^)]*\)/g, "").trim();
+};
+const filtrarCliente = (texto: string, op: OpcaoPopup) => {
+  const seg = segmentoCliente(texto);
+  return !seg || semAcento(op.rotulo).includes(semAcento(seg));
+};
+
 function estadoDaEntrega(entrega: Entrega) {
   return {
     checked: entrega.checked,
@@ -418,6 +440,26 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const [isSaving, setIsSaving] = useState(false);
   const [editingDivergencias, setEditingDivergencias] = useState(false);
+  // pop-ups de cliente, motorista • placa, frete e unidade (um aberto por vez)
+  const [popupAberto, setPopupAberto] = useState<null | "cliente" | "motorista" | "frete" | "unidade">(null);
+  const { opcoes: opcoesClientes, nomes: nomesClientes, podeConferir: podeConferirCliente } = useOpcoesClientes();
+  const { data: motoristas = [] } = useListMotoristas();
+  const opcoesMotoristas = React.useMemo(() => motoristas.map((m) => ({ chave: String(m.id), rotulo: m.nome, detalhe: m.placa })), [motoristas]);
+  const [motoristaDigitado, setMotoristaDigitado] = useState("");
+  const [placaLivre, setPlacaLivre] = useState("");
+  const fecharPopup = () => setPopupAberto(null);
+  const salvarCliente = (valor: string) => {
+    setLocalState(prev => ({ ...prev, cliente: valor }));
+    saveField("cliente", valor);
+    fecharPopup();
+  };
+  const salvarMotorista = (nome: string, placa: string, frete?: string | null) => {
+    setLocalState(prev => ({ ...prev, motorista: nome, placa, ...(frete !== undefined ? { frete: frete as FreteOption | null } : {}) }));
+    saveField("motorista", nome);
+    saveField("placa", placa);
+    if (frete !== undefined) saveField("frete", frete);
+    fecharPopup();
+  };
   // pop-up da hora: o que está sendo digitado (null = fechado)
   const [horaDigitada, setHoraDigitada] = useState<string | null>(null);
   const salvarHora = (texto: string) => {
@@ -644,14 +686,35 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         }}
         title={localState.cliente ? "Botão direito: ver este cliente na RQ C 008" : undefined}
       >
-        <ClienteAutocomplete
-          value={localState.cliente}
-          onChange={(val) => setLocalState((s) => ({ ...s, cliente: val }))}
-          onBlur={(val) => saveField("cliente", val)}
-          className="w-full px-2 py-1.5 text-sm font-medium text-slate-800 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+        <button
+          type="button"
+          onClick={(e) => { if (e.button === 0) setPopupAberto("cliente"); }}
+          className="w-full min-h-8 px-2 py-1.5 text-left text-sm font-medium text-slate-800 bg-transparent rounded hover:bg-white/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
           data-testid={`input-cliente-${entrega.id}`}
-        />
+        >
+          <span className="block truncate">{localState.cliente}</span>
+        </button>
       </div>
+      <CampoPopup
+        aberto={popupAberto === "cliente"}
+        titulo="Cliente"
+        opcoes={opcoesClientes}
+        filtrar={filtrarCliente}
+        textoDeBusca={segmentoCliente}
+        semAutoSe={/[+(]/}
+        placeholder={localState.cliente || "código ou nome"}
+        dica="Digite o código ou parte do nome · para mais de um cliente use +"
+        avisoSemOpcao="Nenhum cliente cadastrado com esse nome."
+        aoEscolher={(op, texto) => salvarCliente(replaceLastSegment(texto, op.rotulo))}
+        aoTextoLivre={(texto) => {
+          // só fica cliente cadastrado (o que não for some), igual a antes; sem a lista (offline), aceita
+          const valor = !navigator.onLine || !podeConferirCliente ? texto.trim() : validateValue(texto, nomesClientes);
+          if (valor) salvarCliente(valor);
+        }}
+        aoLimpar={() => salvarCliente("")}
+        aoFechar={fecharPopup}
+        testId={`popup-cliente-${entrega.id}`}
+      />
 
       {/* HRS */}
       <div className={cn(
@@ -743,38 +806,71 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
       {/* MOTORISTA / PLACA */}
       <div className="p-1 border-r border-slate-200 flex items-center overflow-hidden">
-        <MotoristaCombobox
-          motorista={localState.motorista}
-          placa={localState.placa}
-          onSelect={(nome, pl, frete) => {
-            setLocalState(prev => ({ ...prev, motorista: nome, placa: pl, frete: frete as FreteOption | null }));
-            saveField("motorista", nome);
-            saveField("placa", pl);
-            saveField("frete", frete);
-          }}
-          onMotoristaChange={(v) => setLocalState(prev => ({ ...prev, motorista: v }))}
-          onMotoristaBlur={handleBlur("motorista")}
-          onPlacaChange={(v) => setLocalState(prev => ({ ...prev, placa: v.toUpperCase() }))}
-          onPlacaBlur={handleBlur("placa")}
-          motoristaTestId={`input-motorista-${entrega.id}`}
-          placaTestId={`input-placa-${entrega.id}`}
-        />
+        <button
+          type="button"
+          onClick={() => { setMotoristaDigitado(""); setPlacaLivre(""); setPopupAberto("motorista"); }}
+          className="w-full min-h-8 flex items-center gap-1 px-2 py-1.5 text-left text-sm bg-transparent rounded hover:bg-white/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          data-testid={`input-motorista-${entrega.id}`}
+        >
+          <span className={cn("min-w-0 flex-1 truncate font-medium", localState.motorista ? "text-slate-700" : "text-slate-400")}>{localState.motorista || "Motorista"}</span>
+          <span className="text-slate-400 font-bold flex-shrink-0">•</span>
+          <span className={cn("w-[90px] flex-shrink-0 truncate font-mono uppercase", localState.placa ? "text-slate-600" : "text-slate-400")} data-testid={`input-placa-${entrega.id}`}>{localState.placa || "Placa"}</span>
+        </button>
       </div>
+      <CampoPopup
+        aberto={popupAberto === "motorista"}
+        titulo="Motorista • Placa"
+        opcoes={opcoesMotoristas}
+        placeholder={localState.motorista || "nome ou placa"}
+        dica="Digite o nome ou a placa"
+        avisoSemOpcao="Motorista não cadastrado: confira o nome, digite a placa abaixo e aperte Enter."
+        aoMudarTexto={setMotoristaDigitado}
+        aoEscolher={(op) => {
+          const m = motoristas.find((x) => String(x.id) === op.chave);
+          salvarMotorista(op.rotulo, op.detalhe || "", m ? (m.frete ?? null) : undefined);
+        }}
+        aoTextoLivre={(texto) => salvarMotorista(texto.trim().toUpperCase(), placaLivre.trim().toUpperCase())}
+        aoLimpar={() => salvarMotorista("", "")}
+        aoFechar={fecharPopup}
+        testId={`popup-motorista-${entrega.id}`}
+      >
+        <input
+          value={placaLivre}
+          placeholder="Placa (só para motorista não cadastrado)"
+          autoComplete="off"
+          onChange={(e) => setPlacaLivre(e.target.value.toUpperCase())}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && motoristaDigitado.trim()) { e.preventDefault(); salvarMotorista(motoristaDigitado.trim().toUpperCase(), placaLivre.trim().toUpperCase()); }
+          }}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-center font-mono uppercase outline-none focus:ring-2 focus:ring-blue-500"
+          data-testid={`popup-placa-${entrega.id}`}
+        />
+      </CampoPopup>
 
       {/* FRETE */}
       <div className="border-r border-slate-200 flex items-center overflow-hidden px-1">
-        <select
-          value={localState.frete ?? ""}
-          onChange={(e) => handleFreteChange(e.target.value)}
+        <button
+          type="button"
+          onClick={() => setPopupAberto("frete")}
+          className="w-full min-h-8 px-1 py-1 text-left text-xs font-semibold text-slate-700 bg-transparent rounded hover:bg-white/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
           data-testid={`select-frete-${entrega.id}`}
-          className="w-full text-xs font-semibold bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 py-1 cursor-pointer text-slate-700"
         >
-          <option value="">—</option>
-          {FRETE_OPTIONS.map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
-        </select>
+          <span className="block truncate">{localState.frete || "—"}</span>
+        </button>
       </div>
+      <CampoPopup
+        aberto={popupAberto === "frete"}
+        titulo="Frete"
+        opcoes={FRETE_OPTIONS.map((o) => ({ chave: o, rotulo: o }))}
+        filtrar={filtrarPeloComeco}
+        minAuto={1}
+        placeholder={localState.frete || "R, T, 3 ou C"}
+        dica="Digite a primeira letra ou clique na opção"
+        aoEscolher={(op) => { handleFreteChange(op.rotulo); fecharPopup(); }}
+        aoLimpar={() => { handleFreteChange(""); fecharPopup(); }}
+        aoFechar={fecharPopup}
+        testId={`popup-frete-${entrega.id}`}
+      />
 
       {/* V */}
       <div className="p-1 border-r border-slate-200 flex items-center justify-center overflow-hidden">
@@ -793,17 +889,27 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
       {/* UNIDADE */}
       <div className="p-1 border-r border-slate-200 flex flex-col justify-center overflow-hidden">
-        <Select value={localState.unidade} onValueChange={handleUnidadeChange}>
-          <SelectTrigger className="w-full h-8 border-transparent bg-transparent hover:bg-slate-100 focus:ring-blue-500 text-xs font-semibold shadow-none data-[state=open]:bg-white" data-testid={`select-unidade-${entrega.id}`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="MATRIZ">MATRIZ</SelectItem>
-            <SelectItem value="FILIAL">FILIAL</SelectItem>
-            <SelectItem value="MATRIZ + FILIAL">MATRIZ + FILIAL</SelectItem>
-          </SelectContent>
-        </Select>
+        <button
+          type="button"
+          onClick={() => setPopupAberto("unidade")}
+          className="w-full h-8 px-3 text-left text-xs font-semibold text-slate-800 bg-transparent rounded hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          data-testid={`select-unidade-${entrega.id}`}
+        >
+          <span className="block truncate">{localState.unidade}</span>
+        </button>
       </div>
+      <CampoPopup
+        aberto={popupAberto === "unidade"}
+        titulo="Unidade"
+        opcoes={UNIDADE_OPTIONS.map((o) => ({ chave: o, rotulo: o }))}
+        filtrar={filtrarPeloComeco}
+        minAuto={1}
+        placeholder={localState.unidade || "M ou F"}
+        dica="Digite a primeira letra ou clique na opção"
+        aoEscolher={(op) => { handleUnidadeChange(op.rotulo); fecharPopup(); }}
+        aoFechar={fecharPopup}
+        testId={`popup-unidade-${entrega.id}`}
+      />
 
       {/* NF */}
       <div className={cn(
@@ -961,6 +1067,8 @@ function NewDeliveryRow({ date, index, backgroundImageEnabled, acrylicEnabled }:
   const createEntrega = useCreateEntrega();
   const [isCreating, setIsCreating] = useState(false);
   const [newCliente, setNewCliente] = useState("");
+  const [popupNovo, setPopupNovo] = useState(false);
+  const { opcoes: opcoesClientes, nomes: nomesClientes, podeConferir: podeConferirCliente } = useOpcoesClientes();
 
   const handleCreate = (validatedCliente?: string) => {
     const value = (validatedCliente ?? newCliente).trim();
@@ -998,13 +1106,31 @@ function NewDeliveryRow({ date, index, backgroundImageEnabled, acrylicEnabled }:
       <div className="p-1 border-r border-slate-100 overflow-hidden" />{/* # */}
 
       <div className="p-1 border-r border-slate-100 flex flex-col justify-center relative overflow-hidden">
-        <ClienteAutocomplete
-          value={newCliente}
-          onChange={setNewCliente}
-          onBlur={(val) => handleCreate(val)}
-          placeholder="Adicionar cliente..."
-          className="w-full px-2 py-1.5 text-sm text-slate-800 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white placeholder:text-slate-400 placeholder:italic"
+        <button
+          type="button"
+          onClick={() => setPopupNovo(true)}
+          className="w-full min-h-8 px-2 py-1.5 text-left text-sm italic text-slate-400 bg-transparent rounded hover:bg-white/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
           data-testid={`input-new-cliente-${index}`}
+        >
+          {newCliente || "Adicionar cliente..."}
+        </button>
+        <CampoPopup
+          aberto={popupNovo}
+          titulo="Adicionar cliente"
+          opcoes={opcoesClientes}
+          filtrar={filtrarCliente}
+          textoDeBusca={segmentoCliente}
+          semAutoSe={/[+(]/}
+          placeholder="código ou nome"
+          dica="Digite o código ou parte do nome · para mais de um cliente use +"
+          avisoSemOpcao="Nenhum cliente cadastrado com esse nome."
+          aoEscolher={(op, texto) => { setPopupNovo(false); handleCreate(replaceLastSegment(texto, op.rotulo)); }}
+          aoTextoLivre={(texto) => {
+            const valor = !navigator.onLine || !podeConferirCliente ? texto.trim() : validateValue(texto, nomesClientes);
+            if (valor) { setPopupNovo(false); handleCreate(valor); }
+          }}
+          aoFechar={() => setPopupNovo(false)}
+          testId={`popup-new-cliente-${index}`}
         />
         {isCreating && (
           <div className="absolute right-2 top-1/2 -translate-y-1/2">

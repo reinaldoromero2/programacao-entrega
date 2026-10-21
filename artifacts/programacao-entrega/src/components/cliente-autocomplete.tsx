@@ -30,7 +30,7 @@ interface ClienteAutocompleteProps {
  * Split by "+" only when outside parentheses.
  * e.g. "INGREDION (025 + 015) + SIEMENS" → ["INGREDION (025 + 015) ", " SIEMENS"]
  */
-function splitByPlusOutsideParens(value: string): string[] {
+export function splitByPlusOutsideParens(value: string): string[] {
   const segments: string[] = [];
   let current = "";
   let depth = 0;
@@ -49,20 +49,20 @@ function splitByPlusOutsideParens(value: string): string[] {
 }
 
 /** Returns the segment after the last "+" (outside parens) for matching purposes */
-function getCurrentSegment(value: string): string {
+export function getCurrentSegment(value: string): string {
   const parts = splitByPlusOutsideParens(value);
   return (parts[parts.length - 1] ?? "").trimStart();
 }
 
 /** True when segment contains an open parenthesis that hasn't been closed */
-function isInsideParens(segment: string): boolean {
+export function isInsideParens(segment: string): boolean {
   const open = (segment.match(/\(/g) ?? []).length;
   const close = (segment.match(/\)/g) ?? []).length;
   return open > close;
 }
 
 /** Replace the last segment (outside parens) of the value with the selected client name */
-function replaceLastSegment(value: string, selected: string): string {
+export function replaceLastSegment(value: string, selected: string): string {
   const segments = splitByPlusOutsideParens(value);
   if (segments.length <= 1) return selected;
   return segments.slice(0, -1).join("+") + "+ " + selected;
@@ -91,7 +91,7 @@ function segmentoCadastrado(seg: string, clienteNames: Set<string>): boolean {
 }
 
 /** Keep only segments that match a registered client. Returns cleaned value. */
-function validateValue(value: string, clienteNames: Set<string>): string {
+export function validateValue(value: string, clienteNames: Set<string>): string {
   if (!value.trim()) return "";
   const segments = splitByPlusOutsideParens(value);
   const valid = segments
