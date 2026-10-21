@@ -3,7 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Loader2, Trash2, GripVertical, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CampoPopup, semAcento, type OpcaoPopup } from "@/components/campo-popup";
-import { getCurrentSegment, isInsideParens, replaceLastSegment, validateValue } from "@/components/cliente-autocomplete";
+import { getCurrentSegment, isInsideParens, replaceLastSegment, splitByPlusOutsideParens, validateValue } from "@/components/cliente-autocomplete";
 import { useClientesCadastro } from "@/components/clientes-cadastro-modal";
 import { abrirGradeComCliente } from "@/components/romaneio-frame";
 import {
@@ -413,7 +413,7 @@ const filtrarCliente = (texto: string, op: OpcaoPopup) => {
   return !seg || semAcento(op.rotulo).includes(semAcento(seg));
 };
 
-type CampoLinha = "cliente" | "hrs" | "motorista" | "frete" | "unidade";
+type CampoLinha = "cliente" | "hrs" | "obs" | "motorista" | "frete" | "unidade";
 function LinhaResumo({ numero, estado, editando }: { numero: number; estado: ReturnType<typeof estadoDaEntrega>; editando: CampoLinha }) {
   const cel = (campo: CampoLinha | null, conteudo: React.ReactNode, extra?: string) => (
     <div className={cn("px-2 py-1.5 border-r border-slate-200 last:border-r-0 truncate", extra, campo === editando && "bg-blue-100 ring-2 ring-inset ring-blue-500 font-bold")}>
@@ -423,12 +423,13 @@ function LinhaResumo({ numero, estado, editando }: { numero: number; estado: Ret
   const caixa = (v: string, cor: string) => <span className={cn("inline-block w-4 h-4 rounded border align-middle", v === "check" || v === "filled" || v === "confirmed" ? cor : "bg-white border-slate-300")} />;
   return (
     <div className="hidden sm:grid rounded-md border border-slate-300 bg-white text-sm text-slate-800 overflow-hidden items-center"
-      style={{ gridTemplateColumns: "32px 32px minmax(120px,2.2fr) 70px minmax(150px,2fr) 110px 40px 130px 36px 36px" }}
+      style={{ gridTemplateColumns: "32px 32px minmax(120px,2.2fr) 70px minmax(80px,1.4fr) minmax(150px,2fr) 110px 40px 130px 36px 36px" }}
       data-testid="popup-linha">
       {cel(null, caixa(estado.checked, estado.checked === "confirmed" ? "bg-green-700 border-green-700" : "bg-slate-800 border-slate-800"), "text-center")}
       {cel(null, <span className="text-xs font-bold text-slate-400">{numero}</span>, "text-center")}
       {cel("cliente", estado.cliente || <span className="text-slate-400 italic">sem cliente</span>)}
       {cel("hrs", estado.hrs, cn("text-center font-bold", estado.hrs && "bg-yellow-200"))}
+      {cel("obs", estado.obs, "text-xs")}
       {cel("motorista", <>{estado.motorista || <span className="text-slate-400">Motorista</span>} <span className="text-slate-400">•</span> <span className="font-mono text-slate-600">{estado.placa}</span></>)}
       {cel("frete", estado.frete || "—", "text-xs font-semibold")}
       {cel(null, estado.v === "2A" ? <span className="text-xs font-semibold text-blue-800">2ª</span> : "", "text-center")}
@@ -465,7 +466,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
   const [isSaving, setIsSaving] = useState(false);
   const [editingDivergencias, setEditingDivergencias] = useState(false);
   // pop-ups de cliente, motorista • placa, frete e unidade (um aberto por vez)
-  const [popupAberto, setPopupAberto] = useState<null | "cliente" | "motorista" | "frete" | "unidade">(null);
+  const [popupAberto, setPopupAberto] = useState<null | "cliente" | "motorista" | "frete" | "unidade" | "motivo">(null);
   const { opcoes: opcoesClientes, nomes: nomesClientes, podeConferir: podeConferirCliente } = useOpcoesClientes();
   const { data: motoristas = [] } = useListMotoristas();
   const opcoesMotoristas = React.useMemo(() => motoristas.map((m) => ({ chave: String(m.id), rotulo: m.nome, detalhe: m.placa })), [motoristas]);
@@ -628,6 +629,22 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
   const obsUpper    = localState.obs?.toUpperCase() ?? "";
   const isCancelled  = obsUpper.startsWith("CANCELADA") || obsUpper.startsWith("CANCELADO");
   const isDevolution = obsUpper.startsWith("DEVOLUÇÃO");
+  const prefixoMotivo = isDevolution ? "DEVOLUÇÃO" : (obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO");
+  const salvarObs = (val: string) => {
+    setLocalState(prev => ({ ...prev, obs: val }));
+    saveField("obs", val);
+  };
+  // digitou só a palavra (com ou sem acento): grava ela e abre os motivos no pop-up
+  const handleObsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    const palavra = semAcento(v);
+    if (/^(CANCELAD[AO]|DEVOLUCAO)$/.test(palavra) && (motivos?.length ?? 0) > 0) {
+      salvarObs(palavra === "DEVOLUCAO" ? "DEVOLUÇÃO" : palavra);
+      setPopupAberto("motivo");
+      return;
+    }
+    setLocalState(prev => ({ ...prev, obs: v }));
+  };
 
   const template = gridTemplate(colWidths);
 
@@ -726,7 +743,8 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         filtrar={filtrarCliente}
         textoDeBusca={segmentoCliente}
         semAutoSe={/[+(]/}
-        placeholder={localState.cliente || "código ou nome"}
+        placeholder="código ou nome"
+        valoresIniciais={splitByPlusOutsideParens(localState.cliente)}
         dica="Digite o código ou parte do nome e aperte Enter · o + abre mais um cliente conjugado"
         avisoSemOpcao="Nenhum cliente cadastrado com esse nome."
         aoEscolher={(op, texto) => salvarCliente(replaceLastSegment(texto, op.rotulo))}
@@ -793,27 +811,15 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       <div className="p-1 border-r border-slate-200 flex items-center gap-1">
         {(isCancelled || isDevolution) && (motivos?.length ?? 0) > 0 ? (
           <>
-            <select
-              value={localState.obs.replace(/^(?:CANCELAD[AO]|DEVOLUÇÃO)\s*-\s*/i, "")}
-              onChange={(e) => {
-                const motivo = e.target.value;
-                const prefix = isDevolution
-                  ? "DEVOLUÇÃO"
-                  : (obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO");
-                const val = motivo === "" ? prefix : `${prefix} - ${motivo}`;
-                setLocalState(prev => ({ ...prev, obs: val }));
-                saveField("obs", val);
-              }}
-              className="flex-1 min-w-0 px-1 py-1 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white cursor-pointer"
+            <button
+              type="button"
+              onClick={() => setPopupAberto("motivo")}
+              title="Clique para escolher o motivo"
+              className="flex-1 min-w-0 px-1 py-1 text-left text-sm text-slate-700 bg-transparent rounded hover:bg-white/60 focus:outline-none focus:ring-2 focus:ring-blue-500"
               data-testid={`select-obs-${entrega.id}`}
             >
-              <option value="">
-                {isDevolution ? "DEVOLUÇÃO" : (obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO")}
-              </option>
-              {motivos!.map((m) => (
-                <option key={m.id} value={m.motivo}>{m.motivo}</option>
-              ))}
-            </select>
+              <span className="block truncate">{localState.obs}</span>
+            </button>
             <button
               onClick={() => {
                 setLocalState(prev => ({ ...prev, obs: "" }));
@@ -827,13 +833,26 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
           <input
             type="text"
             value={localState.obs}
-            onChange={handleChange("obs")}
+            onChange={handleObsChange}
             onBlur={() => saveField("obs", localState.obs)}
             className="w-full px-2 py-1.5 text-sm text-slate-700 bg-transparent border-0 outline-none rounded focus:ring-2 focus:ring-blue-500 focus:bg-white"
             data-testid={`input-obs-${entrega.id}`}
           />
         )}
       </div>
+
+      <CampoPopup
+        aberto={popupAberto === "motivo"}
+        titulo={`Motivo — ${prefixoMotivo}`}
+        opcoes={[{ chave: "__sem", rotulo: `Só ${prefixoMotivo} (sem motivo)` }, ...(motivos ?? []).map((m) => ({ chave: String(m.id), rotulo: m.motivo }))]}
+        semDigitacao
+        dica="Clique no motivo"
+        aoEscolher={(op) => { salvarObs(op.chave === "__sem" ? prefixoMotivo : `${prefixoMotivo} - ${op.rotulo}`); fecharPopup(); }}
+        aoLimpar={() => { salvarObs(""); fecharPopup(); }}
+        aoFechar={fecharPopup}
+        linha={<LinhaResumo numero={rowIndex} estado={localState} editando="obs" />}
+        testId={`popup-motivo-${entrega.id}`}
+      />
 
       {/* MOTORISTA / PLACA */}
       <div className="p-1 border-r border-slate-200 flex items-center overflow-hidden">

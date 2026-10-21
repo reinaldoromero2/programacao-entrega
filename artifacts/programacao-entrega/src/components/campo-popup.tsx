@@ -53,6 +53,8 @@ interface CampoPopupProps {
   /** em vez de escolher e fechar, o reconhecimento completa o texto no campo (ex.: o nome do cliente) e o
    *  pop-up fica aberto para acrescentar algo (anotação entre parênteses); Enter salva com aoTextoLivre */
   completar?: (op: OpcaoPopup, texto: string) => string;
+  /** o que já está salvo, para abrir preenchido (uma barra para cada um) */
+  valoresIniciais?: string[];
   testId?: string;
 }
 
@@ -63,7 +65,7 @@ const filtroPadrao = (texto: string, op: OpcaoPopup) => {
 
 export function CampoPopup({
   aberto, titulo, opcoes, filtrar = filtroPadrao, textoDeBusca = (t) => t, aoEscolher, aoTextoLivre, aoFechar, aoLimpar,
-  minAuto = 2, semAutoSe, placeholder, dica, avisoSemOpcao, aoMudarTexto, children, linha, semDigitacao, varios, completar, testId,
+  minAuto = 2, semAutoSe, placeholder, dica, avisoSemOpcao, aoMudarTexto, children, linha, semDigitacao, varios, completar, valoresIniciais, testId,
 }: CampoPopupProps) {
   // uma barra de digitar por cliente (só o cliente conjugado tem mais de uma); "texto" é a barra em uso
   const [textos, setTextos] = useState<string[]>([""]);
@@ -80,7 +82,14 @@ export function CampoPopup({
   }, 0);
 
   useEffect(() => {
-    if (aberto) { setTextos([""]); setFocado(0); setAtivo(-1); setErroBarra(""); digitouRef.current = false; }
+    if (!aberto) return;
+    const iniciais = (valoresIniciais || []).map((v) => v.trim()).filter(Boolean);
+    const barras = iniciais.length ? (varios ? iniciais : [iniciais.join(" + ")]) : [""];
+    setTextos(barras); setAtivo(-1); setErroBarra(""); digitouRef.current = false;
+    // o cursor vai para o fim da última barra
+    const ultima = barras.length - 1;
+    setFocado(ultima); focarBarra(ultima, barras[ultima]!.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto]);
 
   // completa a barra com o nome reconhecido e deixa o cursor no fim, para continuar escrevendo
@@ -181,7 +190,7 @@ export function CampoPopup({
         <div key={i} className={cn("flex gap-2 items-stretch", linha && "sm:max-w-md sm:mx-auto sm:w-full")}>
         <input
           ref={(el) => { inputsRef.current[i] = el; }}
-          autoFocus={i === 0}
+          autoFocus={i === textos.length - 1}
           value={t}
           placeholder={i === 0 ? placeholder : "mais um cliente"}
           autoComplete="off"
