@@ -4,7 +4,8 @@
  * Pop-up de escolha rápida das colunas da Programação (cliente, motorista/placa, frete, unidade),
  * no mesmo jeito do pop-up da hora: um campo grande para digitar e as sugestões dentro do próprio
  * pop-up. Quando o que foi digitado reconhece uma opção só (ou o nome exato de uma), ela é escolhida
- * sozinha depois de uma pausa curta; com várias ou nenhuma, a lista fica à vista para escolher.
+ * sozinha depois de uma pausa curta; a lista só aparece quando há várias parecidas ou nenhuma
+ * (aí mostra as mais próximas). No alto vai a linha inteira da entrega, para saber qual se edita.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -42,6 +43,10 @@ interface CampoPopupProps {
   aoMudarTexto?: (texto: string) => void;
   /** campos a mais embaixo da lista (ex.: a placa de um motorista que não é cadastrado) */
   children?: ReactNode;
+  /** a linha da entrega que está sendo editada, mostrada no alto do pop-up */
+  linha?: ReactNode;
+  /** poucas opções fixas (ex.: unidade): sem campo de digitar, todas à vista para um clique */
+  semDigitacao?: boolean;
   testId?: string;
 }
 
@@ -52,7 +57,7 @@ const filtroPadrao = (texto: string, op: OpcaoPopup) => {
 
 export function CampoPopup({
   aberto, titulo, opcoes, filtrar = filtroPadrao, textoDeBusca = (t) => t, aoEscolher, aoTextoLivre, aoFechar, aoLimpar,
-  minAuto = 2, semAutoSe, placeholder, dica, avisoSemOpcao, aoMudarTexto, children, testId,
+  minAuto = 2, semAutoSe, placeholder, dica, avisoSemOpcao, aoMudarTexto, children, linha, semDigitacao, testId,
 }: CampoPopupProps) {
   const [texto, setTexto] = useState("");
   const [ativo, setAtivo] = useState(-1);
@@ -75,6 +80,18 @@ export function CampoPopup({
     return exatas.length === 1 ? exatas[0]! : null;
   }, [texto, filtradas, textoDeBusca]);
 
+  // nada encontrado: as mais próximas (começam com as 2 primeiras letras ou têm as 3 primeiras)
+  const parecidas = useMemo(() => {
+    const t = semAcento(textoDeBusca(texto));
+    if (!t || filtradas.length) return [];
+    return opcoes.filter((op) => {
+      const r = semAcento(op.rotulo);
+      return r.startsWith(t.slice(0, 2)) || (t.length >= 3 && r.includes(t.slice(0, 3)));
+    }).slice(0, 30);
+  }, [texto, filtradas, opcoes, textoDeBusca]);
+  // a lista só aparece quando há o que escolher: várias parecidas, ou as próximas de um nome não encontrado
+  const lista = semDigitacao ? opcoes : !texto.trim() ? [] : filtradas.length > 1 ? filtradas : filtradas.length === 0 ? parecidas : [];
+
   // reconheceu: escolhe sozinho depois de uma pausa curta (dá tempo de continuar digitando)
   useEffect(() => {
     if (!aberto || !digitouRef.current || !reconhecida) return;
@@ -84,38 +101,43 @@ export function CampoPopup({
   }, [aberto, reconhecida, texto, minAuto, semAutoSe, aoEscolher]);
 
   const confirmar = () => {
-    if (ativo >= 0 && filtradas[ativo]) { aoEscolher(filtradas[ativo]!, texto); return; }
+    if (ativo >= 0 && lista[ativo]) { aoEscolher(lista[ativo]!, texto); return; }
     if (reconhecida) { aoEscolher(reconhecida, texto); return; }
     if (aoTextoLivre && texto.trim()) aoTextoLivre(texto);
   };
 
   return (
     <Dialog open={aberto} onOpenChange={(open) => { if (!open) aoFechar(); }}>
-      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md">
+      <DialogContent className={cn("w-[calc(100%-2rem)]", linha ? "sm:max-w-4xl" : "sm:max-w-md")}>
         <DialogHeader>
           <DialogTitle>{titulo}</DialogTitle>
         </DialogHeader>
-        <input
+        {linha}
+        {!semDigitacao && <input
           autoFocus
           value={texto}
           placeholder={placeholder}
           autoComplete="off"
           onChange={(e) => { digitouRef.current = true; setTexto(e.target.value); setAtivo(-1); aoMudarTexto?.(e.target.value); }}
           onKeyDown={(e) => {
-            if (e.key === "ArrowDown") { e.preventDefault(); setAtivo((i) => Math.min(i + 1, filtradas.length - 1)); }
+            if (e.key === "ArrowDown") { e.preventDefault(); setAtivo((i) => Math.min(i + 1, lista.length - 1)); }
             else if (e.key === "ArrowUp") { e.preventDefault(); setAtivo((i) => Math.max(i - 1, -1)); }
             else if (e.key === "Enter") { e.preventDefault(); confirmar(); }
           }}
-          className="w-full rounded-md border border-slate-300 px-3 py-3 text-center text-2xl font-bold tracking-wide uppercase outline-none focus:ring-2 focus:ring-blue-500"
+          className={cn("w-full rounded-md border border-slate-300 px-3 py-3 text-center text-2xl font-bold tracking-wide uppercase outline-none focus:ring-2 focus:ring-blue-500", linha && "sm:max-w-md sm:mx-auto")}
           data-testid={testId}
-        />
+        />}
         <p className="text-center text-sm text-slate-500">
           {reconhecida && texto.trim()
             ? <>Reconhecido: <b className="text-slate-900">{reconhecida.rotulo}</b>{reconhecida.detalhe ? ` · ${reconhecida.detalhe}` : ""}</>
             : dica}
         </p>
-        <div className="max-h-72 overflow-y-auto rounded-md border border-slate-200">
-          {filtradas.length ? filtradas.map((op, i) => (
+        {texto.trim() && filtradas.length === 0 && (
+          <p className="text-center text-sm font-semibold text-red-600">{avisoSemOpcao || "Nada encontrado."}{parecidas.length ? " Parecidos:" : ""}</p>
+        )}
+        {lista.length > 0 && (
+        <div className={cn("max-h-72 overflow-y-auto rounded-md border border-slate-200", linha && "sm:max-w-md sm:mx-auto sm:w-full")} data-testid={semDigitacao ? testId : undefined}>
+          {lista.map((op, i) => (
             <button
               key={op.chave}
               type="button"
@@ -133,12 +155,11 @@ export function CampoPopup({
                 </span>
               )}
             </button>
-          )) : (
-            <p className="px-3 py-3 text-center text-sm text-slate-500">{avisoSemOpcao || "Nada encontrado."}</p>
-          )}
+          ))}
         </div>
+        )}
         {children}
-        <div className="flex gap-2">
+        <div className={cn("flex gap-2", linha && "sm:max-w-md sm:mx-auto sm:w-full")}>
           {aoLimpar && <Button type="button" variant="outline" className="flex-1" onClick={aoLimpar} data-testid={testId ? `${testId}-limpar` : undefined}>Limpar</Button>}
           <Button type="button" variant="outline" className="flex-1" onClick={aoFechar}>Fechar</Button>
         </div>

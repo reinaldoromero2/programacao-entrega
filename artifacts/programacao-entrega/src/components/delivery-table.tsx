@@ -415,6 +415,32 @@ const filtrarCliente = (texto: string, op: OpcaoPopup) => {
   return !seg || semAcento(op.rotulo).includes(semAcento(seg));
 };
 
+type CampoLinha = "cliente" | "hrs" | "motorista" | "frete" | "unidade";
+function LinhaResumo({ numero, estado, editando }: { numero: number; estado: ReturnType<typeof estadoDaEntrega>; editando: CampoLinha }) {
+  const cel = (campo: CampoLinha | null, conteudo: React.ReactNode, extra?: string) => (
+    <div className={cn("px-2 py-1.5 border-r border-slate-200 last:border-r-0 truncate", extra, campo === editando && "bg-blue-100 ring-2 ring-inset ring-blue-500 font-bold")}>
+      {conteudo}
+    </div>
+  );
+  const caixa = (v: string, cor: string) => <span className={cn("inline-block w-4 h-4 rounded border align-middle", v === "check" || v === "filled" || v === "confirmed" ? cor : "bg-white border-slate-300")} />;
+  return (
+    <div className="hidden sm:grid rounded-md border border-slate-300 bg-white text-sm text-slate-800 overflow-hidden items-center"
+      style={{ gridTemplateColumns: "32px 32px minmax(120px,2.2fr) 70px minmax(150px,2fr) 110px 40px 130px 36px 36px" }}
+      data-testid="popup-linha">
+      {cel(null, caixa(estado.checked, estado.checked === "confirmed" ? "bg-green-700 border-green-700" : "bg-slate-800 border-slate-800"), "text-center")}
+      {cel(null, <span className="text-xs font-bold text-slate-400">{numero}</span>, "text-center")}
+      {cel("cliente", estado.cliente || <span className="text-slate-400 italic">sem cliente</span>)}
+      {cel("hrs", estado.hrs, cn("text-center font-bold", estado.hrs && "bg-yellow-200"))}
+      {cel("motorista", <>{estado.motorista || <span className="text-slate-400">Motorista</span>} <span className="text-slate-400">•</span> <span className="font-mono text-slate-600">{estado.placa}</span></>)}
+      {cel("frete", estado.frete || "—", "text-xs font-semibold")}
+      {cel(null, estado.v === "2A" ? <span className="text-xs font-semibold text-blue-800">2ª</span> : "", "text-center")}
+      {cel("unidade", estado.unidade, "text-xs font-semibold")}
+      {cel(null, caixa(estado.nf, "bg-green-700 border-green-700"), "text-center")}
+      {cel(null, caixa(estado.cg, "bg-green-700 border-green-700"), "text-center")}
+    </div>
+  );
+}
+
 function estadoDaEntrega(entrega: Entrega) {
   return {
     checked: entrega.checked,
@@ -713,6 +739,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         }}
         aoLimpar={() => salvarCliente("")}
         aoFechar={fecharPopup}
+        linha={<LinhaResumo numero={rowIndex} estado={localState} editando="cliente" />}
         testId={`popup-cliente-${entrega.id}`}
       />
 
@@ -732,10 +759,11 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         </button>
       </div>
       <Dialog open={horaDigitada !== null} onOpenChange={(open) => { if (!open) setHoraDigitada(null); }}>
-        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-xs">
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Hora{localState.cliente ? ` — ${localState.cliente}` : ""}</DialogTitle>
+            <DialogTitle>Hora</DialogTitle>
           </DialogHeader>
+          <LinhaResumo numero={rowIndex} estado={localState} editando="hrs" />
           <input
             autoFocus
             inputMode="numeric"
@@ -745,13 +773,13 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
             onKeyDown={(e) => {
               if (e.key === "Enter") { e.preventDefault(); salvarHora(e.currentTarget.value || localState.hrs); }
             }}
-            className="w-full rounded-md border border-slate-300 px-3 py-3 text-center text-3xl font-bold tracking-wider outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full sm:max-w-xs sm:mx-auto rounded-md border border-slate-300 px-3 py-3 text-center text-3xl font-bold tracking-wider outline-none focus:ring-2 focus:ring-blue-500"
             data-testid={`popup-hrs-${entrega.id}`}
           />
           <p className="text-center text-sm text-slate-500">
             {horaDigitada ? <>Vai ficar <b className="text-slate-900">{normalizarHora(horaDigitada) || "(vazio)"}</b> · Enter para salvar</> : "Digite só a hora (7) ou hora e minutos (730) e aperte Enter"}
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 sm:max-w-xs sm:mx-auto sm:w-full">
             <Button type="button" variant="outline" className="flex-1" onClick={() => salvarHora("")} data-testid={`popup-hrs-limpar-${entrega.id}`}>Limpar</Button>
             <Button type="button" className="flex-1" onClick={() => salvarHora(horaDigitada || localState.hrs)} data-testid={`popup-hrs-salvar-${entrega.id}`}>Salvar</Button>
           </div>
@@ -832,19 +860,20 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         aoTextoLivre={(texto) => salvarMotorista(texto.trim().toUpperCase(), placaLivre.trim().toUpperCase())}
         aoLimpar={() => salvarMotorista("", "")}
         aoFechar={fecharPopup}
+        linha={<LinhaResumo numero={rowIndex} estado={localState} editando="motorista" />}
         testId={`popup-motorista-${entrega.id}`}
       >
-        <input
+        {motoristaDigitado.trim() && !opcoesMotoristas.some((op) => semAcento(op.rotulo).includes(semAcento(motoristaDigitado)) || semAcento(op.detalhe || "").includes(semAcento(motoristaDigitado))) && <input
           value={placaLivre}
-          placeholder="Placa (só para motorista não cadastrado)"
+          placeholder="Placa do motorista não cadastrado"
           autoComplete="off"
           onChange={(e) => setPlacaLivre(e.target.value.toUpperCase())}
           onKeyDown={(e) => {
             if (e.key === "Enter" && motoristaDigitado.trim()) { e.preventDefault(); salvarMotorista(motoristaDigitado.trim().toUpperCase(), placaLivre.trim().toUpperCase()); }
           }}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-center font-mono uppercase outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full sm:max-w-md sm:mx-auto rounded-md border border-slate-300 px-3 py-2 text-center font-mono uppercase outline-none focus:ring-2 focus:ring-blue-500"
           data-testid={`popup-placa-${entrega.id}`}
-        />
+        />}
       </CampoPopup>
 
       {/* FRETE */}
@@ -869,6 +898,7 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         aoEscolher={(op) => { handleFreteChange(op.rotulo); fecharPopup(); }}
         aoLimpar={() => { handleFreteChange(""); fecharPopup(); }}
         aoFechar={fecharPopup}
+        linha={<LinhaResumo numero={rowIndex} estado={localState} editando="frete" />}
         testId={`popup-frete-${entrega.id}`}
       />
 
@@ -902,12 +932,11 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         aberto={popupAberto === "unidade"}
         titulo="Unidade"
         opcoes={UNIDADE_OPTIONS.map((o) => ({ chave: o, rotulo: o }))}
-        filtrar={filtrarPeloComeco}
-        minAuto={1}
-        placeholder={localState.unidade || "M ou F"}
-        dica="Digite a primeira letra ou clique na opção"
+        semDigitacao
+        dica="Clique na unidade"
         aoEscolher={(op) => { handleUnidadeChange(op.rotulo); fecharPopup(); }}
         aoFechar={fecharPopup}
+        linha={<LinhaResumo numero={rowIndex} estado={localState} editando="unidade" />}
         testId={`popup-unidade-${entrega.id}`}
       />
 
