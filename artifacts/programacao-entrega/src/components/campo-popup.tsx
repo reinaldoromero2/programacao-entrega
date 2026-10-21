@@ -226,21 +226,21 @@ export function CampoPopup({
           <p className="text-center text-sm font-semibold text-red-600">{avisoSemOpcao || "Nada encontrado."}{parecidas.length ? " Parecidos:" : ""}</p>
         )}
         {lista.length > 0 && (
-        <div className={cn("max-h-72 overflow-y-auto rounded-md border border-slate-200", linha && "sm:max-w-md sm:mx-auto sm:w-full")} data-testid={semDigitacao ? testId : undefined}>
+        <div className={cn("max-h-80 overflow-y-auto flex flex-col gap-1.5 p-0.5", linha && "sm:max-w-md sm:mx-auto sm:w-full")} data-testid={semDigitacao ? testId : undefined}>
           {lista.map((op, i) => (
             <button
               key={op.chave}
               type="button"
               onClick={() => escolher(op, texto)}
               className={cn(
-                "w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm border-b border-slate-100 last:border-b-0",
-                i === ativo || op === reconhecida ? "bg-blue-600 text-white" : "text-slate-800 hover:bg-blue-50",
+                "w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-base rounded-lg border-2 shadow-sm transition-colors",
+                i === ativo || op === reconhecida ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-900 hover:border-blue-400 hover:bg-blue-50",
               )}
               data-testid={testId ? `${testId}-opcao` : undefined}
             >
-              <span className="font-medium truncate">{op.rotulo}</span>
+              <span className="font-bold truncate">{op.rotulo}</span>
               {op.detalhe && (
-                <span className={cn("text-xs font-mono px-2 py-0.5 rounded flex-shrink-0", i === ativo || op === reconhecida ? "bg-white/20" : "bg-slate-100 text-slate-500")}>
+                <span className={cn("text-base font-mono font-bold tracking-wider px-3 py-1 rounded-md flex-shrink-0", i === ativo || op === reconhecida ? "bg-white/20" : "bg-slate-100 text-slate-700 border border-slate-300")}>
                   {op.detalhe}
                 </span>
               )}
