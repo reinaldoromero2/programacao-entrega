@@ -9390,7 +9390,7 @@ var SIGNATURES = {
         }
         var f = fardosMapa[it.fardoId];
         var qtdOutro = parseFloat(it.qtd) || 0;
-        if (!f || qtdOutro <= 0) return;
+        if (!f || qtdOutro <= 0 || it.paleteBase) return;
         itensTeste.push({ fardo: f, qtd: qtdOutro, cor: CF_PALETA[idx % CF_PALETA.length], item: it });
       });
       if (!itensTeste.length) return { compativel: true };
@@ -9453,7 +9453,8 @@ var SIGNATURES = {
   function cfRpDoItem(it){
     var f = cfFardosOrdenados().filter(function(x){ return x.id === it.fardoId; })[0];
     var c = f ? cfCodigoParaRp(String(f.codigo || '')) : (it.codigoSemFardo || '');
-    return rpComZeros(String(c).trim().toUpperCase());
+    // a legenda depois do RP (ex.: "2088-008/25 CARREGA 3 ALTAS") não faz parte do código no sistema
+    return rpComZeros(String(c).trim().split(/\s+/)[0].toUpperCase());
   }
   // põe a OF na linha (no 1º campo se estiver vazio; senão numa linha de OF nova), sem repetir
   function cfPorOfNoItem(itemId, of){
@@ -9556,7 +9557,7 @@ var SIGNATURES = {
       // disso, o estado é o que a pessoa escolheu ao clicar no botão
       // (guardado em _uiClienteOpen/_uiOpcoesOpen, só em memória, não é
       // salvo no romaneio).
-      var qtdOpcoesMarcadas = (it.modoDoisTras ? 1 : 0) + (it.semQtd ? 1 : 0) + (it.ladoFixo ? 1 : 0);
+      var qtdOpcoesMarcadas = (it.modoDoisTras ? 1 : 0) + (it.semQtd ? 1 : 0) + (it.ladoFixo ? 1 : 0) + (it.paleteBase ? 1 : 0);
       var clienteAberto = it._uiClienteOpen != null ? it._uiClienteOpen : !!it.cliente;
       var opcoesAberto = it._uiOpcoesOpen != null ? it._uiOpcoesOpen : (qtdOpcoesMarcadas > 0);
       return '<div class="cf-item-row' + (it.doOriginal ? ' cf-item-original' : '') + '" data-cf-item-id="' + it.id + '" style="border:1px solid ' + cor + '; border-radius:8px; padding:10px;">' +
@@ -9574,7 +9575,7 @@ var SIGNATURES = {
             '</button>' +
           '</div></div>' +
           '<div class="field" style="flex:0.8; min-width:44px; margin-bottom:0;"><label style="margin-bottom:3px;">Qtd</label><input type="text" inputmode="decimal" class="cf-item-qtd' + (it.qtdLabel ? ' qtd-input-calculado' : '') + '" placeholder="0"' + (it.semQtd ? ' disabled' : '') + ' value="' + escapeHtml(String(it.qtdLabel || it.qtd || '')) + '"></div>' +
-          '<button type="button" class="add-btn btn-destaque-azul cf-item-preencher"' + (it.semQtd ? ' disabled' : '') + ' title="Preenche com o máximo que ainda cabe no caminhão (o espaço restante, depois dos outros itens)" style="flex:0 0 auto; margin:0 0 1px; padding:8px 10px; white-space:nowrap;">⚡</button>' +
+          '<button type="button" class="add-btn btn-destaque-azul cf-item-preencher"' + (it.semQtd || it.paleteBase ? ' disabled' : '') + ' title="Preenche com o máximo que ainda cabe no caminhão (o espaço restante, depois dos outros itens)" style="flex:0 0 auto; margin:0 0 1px; padding:8px 10px; white-space:nowrap;">⚡</button>' +
           '<div class="field" style="flex:1; min-width:50px; margin-bottom:0;"><label style="margin-bottom:3px;">OF</label>' +
             '<div style="display:flex; gap:4px; align-items:center;">' +
               '<input type="text" class="cf-item-of" data-linha-of="0" placeholder="opcional" value="' + escapeHtml(linhasOf[0]) + '" style="flex:1 1 auto; min-width:0;">' +
@@ -9602,7 +9603,7 @@ var SIGNATURES = {
             // respeita a cor via CSS e fica quase invisível no fundo escuro.
             '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" style="vertical-align:middle;"><circle cx="8" cy="5.2" r="3"></circle><path d="M2.3 14c0-3.1 2.6-5.3 5.7-5.3s5.7 2.2 5.7 5.3"></path></svg>' +
           '</button>' +
-          '<button type="button" class="add-btn cf-item-opcoes-toggle" title="Opções de carregamento (2 fardos por trás, sem quantidade definida, só de um lado)" style="flex:0 0 auto; margin-top:0;' + (qtdOpcoesMarcadas > 0 ? ' color:var(--accent-blue); border-color:var(--accent-blue); border-style:solid;' : '') + '">⚙️' + (qtdOpcoesMarcadas > 0 ? ' (' + qtdOpcoesMarcadas + ')' : '') + '</button>' +
+          '<button type="button" class="add-btn cf-item-opcoes-toggle" title="Opções de carregamento (2 fardos por trás, sem quantidade definida, só de um lado, palete base)" style="flex:0 0 auto; margin-top:0;' + (qtdOpcoesMarcadas > 0 ? ' color:var(--accent-blue); border-color:var(--accent-blue); border-style:solid;' : '') + '">⚙️' + (qtdOpcoesMarcadas > 0 ? ' (' + qtdOpcoesMarcadas + ')' : '') + '</button>' +
         '</div>' +
         (clienteAberto ? '<div class="field" style="margin-top:6px;"><input type="text" class="cf-item-cliente" list="cliente-list" autocomplete="off" placeholder="Cliente deste item (opcional)" value="' + escapeHtml(it.cliente || '') + '"></div>' : '') +
         (opcoesAberto ?
@@ -9616,6 +9617,9 @@ var SIGNATURES = {
             '<label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12px; color:var(--text-secondary); cursor:pointer;">' +
               '<input type="checkbox" class="cf-item-um-lado"' + (it.ladoFixo ? ' checked' : '') + '> Carregar só de um lado' +
               (it.ladoFixo ? (' <span class="pill-mini" style="font-size:10px; padding:1px 7px; background:var(--surface-2);">' + (it.ladoFixo === 'esquerdo' ? 'lado esquerdo' : 'lado direito') + '</span>') : '') +
+            '</label>' +
+            '<label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12px; color:var(--text-secondary); cursor:pointer;" title="Base de outro produto: vai no romaneio, mas não entra no desenho">' +
+              '<input type="checkbox" class="cf-item-palete-base"' + (it.paleteBase ? ' checked' : '') + '> Palete base' +
             '</label>' +
           '</div>'
         : '') +
@@ -9702,7 +9706,7 @@ var SIGNATURES = {
         btnOpcoesToggle.addEventListener('click', function(){
           var item = cfItens.filter(function(i){ return i.id === id; })[0];
           if (!item) return;
-          var qtdMarcadas = (item.modoDoisTras ? 1 : 0) + (item.semQtd ? 1 : 0) + (item.ladoFixo ? 1 : 0);
+          var qtdMarcadas = (item.modoDoisTras ? 1 : 0) + (item.semQtd ? 1 : 0) + (item.ladoFixo ? 1 : 0) + (item.paleteBase ? 1 : 0);
           var estavaAberto = item._uiOpcoesOpen != null ? item._uiOpcoesOpen : (qtdMarcadas > 0);
           item._uiOpcoesOpen = !estavaAberto;
           renderCfItens();
@@ -9769,6 +9773,18 @@ var SIGNATURES = {
           } else {
             item.ladoFixo = null;
           }
+          renderCfItens();
+          cfCalcular();
+        });
+      }
+      var chkPaleteBase = row.querySelector('.cf-item-palete-base');
+      if (chkPaleteBase){
+        chkPaleteBase.addEventListener('change', function(){
+          var item = cfItens.filter(function(i){ return i.id === id; })[0];
+          if (!item) return;
+          // palete base fica fora do desenho: as opções de posição no caminhão não valem pra ele
+          item.paleteBase = chkPaleteBase.checked;
+          if (item.paleteBase){ item.modoDoisTras = false; item.ladoFixo = null; }
           renderCfItens();
           cfCalcular();
         });
@@ -12340,7 +12356,9 @@ var SIGNATURES = {
       if (!totalEl || !item) return;
       var fardo = fardosMapa[item.fardoId];
       var qtd = parseFloat(item.qtd) || 0;
-      if (fardo && fardo.pecasPorFardo > 0 && qtd > 0){
+      if (item.paleteBase && (fardo || item.codigoSemFardo)){
+        totalEl.innerHTML = '<span style="color:var(--text-muted);">Palete base: entra no romaneio, só não aparece no desenho.</span>';
+      } else if (fardo && fardo.pecasPorFardo > 0 && qtd > 0){
         var n = Math.ceil(qtd / fardo.pecasPorFardo);
         var regraTotal = fardo && REGRAS_POR_RP[fardo.codigo];
         if (regraTotal){
@@ -12385,6 +12403,7 @@ var SIGNATURES = {
       var fardo = fardosMapa[it.fardoId];
       var qtd = parseFloat(it.qtd) || 0;
       if (!fardo || qtd <= 0) return;
+      if (it.paleteBase) return; // palete base: só informativo, não ocupa lugar no desenho
       if (!(fardo.comprimento > 0 && fardo.largura > 0)){ cfSemMedida.push({ codigo: fardo.codigo, qtd: qtd }); return; }
       // regra de "quantidade fechada" (tela Configurações → Regras): quando
       // esse RP tem regra aplicada, a quantidade digitada é fechada em
