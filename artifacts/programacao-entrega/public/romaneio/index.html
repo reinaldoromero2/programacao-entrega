@@ -16107,7 +16107,7 @@ var SIGNATURES = {
 
     // OF/OBS que não cabe na largura da coluna continua nas linhas de baixo (só a coluna OF/OBS
     // preenchida); as linhas vazias do fim são usadas primeiro, para o quadro seguir com 9 linhas
-    var FONTE_OFOBS = 'bold 14px Arial, Helvetica, sans-serif', LARGURA_OFOBS = 228;
+    var FONTE_OFOBS = 'bold 16px Arial, Helvetica, sans-serif', LARGURA_OFOBS = 228;
     var medidor = document.createElement('canvas').getContext('2d');
     medidor.font = FONTE_OFOBS;
     function quebrarOfobs(texto){
@@ -16147,12 +16147,12 @@ var SIGNATURES = {
       var ofobsTxt = String(l.ofobs||'');
       var ofobsEhAglotec = ofobsTxt.indexOf('BASE AGLOTEC FILIAL') !== -1;
       // uma linha de texto por linha da tabela (o resto já foi para as linhas de baixo), letra maior
-      var ofobsStyle = 'border:1px solid #000;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;text-align:center;' +
+      var ofobsStyle = 'border:1px solid #000;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px;text-align:center;' +
         (ofobsEhAglotec ? 'font-weight:bold;color:#d00000;' : '');
       return '<tr>' +
-        '<td style="border:1px solid #000;padding:4px 6px;height:20px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:14px;">' + esc(String(l.cliente||'')) + '</td>' +
-        '<td style="border:1px solid #000;padding:4px 6px;text-align:center;white-space:nowrap;font-size:14px;">' + esc(String(l.rp||'')) + '</td>' +
-        '<td style="border:1px solid #000;padding:4px 6px;text-align:center;white-space:normal;word-break:break-word;font-size:14px;">' + esc(l.qtd === '' ? '' : String(l.qtd)) + '</td>' +
+        '<td style="border:1px solid #000;padding:4px 6px;height:20px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:16px;">' + esc(String(l.cliente||'')) + '</td>' +
+        '<td style="border:1px solid #000;padding:4px 6px;text-align:center;white-space:nowrap;font-size:16px;">' + esc(String(l.rp||'')) + '</td>' +
+        '<td style="border:1px solid #000;padding:4px 6px;text-align:center;white-space:normal;word-break:break-word;font-size:16px;">' + esc(l.qtd === '' ? '' : String(l.qtd)) + '</td>' +
         // OF em mais de uma linha (lotes/datas diferentes): uma embaixo da outra
         '<td style="' + ofobsStyle + '">' + ofobsTxt.split('\n').map(function(s){ return s.trim(); }).filter(Boolean).map(ofobsNegrito).join('<br>') + '</td>' +
       '</tr>';
@@ -16177,9 +16177,9 @@ var SIGNATURES = {
           '<td style="border:1px solid #000;padding:4px 6px;width:34%;"><b>EMP:</b> ' + '<span style="font-size:14px;">' + esc(emp) + '</span>' + '</td>' +
         '</tr>' +
       '</table>' +
-      '<div style="font-weight:bold;font-size:12px;margin-bottom:4px;">DETALHES DOS PRODUTOS</div>' +
-      '<table style="width:100%;border-collapse:collapse;margin-bottom:12px;table-layout:fixed;">' +
-        '<colgroup><col style="width:38%;"><col style="width:16%;"><col style="width:18%;"><col style="width:28%;"></colgroup>' +
+      '<div style="font-weight:bold;font-size:13px;margin-bottom:4px;">DETALHES DOS PRODUTOS</div>' +
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:12px;table-layout:fixed;font-size:13px;">' +
+        '<colgroup><col style="width:27%;"><col style="width:27%;"><col style="width:18%;"><col style="width:28%;"></colgroup>' +
         '<tr style="background:#e5e5e5;">' +
           '<th style="border:1px solid #000;padding:4px 6px;text-align:left;">CLIENTE</th>' +
           '<th style="border:1px solid #000;padding:4px 6px;">RP</th>' +
@@ -18644,98 +18644,104 @@ var SIGNATURES = {
       '</div>';
     topRow.appendChild(img);
     topRow.appendChild(info);
+    // botões só com ícone (o nome aparece ao passar o mouse)
+    var iconeBtn = function(btn, icone, titulo){
+      btn.textContent = icone;
+      btn.setAttribute('aria-label', titulo);
+      btn.title = titulo;
+      btn.style.cssText += 'flex:0 0 auto; min-width:0; padding:5px 12px; font-size:17px; line-height:1;';
+      return btn;
+    };
     var viewBtn = document.createElement('button');
     viewBtn.type = 'button';
     viewBtn.className = 'add-btn btn-destaque-branco';
-    viewBtn.style.cssText = 'flex:0 0 auto;';
-    viewBtn.textContent = 'Romaneio';
-    viewBtn.title = 'Ver o romaneio completo, já com esta assinatura';
     viewBtn.addEventListener('click', function(){ previewRomaneioFromDoc(d, pendStatusEl); });
-    topRow.appendChild(viewBtn);
+    topRow.appendChild(iconeBtn(viewBtn, '📄', 'Romaneio — ver o romaneio completo, já com esta assinatura'));
     cfBotoesDesenho(d, true).forEach(function(btn){
-      btn.style.cssText += 'flex:0 0 auto;';
-      topRow.appendChild(btn);
+      topRow.appendChild(iconeBtn(btn, '📐', 'Desenho — ver a imagem da carga usada neste romaneio'));
     });
-    // botão amarelo "N" — aparece em TODOS os romaneios finalizados (não só
-    // nos de clientes cadastrados no Nathan, já que ele pode acompanhar uma
-    // carga fora do padrão dele); some sozinho depois que todo cliente do
-    // romaneio já tiver resposta registrada, e essa entrega já entra
-    // automaticamente no formulário quando a resposta for SIM.
+    // as outras ações ficam no pop-up "Mais opções" (botão ☰ no fim da linha), igual aos pendentes
+    var opcoes = [];
+    var novoBtn = function(classe, texto, titulo, aoClicar, estilo){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'add-btn ' + (classe || '');
+      b.textContent = texto;
+      b.title = titulo;
+      if (estilo) b.style.cssText = estilo;
+      b.addEventListener('click', aoClicar);
+      opcoes.push(b);
+      return b;
+    };
+    // "O Nathan acompanhou essa carga?" — some sozinho depois que todo cliente do romaneio tiver
+    // resposta; enquanto falta, o ☰ ganha uma bolinha roxa para lembrar
     var nathanPendenciasDesteRomaneio = nathanPendenciasDeDocQualquerCliente(doc);
-    var precisaMargemAuto = true;
     if (nathanPendenciasDesteRomaneio.length){
-      var nathanBtn = document.createElement('button');
-      nathanBtn.type = 'button';
-      nathanBtn.className = 'add-btn';
-      nathanBtn.style.cssText = 'margin-left:auto; flex:0 0 auto; padding:5px 9px; min-width:0; background:#c084fc; border-color:#c084fc; color:#2e1065; font-weight:700;';
-      nathanBtn.textContent = 'N';
-      nathanBtn.title = 'O Nathan acompanhou essa carga?';
-      nathanBtn.addEventListener('click', function(){
+      novoBtn('', 'Nathan acompanhou a carga?', 'O Nathan acompanhou essa carga?', function(){
         nathanAbrirPergunta(nathanPendenciasDesteRomaneio, function(){
           if (typeof renderFiltered === 'function') renderFiltered();
         });
-      });
-      topRow.appendChild(nathanBtn);
-      precisaMargemAuto = false;
+      }, 'background:#c084fc; border-color:#c084fc; color:#2e1065;');
     }
-    // "C" (azul) — completar carga: botão pequeno junto do N / Q / R
     if (d.cfDesenho && currentRole === 'admin'){
-      var completarBtnDone = document.createElement('button');
-      completarBtnDone.type = 'button';
-      completarBtnDone.className = 'add-btn';
-      completarBtnDone.style.cssText = (precisaMargemAuto ? 'margin-left:auto; ' : '') + 'flex:0 0 auto; padding:5px 9px; min-width:0; background:#2a78d6; border-color:#2a78d6; color:#ffffff; font-weight:700;';
-      completarBtnDone.textContent = 'C';
-      completarBtnDone.title = 'Completar carga — abrir o desenho desta carga na calculadora e completar o caminhão com outros itens (sai um romaneio novo só com os itens novos)';
-      completarBtnDone.addEventListener('click', function(){ cfAbrirCompletarCarga(doc.id, d); });
-      topRow.appendChild(completarBtnDone);
-      precisaMargemAuto = false;
+      novoBtn('btn-destaque-azul', '＋ Completar carga', 'Completar carga — abrir o desenho desta carga na calculadora e completar o caminhão com outros itens (sai um romaneio novo só com os itens novos)', function(){ cfAbrirCompletarCarga(doc.id, d); });
     }
     if (currentRole === 'admin'){
-      var qaBtnDone = document.createElement('button');
-      qaBtnDone.type = 'button';
-      qaBtnDone.className = 'add-btn';
-      qaBtnDone.style.cssText = (precisaMargemAuto ? 'margin-left:auto; ' : '') + 'flex:0 0 auto; padding:5px 9px; min-width:0; background:#eab308; border-color:#eab308; color:#241c02; font-weight:700;';
-      qaBtnDone.textContent = 'Q';
-      qaBtnDone.title = 'Abrir "Qualidade e meio ambiente" deste romaneio para ver/editar as respostas (as não conformidades vão pro Relatório de Não Conformidades)';
-      qaBtnDone.addEventListener('click', function(){ abrirQaParaRomaneio(doc.id, d); });
-      topRow.appendChild(qaBtnDone);
-      precisaMargemAuto = false;
-      var revertBtn = document.createElement('button');
-      revertBtn.type = 'button';
-      revertBtn.className = 'add-btn btn-destaque-laranja';
-      revertBtn.style.cssText = (precisaMargemAuto ? 'margin-left:auto; ' : '') + 'flex:0 0 auto; padding:5px 9px; min-width:0;';
-      revertBtn.textContent = 'R';
-      revertBtn.title = 'Reverter p/ aguardando — volta este romaneio para "aguardando carregamento", apagando a assinatura atual (uso quando o empilhadeirista assinou sem querer)';
-      revertBtn.addEventListener('click', function(){
+      novoBtn('btn-destaque-amarelo', 'Qualidade', 'Abrir "Qualidade e meio ambiente" deste romaneio para ver/editar as respostas (as não conformidades vão pro Relatório de Não Conformidades)', function(){ abrirQaParaRomaneio(doc.id, d); });
+      novoBtn('btn-destaque-laranja', '↩ Reverter p/ aguardando', 'Reverter p/ aguardando — volta este romaneio para "aguardando carregamento", apagando a assinatura atual (uso quando o empilhadeirista assinou sem querer)', function(){
         if (!dbApi) return;
         abrirConfirmarAcao('Reverter romaneio', 'Voltar este romaneio para "aguardando carregamento"? A assinatura atual será apagada.', function(){
-          revertBtn.disabled = true;
           dbApi.collection('romaneios').doc(doc.id).update({
             docStatus: 'pendente',
             carregStatus: 'aguardando',
             assinatura: null,
             assinadoPor: null,
             assinadoEm: null
-          }).catch(function(){
-            revertBtn.disabled = false;
-          });
+          }).catch(function(){});
         });
       });
-      topRow.appendChild(revertBtn);
-      var delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'clear-btn';
-      delBtn.style.cssText = 'flex:0 0 auto;';
-      delBtn.textContent = 'Excluir';
-      delBtn.title = 'Excluir este romaneio concluído (uso para testes)';
-      delBtn.addEventListener('click', function(){
+      novoBtn('btn-destaque-vermelho', '🗑 Excluir', 'Excluir este romaneio concluído (uso para testes)', function(){
         if (!dbApi) return;
         abrirConfirmarAcao('Excluir romaneio', 'Excluir este romaneio concluído? Essa ação não pode ser desfeita.', function(){
           dbApi.collection('romaneios').doc(doc.id).delete();
           deleteLinkedHistoryEntries(d, doc.id);
         });
       });
-      topRow.appendChild(delBtn);
+    }
+    if (opcoes.length){
+      var maisBtnDone = document.createElement('button');
+      maisBtnDone.type = 'button';
+      maisBtnDone.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="display:block;"><path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>' +
+        (nathanPendenciasDesteRomaneio.length ? '<span style="position:absolute; top:-2px; right:-2px; width:11px; height:11px; border-radius:50%; background:#c084fc; border:2px solid var(--surface-1);"></span>' : '');
+      maisBtnDone.title = 'Mais opções (' + opcoes.map(function(b){ return b.textContent.replace(/^[^A-Za-zÀ-ú]+/, ''); }).join(', ') + ')';
+      maisBtnDone.setAttribute('aria-label', 'Mais opções');
+      maisBtnDone.style.cssText = 'position:relative; margin-left:auto; flex:0 0 auto; width:34px; height:34px; border-radius:50%; border:1px solid var(--grid); background:var(--surface-1); color:var(--text-primary); cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center;';
+      maisBtnDone.addEventListener('click', function(){
+        var ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed; inset:0; z-index:190; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; padding:16px;';
+        var box = document.createElement('div');
+        box.className = 'pend-menu-box';
+        box.style.cssText = 'background:var(--surface-1); color:var(--text-primary); border-radius:14px; padding:16px; width:100%; max-width:340px; max-height:90vh; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,0.35);';
+        var tit = document.createElement('div');
+        tit.style.cssText = 'font-weight:700; font-size:15px; margin-bottom:12px;';
+        tit.textContent = 'Mais opções · ' + resumoClientesTxt(d.clientes, d.cliente);
+        var lista = document.createElement('div');
+        lista.className = 'pend-menu-lista';
+        opcoes.forEach(function(b){ lista.appendChild(b); });
+        var fechar = document.createElement('button');
+        fechar.type = 'button';
+        fechar.className = 'add-btn';
+        fechar.style.cssText = 'box-sizing:border-box; width:100%; height:42px; margin:6px 0 0; display:flex; align-items:center; justify-content:center; background:#6b7280; border:1px solid #6b7280; color:#ffffff; font-size:13.5px; font-weight:700; border-radius:10px;';
+        fechar.textContent = 'Fechar';
+        function fecha(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
+        fechar.addEventListener('click', fecha);
+        lista.addEventListener('click', function(ev){ if (ev.target.closest && ev.target.closest('button')) setTimeout(fecha, 0); });
+        ov.addEventListener('click', function(ev){ if (ev.target === ov) fecha(); });
+        box.appendChild(tit); box.appendChild(lista); box.appendChild(fechar);
+        ov.appendChild(box);
+        (row.closest('.app-root') || document.querySelector('.app-root') || document.body).appendChild(ov);
+      });
+      topRow.appendChild(maisBtnDone);
     }
     row.appendChild(topRow);
     // recado não aparece mais aqui: some ao assinar (ver signConfirmBtn),
