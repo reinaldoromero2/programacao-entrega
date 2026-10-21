@@ -6361,10 +6361,16 @@ var SIGNATURES = {
       html += '<div class="row crp-row-cliente" data-nome="' + escapeHtml(nome) + '" style="padding:6px 8px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:8px; font-size:12.5px;' + (isActive ? ' background:var(--accent-blue); color:#fff;' : '') + '">' +
         '<span>' + (linked ? '&#9679;' : '&#9675;') + '</span>' +
         '<span>' + escapeHtml(nome) + '</span>' +
-        (linked ? '<span class="pill-mini" style="margin-left:auto; background:var(--surface-2);">' + linked + '</span>' : '') +
+        '<span style="margin-left:auto; display:flex; align-items:center; gap:6px;">' +
+          (linked ? '<span class="pill-mini" style="background:var(--surface-2);">' + linked + '</span>' : '') +
+          '<button type="button" data-crp-editar-cli="' + escapeHtml(nome) + '" title="Editar este cliente (nome, frete ou excluir)" style="background:none; border:none; color:inherit; opacity:.75; cursor:pointer; font-size:13px; padding:2px 4px; line-height:1;">&#9998;</button>' +
+        '</span>' +
       '</div>';
     });
     crpListaClientesEl.innerHTML = html || '<p class="foot-note">Nenhum cliente encontrado.</p>';
+    crpListaClientesEl.querySelectorAll('[data-crp-editar-cli]').forEach(function(b){
+      b.addEventListener('click', function(ev){ ev.stopPropagation(); abrirEditarCliente(b.getAttribute('data-crp-editar-cli')); });
+    });
     crpListaClientesEl.querySelectorAll('.crp-row-cliente').forEach(function(row){
       row.addEventListener('click', function(){
         crpClienteAtivo = row.dataset.nome;
@@ -6791,14 +6797,31 @@ var SIGNATURES = {
     });
   }
 
+  // ajustes nos clientes que vêm no app (nome novo, frete, excluído), pela chave do nome original
+  var allClientesAjusteDocs = [];
+  // de onde veio cada nome da lista: { tipo: 'base', original } ou { tipo: 'extra', id }
+  var CLI_ORIGEM = {};
+  function chaveAjusteCliente(nome){
+    return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'cliente';
+  }
   function reconstruirClienteMap(){
-    var novoMap = {}, novaLista = [];
-    DATA.clientes.forEach(function(c){ novoMap[c.cliente] = c.frete; novaLista.push(c.cliente); });
+    var novoMap = {}, novaLista = [], ajustes = {};
+    allClientesAjusteDocs.forEach(function(doc){ var a = doc.data() || {}; if (a.original) ajustes[a.original] = a; });
+    CLI_ORIGEM = {};
+    DATA.clientes.forEach(function(c){
+      var a = ajustes[c.cliente];
+      if (a && a.excluido) return;
+      var nome = (a && a.nome) || c.cliente;
+      novoMap[nome] = (a && a.hasOwnProperty('frete')) ? a.frete : c.frete;
+      novaLista.push(nome);
+      CLI_ORIGEM[nome] = { tipo: 'base', original: c.cliente };
+    });
     allClientesExtraDocs.forEach(function(doc){
       var d = doc.data() || {};
       if (!d.cliente) return;
       if (!(d.cliente in novoMap)) novaLista.push(d.cliente);
       novoMap[d.cliente] = (d.frete != null ? d.frete : null);
+      CLI_ORIGEM[d.cliente] = { tipo: 'extra', id: doc.id };
     });
     Object.keys(CLI_MAP).forEach(function(k){ delete CLI_MAP[k]; });
     Object.keys(novoMap).forEach(function(k){ CLI_MAP[k] = novoMap[k]; });
@@ -6820,6 +6843,10 @@ var SIGNATURES = {
   function initClientesExtra(db, tentativa){
     if (!db) return;
     tentativa = tentativa || 0;
+    db.collection('clientes_ajustes').limit(2000).onSnapshot(function(snap){
+      allClientesAjusteDocs = snap.docs || [];
+      reconstruirClienteMap();
+    }, function(){});
     db.collection('clientes_extra').orderBy('criadoEm', 'desc').limit(500).onSnapshot(function(snap){
       allClientesExtraDocs = snap.docs || [];
       reconstruirClienteMap();
@@ -6865,6 +6892,81 @@ var SIGNATURES = {
         crpNovoClienteStatusEl.textContent = 'Não foi possível salvar agora. Tente novamente.';
         crpNovoClienteStatusEl.style.color = 'var(--critical)';
         crpNovoClienteSalvarBtn.disabled = false;
+      });
+    });
+  }
+
+  // ---- editar cliente: nome, frete ou excluir (pop-up) ----
+  function vinculosDoCliente(nome){
+    return allClienteRpDocs.filter(function(doc){ return (doc.data() || {}).cliente === nome; });
+  }
+  function abrirEditarCliente(nomeAtual){
+    var origem = CLI_ORIGEM[nomeAtual];
+    if (!origem || !dbApi) return;
+    var freteAtual = CLI_MAP[nomeAtual];
+    var raiz = document.querySelector('.app-root') || document.body;
+    var ov = document.createElement('div');
+    ov.className = 'rom-modal-overlay';
+    ov.style.zIndex = '600';
+    var campo = 'width:100%; box-sizing:border-box; background:var(--surface-2); border:1px solid var(--border); color:var(--text-primary); border-radius:8px; padding:10px 12px; font-size:15px;';
+    ov.innerHTML = '<div class="rom-modal-card" style="max-width:440px;">' +
+      '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>&#9998; Editar cliente</h3><button class="rom-modal-close" type="button" data-ec-fechar>Sair</button></div>' +
+      '<div style="padding:12px 18px 18px;">' +
+        '<label style="display:block; font-size:12px; color:var(--text-secondary); margin:0 0 4px;">Nome do cliente</label>' +
+        '<input type="text" data-ec-nome style="' + campo + ' font-weight:700; text-transform:uppercase;" value="' + escapeHtml(nomeAtual) + '">' +
+        '<label style="display:block; font-size:12px; color:var(--text-secondary); margin:12px 0 4px;">Frete (R$) — usado na checagem dos 5%</label>' +
+        '<input type="text" inputmode="decimal" data-ec-frete style="' + campo + '" placeholder="sem frete" value="' + (freteAtual != null ? escapeHtml(String(freteAtual).replace('.', ',')) : '') + '">' +
+        '<p class="foot-note" style="margin:10px 0 0;">' + (vinculosDoCliente(nomeAtual).length ? 'Os RPs vinculados a este cliente acompanham o nome novo.' : 'Este cliente não tem RP vinculado.') + '</p>' +
+        '<p class="foot-note" data-ec-status style="margin:8px 0 0;"></p>' +
+        '<div style="display:flex; gap:8px; margin-top:14px;">' +
+          '<button type="button" class="add-btn btn-destaque-vermelho" data-ec-excluir style="flex:1; margin:0;">&#128465; Excluir</button>' +
+          '<button type="button" class="add-btn btn-destaque-verde" data-ec-salvar style="flex:2; margin:0;">Salvar</button>' +
+        '</div>' +
+      '</div></div>';
+    raiz.appendChild(ov);
+    var q = function(sel){ return ov.querySelector(sel); };
+    var st = q('[data-ec-status]');
+    function fecha(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }
+    function erro(t){ st.textContent = t; st.style.color = 'var(--critical)'; }
+    ov.addEventListener('click', function(ev){ if (ev.target === ov || (ev.target.closest && ev.target.closest('[data-ec-fechar]'))) fecha(); });
+    setTimeout(function(){ var i = q('[data-ec-nome]'); i.focus(); i.select(); }, 30);
+    q('[data-ec-nome]').addEventListener('keydown', function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); q('[data-ec-salvar]').click(); } });
+    q('[data-ec-frete]').addEventListener('keydown', function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); q('[data-ec-salvar]').click(); } });
+
+    q('[data-ec-salvar]').addEventListener('click', function(){
+      var nomeNovo = (q('[data-ec-nome]').value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+      var freteTxt = (q('[data-ec-frete]').value || '').trim();
+      var frete = freteTxt ? toNumSeguro(freteTxt) : null;
+      if (!nomeNovo){ erro('Preencha o nome do cliente.'); return; }
+      if (freteTxt && !(frete > 0)){ erro('Frete inválido — use só números (ex.: 598 ou 278,88).'); return; }
+      if (nomeNovo !== nomeAtual && CLI_MAP.hasOwnProperty(nomeNovo)){ erro('Já existe um cliente com esse nome.'); return; }
+      this.disabled = true;
+      st.textContent = 'Salvando...'; st.style.color = '';
+      var gravar = origem.tipo === 'base'
+        ? dbApi.collection('clientes_ajustes').doc(chaveAjusteCliente(origem.original)).set({ original: origem.original, nome: nomeNovo, frete: frete, excluido: false, editadoEm: new Date().toISOString(), editadoPor: currentSessionNome || null })
+        : dbApi.collection('clientes_extra').doc(origem.id).update({ cliente: nomeNovo, frete: frete });
+      var btn = this;
+      gravar.then(function(){
+        // os vínculos com RP acompanham o nome novo
+        if (nomeNovo !== nomeAtual){
+          vinculosDoCliente(nomeAtual).forEach(function(doc){ dbApi.collection('cliente_rps').doc(doc.id).update({ cliente: nomeNovo }).catch(function(){}); });
+          if (crpClienteAtivo === nomeAtual){ crpClienteAtivo = nomeNovo; atualizarCrpLabelAtivo(); }
+        }
+        fecha();
+      }).catch(function(){ btn.disabled = false; erro('Não foi possível salvar agora. Tente novamente.'); });
+    });
+
+    q('[data-ec-excluir]').addEventListener('click', function(){
+      var vinc = vinculosDoCliente(nomeAtual);
+      abrirConfirmarAcao('Excluir cliente', 'Excluir "' + nomeAtual + '" da lista de clientes?' + (vinc.length ? ' Os RPs vinculados a ele também saem.' : ''), function(){
+        var apagar = origem.tipo === 'base'
+          ? dbApi.collection('clientes_ajustes').doc(chaveAjusteCliente(origem.original)).set({ original: origem.original, nome: nomeAtual, excluido: true, editadoEm: new Date().toISOString(), editadoPor: currentSessionNome || null })
+          : dbApi.collection('clientes_extra').doc(origem.id).delete();
+        Promise.resolve(apagar).then(function(){
+          vinc.forEach(function(doc){ dbApi.collection('cliente_rps').doc(doc.id).delete(); });
+          if (crpClienteAtivo === nomeAtual){ crpClienteAtivo = null; atualizarCrpLabelAtivo(); renderCrpRps(); }
+          fecha();
+        }).catch(function(){ erro('Não foi possível excluir agora. Tente novamente.'); });
       });
     });
   }
