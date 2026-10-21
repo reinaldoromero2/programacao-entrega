@@ -50,6 +50,9 @@ interface CampoPopupProps {
   /** vários de uma vez (cliente conjugado): o botão "+" abre mais uma linha; cada escolha preenche uma
    *  linha e passa para a próxima, e com todas preenchidas chama aoConcluir com os nomes */
   varios?: { aoConcluir: (nomes: string[]) => void; validarLivre?: (texto: string) => string };
+  /** em vez de escolher e fechar, o reconhecimento completa o texto no campo (ex.: o nome do cliente) e o
+   *  pop-up fica aberto para acrescentar algo (anotação entre parênteses); Enter salva com aoTextoLivre */
+  completar?: (op: OpcaoPopup, texto: string) => string;
   testId?: string;
 }
 
@@ -60,7 +63,7 @@ const filtroPadrao = (texto: string, op: OpcaoPopup) => {
 
 export function CampoPopup({
   aberto, titulo, opcoes, filtrar = filtroPadrao, textoDeBusca = (t) => t, aoEscolher, aoTextoLivre, aoFechar, aoLimpar,
-  minAuto = 2, semAutoSe, placeholder, dica, avisoSemOpcao, aoMudarTexto, children, linha, semDigitacao, varios, testId,
+  minAuto = 2, semAutoSe, placeholder, dica, avisoSemOpcao, aoMudarTexto, children, linha, semDigitacao, varios, completar, testId,
 }: CampoPopupProps) {
   const [texto, setTexto] = useState("");
   const [ativo, setAtivo] = useState(-1);
@@ -81,10 +84,27 @@ export function CampoPopup({
     setEscolhidos(lista);
     limparDigitacao();
   };
+  // completa o campo com o nome reconhecido e deixa o cursor no fim, para continuar escrevendo
+  const completarCampo = (op: OpcaoPopup) => {
+    const novo = completar!(op, texto);
+    setTexto(novo); setAtivo(-1); digitouRef.current = false; aoMudarTexto?.(novo);
+    window.setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(novo.length, novo.length); } }, 0);
+    return novo;
+  };
   // com mais de uma linha, a escolha vai para a linha da vez em vez de salvar e fechar
   const escolher = (op: OpcaoPopup, t: string) => {
+    if (completar) { completarCampo(op); return; }
     if (varios && qtdLinhas > 1) juntarNome(op.rotulo);
     else aoEscolher(op, t);
+  };
+  // Enter no modo "completar": usa o que está no campo (já com a anotação, se tiver)
+  const salvarTexto = (t: string) => {
+    if (varios && qtdLinhas > 1) {
+      const valor = varios.validarLivre ? varios.validarLivre(t) : t.trim();
+      if (valor) juntarNome(valor);
+      return;
+    }
+    if (aoTextoLivre && t.trim()) aoTextoLivre(t);
   };
 
   const filtradas = useMemo(
@@ -121,6 +141,13 @@ export function CampoPopup({
   });
 
   const confirmar = () => {
+    if (completar) {
+      let t = texto;
+      if (ativo >= 0 && lista[ativo]) t = completar(lista[ativo]!, texto);
+      else if (reconhecida && semAcento(textoDeBusca(texto)) !== semAcento(reconhecida.rotulo)) t = completar(reconhecida, texto);
+      salvarTexto(t);
+      return;
+    }
     if (ativo >= 0 && lista[ativo]) { escolher(lista[ativo]!, texto); return; }
     if (reconhecida) { escolher(reconhecida, texto); return; }
     if (varios && qtdLinhas > 1) {
@@ -180,7 +207,7 @@ export function CampoPopup({
         )}
         <p className="text-center text-sm text-slate-500">
           {reconhecida && texto.trim()
-            ? <>Reconhecido: <b className="text-slate-900">{reconhecida.rotulo}</b>{reconhecida.detalhe ? ` · ${reconhecida.detalhe}` : ""}</>
+            ? <>Reconhecido: <b className="text-slate-900">{reconhecida.rotulo}</b>{reconhecida.detalhe ? ` · ${reconhecida.detalhe}` : ""}{completar ? " · Enter para salvar (pode escrever algo entre parênteses antes)" : ""}</>
             : dica}
         </p>
         {texto.trim() && filtradas.length === 0 && (

@@ -727,9 +727,10 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         textoDeBusca={segmentoCliente}
         semAutoSe={/[+(]/}
         placeholder={localState.cliente || "código ou nome"}
-        dica="Digite o código ou parte do nome · para mais de um cliente use +"
+        dica="Digite o código ou parte do nome e aperte Enter · o + abre mais um cliente conjugado"
         avisoSemOpcao="Nenhum cliente cadastrado com esse nome."
         aoEscolher={(op, texto) => salvarCliente(replaceLastSegment(texto, op.rotulo))}
+        completar={(op, texto) => replaceLastSegment(texto, op.rotulo)}
         aoTextoLivre={(texto) => {
           // só fica cliente cadastrado (o que não for some), igual a antes; sem a lista (offline), aceita
           const valor = !navigator.onLine || !podeConferirCliente ? texto.trim() : validateValue(texto, nomesClientes);
@@ -1151,9 +1152,10 @@ function NewDeliveryRow({ date, index, backgroundImageEnabled, acrylicEnabled }:
           textoDeBusca={segmentoCliente}
           semAutoSe={/[+(]/}
           placeholder="código ou nome"
-          dica="Digite o código ou parte do nome · para mais de um cliente use +"
+          dica="Digite o código ou parte do nome e aperte Enter · o + abre mais um cliente conjugado"
           avisoSemOpcao="Nenhum cliente cadastrado com esse nome."
           aoEscolher={(op, texto) => { setPopupNovo(false); handleCreate(replaceLastSegment(texto, op.rotulo)); }}
+          completar={(op, texto) => replaceLastSegment(texto, op.rotulo)}
           aoTextoLivre={(texto) => {
             const valor = !navigator.onLine || !podeConferirCliente ? texto.trim() : validateValue(texto, nomesClientes);
             if (valor) { setPopupNovo(false); handleCreate(valor); }
