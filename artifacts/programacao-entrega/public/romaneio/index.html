@@ -10589,15 +10589,7 @@ var SIGNATURES = {
       }
       return;
     }
-    var codigosSemRpCriar = cfCodigosSemRpCadastrado(itensValidos, fardosMapa);
-    if (codigosSemRpCriar.length){
-      cfAbrirCadastroParaCodigo(codigosSemRpCriar[0], 'rp');
-      if (cfCriarRomaneioStatusEl){
-        cfCriarRomaneioStatusEl.textContent = 'O código ' + codigosSemRpCriar.join(', ') + ' não tem um RP cadastrado com preço — abri a tela de cadastro de RP pra você registrar — corrija antes de criar o romaneio, senão esse item some do romaneio impresso.';
-        cfCriarRomaneioStatusEl.style.color = 'var(--critical)';
-      }
-      return;
-    }
+    // código sem RP/preço cadastrado: entra no romaneio do jeito que foi digitado (sem preço), não trava mais
     if (cfCriarRomaneioStatusEl) cfCriarRomaneioStatusEl.textContent = '';
     var cd = caminhaoDoc ? (caminhaoDoc.data() || {}) : { placa: placaLivre, motorista: '', categoria: '' };
     // rascunho que deu origem a esse romaneio (se veio de um) — apagado só
@@ -10836,15 +10828,7 @@ var SIGNATURES = {
       }
       return;
     }
-    var codigosSemRpSalvar = cfCodigosSemRpCadastrado(itensValidos, fardosMapa);
-    if (codigosSemRpSalvar.length){
-      cfAbrirCadastroParaCodigo(codigosSemRpSalvar[0], 'rp');
-      if (cfCriarRomaneioStatusEl){
-        cfCriarRomaneioStatusEl.textContent = 'O código ' + codigosSemRpSalvar.join(', ') + ' não tem um RP cadastrado com preço — abri a tela de cadastro de RP pra você registrar — corrija antes de salvar, senão esse item some do romaneio impresso.';
-        cfCriarRomaneioStatusEl.style.color = 'var(--critical)';
-      }
-      return;
-    }
+    // código sem RP/preço cadastrado: entra no romaneio do jeito que foi digitado (sem preço), não trava mais
     if (cfCriarRomaneioStatusEl) cfCriarRomaneioStatusEl.textContent = '';
     var cd = caminhaoDoc.data() || {};
     var snapshot = {
