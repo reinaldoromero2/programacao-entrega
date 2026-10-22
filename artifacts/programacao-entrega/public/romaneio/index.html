@@ -20477,6 +20477,9 @@ var SIGNATURES = {
   .pg th.h-ok{ background:#92d050 !important; }
   .pg th.h-atr{ background:#ff0000 !important; color:#fff; }
   .pg th.h-dia{ min-width:50px; font-size:20px; }
+  .pg th[data-dia-col]{ cursor:pointer; }
+  .pg th[data-dia-col]:hover{ filter:brightness(0.92); }
+  .pg th.h-filtro{ background:#2563eb !important; color:#fff !important; box-shadow:inset 0 0 0 3px #1e3a8a; }
   .pg th.h-fds{ background:#ff0000 !important; color:#fff; }
   .pg th.h-sem{ font-size:12px; font-weight:400; }
   .pg td.d{ text-align:center; min-width:50px; font-size:14px; }
@@ -20796,7 +20799,10 @@ var SIGNATURES = {
     var fcs = fc.split('|').map(function(f){ return f.trim(); }).filter(Boolean);
     // sem o filtro "só com pedido": a grade mostra exatamente o que veio da planilha
     var soPed = false, comSiemens = $('prog-siemens').checked;
+    // dia clicado no cabeçalho: só as linhas com quantidade naquele dia
+    var dia = (filtroDiaCol != null && filtroDiaCol <= prog.dias.length) ? filtroDiaCol : null;
     return prog.itens.map(function(it, idx){ return { it: it, idx: idx }; }).filter(function(x){
+      if (dia != null && !(qEf(x.idx, dia) > 0)) return false;
       var it = x.it;
       // caixa "Siemens": marcada mostra só as Siemens; desmarcada esconde as Siemens
       if (comSiemens !== ehSiemens(it.cliente)) return false;
@@ -20810,6 +20816,8 @@ var SIGNATURES = {
     });
   }
 
+  // coluna do dia escolhido no cabeçalho (0 = Atr; 1.. = dias), ou null para todos
+  var filtroDiaCol = null;
   function renderGrade(){
     var limpar = $('prog-filtro-limpar');
     if (limpar) limpar.hidden = !$('prog-filtro-cli').value;
@@ -20818,8 +20826,8 @@ var SIGNATURES = {
     var d = prog.dias;
     var h = '<table class="pg"><thead>' +
       '<tr class="h1"><th class="c-cli" rowspan="3"><span class="cli-nome">Cliente</span></th><th class="c-prod" rowspan="3">Produto</th><th rowspan="3">Un</th><th rowspan="3">Descr</th><th rowspan="3">Base<br>fatura</th>' +
-      '<th class="h-blq" colspan="2">Estq BLQ</th><th class="h-ok" colspan="3">Estq OK</th><th class="h-atr">Atr</th>' +
-      d.map(function(x){ return '<th class="h-dia' + (x.fds ? ' h-fds' : '') + '">' + x.dia + '</th>'; }).join('') + '<th rowspan="3">prog<br>próx<br>15 d</th></tr>' +
+      '<th class="h-blq" colspan="2">Estq BLQ</th><th class="h-ok" colspan="3">Estq OK</th><th class="h-atr' + (filtroDiaCol === 0 ? ' h-filtro' : '') + '" data-dia-col="0" title="Mostrar só o que está em atraso (clique de novo para mostrar tudo)">Atr</th>' +
+      d.map(function(x, i){ return '<th class="h-dia' + (x.fds ? ' h-fds' : '') + (filtroDiaCol === i + 1 ? ' h-filtro' : '') + '" data-dia-col="' + (i + 1) + '" title="Mostrar só os pedidos deste dia (clique de novo para mostrar tudo)">' + x.dia + '</th>'; }).join('') + '<th rowspan="3">prog<br>próx<br>15 d</th></tr>' +
       '<tr class="h2"><th class="h-blq" rowspan="2">MAT</th><th class="h-blq" rowspan="2">FIL</th><th class="h-ok" rowspan="2">MAT</th><th class="h-ok" rowspan="2">FIL</th><th class="h-ok" rowspan="2">TOT</th><th class="h-atr">aso</th>' +
       d.map(function(x){ return '<th class="h-sem' + (x.fds ? ' h-fds' : '') + '">' + x.mes + '</th>'; }).join('') + '</tr>' +
       '<tr class="h3"><th class="h-atr"></th>' + d.map(function(x){ return '<th class="h-sem' + (x.fds ? ' h-fds' : '') + '">' + x.sem + '</th>'; }).join('') + '</tr>' +
@@ -21067,6 +21075,15 @@ var SIGNATURES = {
       if (tds[i] === cel){ cel.classList.add('cel-marca-fim'); break; }
     }
   }
+  // número do dia (ou "Atr") no cabeçalho: filtra as linhas daquele dia; clicar de novo mostra tudo
+  $('prog-grade').addEventListener('click', function(ev){
+    var th = ev.target.closest ? ev.target.closest('th[data-dia-col]') : null;
+    if (!th) return;
+    ev.stopImmediatePropagation();
+    var c = +th.getAttribute('data-dia-col');
+    filtroDiaCol = filtroDiaCol === c ? null : c;
+    renderGrade();
+  }, true);
   $('prog-grade').addEventListener('click', function(ev){
     if (somenteVer){ marcarLinhaCelular(ev); return; } // no celular a grade é só para ver
     // ✕ vermelho da quantidade marcada: desmarca
