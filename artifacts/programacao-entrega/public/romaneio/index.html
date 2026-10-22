@@ -9953,7 +9953,15 @@ var SIGNATURES = {
           // (mesmo digitando só uma parte do código), já reconhece e
           // preenche sozinho, sem precisar escolher na lista.
           var candidatosAgora = [];
-          if (!novoFardoId && val){
+          // cleiton: sem completar sozinho nem pop-up de escolha — só a sugestão da lista; o fardo só
+          // entra quando o código digitado é exatamente o de um fardo (ou escolhido da lista)
+          var rpLivre = currentUserKey === 'cleiton';
+          if (rpLivre && !novoFardoId && val){
+            var termoLivre = val.toUpperCase();
+            var exatos = cfFardosOrdenados().filter(function(f){ return f.codigo && cfCodigoParaRp(f.codigo).toUpperCase() === termoLivre; });
+            if (exatos.length === 1) novoFardoId = exatos[0].id;
+          }
+          if (!rpLivre && !novoFardoId && val){
             // pega a lista de fardos NA HORA (não a capturada quando essa
             // linha foi desenhada) — um fardo cadastrado depois que essa
             // linha já estava na tela (ex.: cadastrou um novo código em
@@ -10011,7 +10019,7 @@ var SIGNATURES = {
           // o mesmo código na tabela de RP/preço — se existir, o item entra
           // no romaneio/total mesmo sem desenhar nada (não tem dimensão pra
           // desenhar), com um aviso na linha pra cadastrar o fardo depois.
-          item.codigoSemFardo = (!novoFardoId && val) ? cfResolverRpSemFardo(val) : '';
+          item.codigoSemFardo = (!novoFardoId && val) ? (rpLivre ? val.toUpperCase() : cfResolverRpSemFardo(val)) : '';
           cfCalcular();
           // batem várias variações cadastradas com o mesmo código (ex.:
           // "0774-001" carrega c/15, c/20 e c/25) — a sugestão nativa do
