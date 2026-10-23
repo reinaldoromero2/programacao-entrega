@@ -113,6 +113,8 @@ export function RomaneioFrame() {
   // a página do iframe já está na tela pedida (grade aberta ou fechada); até lá o painel fica em branco
   const [conteudoPronto, setConteudoPronto] = useState(false);
   const reservaRef = useRef<number | undefined>(undefined);
+  // "Ler etiquetas" aberto na página: sem as setas (a única saída é o Sair da própria tela)
+  const [leitorAberto, setLeitorAberto] = useState(false);
 
   const carregado = useRef(false);
   const avisarPagina = (t: Tela) => {
@@ -149,6 +151,7 @@ export function RomaneioFrame() {
         setConteudoPronto(true);
       }
       if (ev.data?.ripack === "programacao-fechou") ir("/");
+      if (ev.data?.ripack === "leitor-aberto") setLeitorAberto(!!ev.data.aberto);
       // a grade fechou indo para o romaneio (ex.: calculadora de carga): vira a tela do Romaneio
       if (ev.data?.ripack === "grade-virou-romaneio" && window.location.hash.replace(/^#/, "") === PROGRAMACAO_ROTA) {
         ir(ROMANEIO_ROTA);
@@ -238,11 +241,12 @@ export function RomaneioFrame() {
           allow="clipboard-read; clipboard-write; camera"
           onLoad={() => {
             carregado.current = true;
+            setLeitorAberto(false);
             avisarPagina(tela);
           }}
         />
       </div>
-      <Seta lado="direita" visivel={tela === "romaneio"} onClick={() => ir("/")} rotulo="Programação de Entrega" testid="seta-voltar-do-romaneio" />
+      <Seta lado="direita" visivel={tela === "romaneio" && !leitorAberto} onClick={() => ir("/")} rotulo="Programação de Entrega" testid="seta-voltar-do-romaneio" />
       <Seta lado="esquerda" visivel={tela === "programacao"} onClick={() => ir("/")} rotulo="Programação de Entrega" testid="seta-voltar-da-programacao" />
     </>
   );

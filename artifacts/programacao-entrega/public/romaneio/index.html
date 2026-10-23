@@ -5715,6 +5715,11 @@ var SIGNATURES = {
   // ---- relatório visual (tabela estilo planilha, lado a lado) ----
   var TATU_RELATORIO_PALETA = ['#cdeccd', '#cfe3fb', '#fbe0bd', '#f6cfcf', '#e6d9f7', '#fff3b0'];
 
+  // quantidade do item naquele código: a linha de um romaneio com vários RPs guarda uma por código (qtds)
+  function qtdTatuNoCodigo(it, c){
+    if (it.qtds) return it.qtds[c] != null ? it.qtds[c] : '';
+    return it.codigo === c ? it.qtd : '';
+  }
   function montarTabelaRelatorioTatu(titulo, corTitulo, itens, codigos, colExtraLabel, mostrarPlaca){
     if (mostrarPlaca == null) mostrarPlaca = true;
     var coresCodigo = {};
@@ -5725,9 +5730,9 @@ var SIGNATURES = {
 
     var linhasHtml = itens.length ? itens.map(function(it, i){
       var cels = codigos.map(function(c){
-        var bate = it.codigo === c;
-        if (bate) totais[c] += toNumSeguro(it.qtd);
-        return '<td style="background:' + coresCodigo[c] + '; font-weight:600;">' + (bate ? escapeHtml(String(it.qtd)) : '') + '</td>';
+        var q = qtdTatuNoCodigo(it, c);
+        if (q !== '') totais[c] += toNumSeguro(q);
+        return '<td style="background:' + coresCodigo[c] + '; font-weight:600;">' + escapeHtml(String(q)) + '</td>';
       }).join('');
       return '<tr>' +
         '<td>' + (i + 1) + '</td>' +
@@ -5782,8 +5787,23 @@ var SIGNATURES = {
       // o número da entrega já aparece na 1ª coluna (Nº) da tabela — aqui
       // só mostra algo quando for BASE AGLOTEC FILIAL, destacado.
       var extraTxt = l.extraAglotec ? 'BASE AGLOTEC FILIAL' : '';
-      return { codigo: l.codigo, qtd: (l.qtd != null ? l.qtd : ''), motorista: l.motorista, placa: l.placa, extra: extraTxt, aglotecFlag: !!l.extraAglotec, dataLabel: dataLabel };
+      return { codigo: l.codigo, qtd: (l.qtd != null ? l.qtd : ''), motorista: l.motorista, placa: l.placa, extra: extraTxt, aglotecFlag: !!l.extraAglotec, dataLabel: dataLabel, grupo: l.grupo };
     });
+    // os itens do mesmo romaneio (dois RPs na mesma entrega) ficam numa linha só, cada um na coluna do seu RP
+    var porRomaneio = {};
+    saidaItens = saidaItens.reduce(function(acc, it){
+      var q = it.qtd;
+      var junto = it.grupo ? porRomaneio[it.grupo] : null;
+      if (!junto){
+        junto = Object.assign({}, it, { qtds: {} });
+        if (it.grupo) porRomaneio[it.grupo] = junto;
+        acc.push(junto);
+      }
+      if (q === '' || q == null) return acc;
+      var ant = junto.qtds[it.codigo];
+      junto.qtds[it.codigo] = (ant == null || ant === '') ? q : toNumSeguro(ant) + toNumSeguro(q);
+      return acc;
+    }, []);
     // acerto de estoque entra no saldo normalmente, mas não aparece no
     // relatório (é só um ajuste interno de conferência, não uma
     // entrada/chegada real de mercadoria).
@@ -5853,7 +5873,7 @@ var SIGNATURES = {
       if (i < itens.length){
         var it = itens[i];
         var row = [i + 1, it.dataLabel || ''];
-        codigos.forEach(function(c){ row.push(it.codigo === c ? it.qtd : ''); });
+        codigos.forEach(function(c){ row.push(qtdTatuNoCodigo(it, c)); });
         if (mostrarPlaca){ row.push(it.motorista || '', it.placa || '', it.extra || ''); }
         else { row.push(it.motorista || '', it.extra || ''); }
         linhas.push(row);
@@ -5862,7 +5882,7 @@ var SIGNATURES = {
       }
     }
     var totais = codigos.map(function(c){
-      return itens.reduce(function(soma, it){ return soma + (it.codigo === c ? toNumSeguro(it.qtd) : 0); }, 0);
+      return itens.reduce(function(soma, it){ var q = qtdTatuNoCodigo(it, c); return soma + (q !== '' ? toNumSeguro(q) : 0); }, 0);
     });
     linhas.push(['TOTAL', ''].concat(totais).concat(colunasExtras.map(function(){ return ''; })));
     return linhas;
@@ -19130,7 +19150,7 @@ var SIGNATURES = {
   // recurso de banco de dados usado na assinatura).
   var USERS = {
     'reinaldo': { senha: '1250', role: 'admin', nome: 'Reinaldo', precisaSenha: true },
-    'cristian': { senha: '1250', role: 'admin', nome: 'Cristian', precisaSenha: true },
+    'cristian': { senha: '1010', role: 'admin', nome: 'Cristian', precisaSenha: true },
     'rinaldo': { senha: '204154', role: 'admin', nome: 'Rinaldo', precisaSenha: true },
     'sinvaldo': { role: 'operador', nome: 'José Sinvaldo', precisaSenha: false },
     'jean': { role: 'operador', nome: 'Jean', precisaSenha: false },
@@ -22198,7 +22218,9 @@ var SIGNATURES = {
     $('leitor-contagem').textContent = hoje.length + (hoje.length === 1 ? ' lida hoje' : ' lidas hoje');
     $('leitor-lidos').innerHTML = hoje.map(function(x){ return '<div>' + esc(x.codigo) + '</div>'; }).join('');
   }
-  function fecharTela(){ pararCamera(); tela.hidden = true; $('leitor-pop').hidden = true; document.documentElement.style.overflow = ''; }
+  // avisa o app (fora do iframe) para esconder as setas de trocar de tela enquanto a leitura está aberta
+  function avisarLeitorAberto(aberto){ try { if (window.parent !== window) window.parent.postMessage({ ripack: 'leitor-aberto', aberto: aberto }, '*'); } catch (e){} }
+  function fecharTela(){ pararCamera(); tela.hidden = true; $('leitor-pop').hidden = true; document.documentElement.style.overflow = ''; avisarLeitorAberto(false); }
   $('leitor-close').addEventListener('click', fecharTela);
   document.addEventListener('visibilitychange', function(){
     if (tela.hidden) return;
@@ -22207,6 +22229,7 @@ var SIGNATURES = {
   $('leitor-abrir-btn').addEventListener('click', function(){
     tela.hidden = false;
     document.documentElement.style.overflow = 'hidden';
+    avisarLeitorAberto(true);
     $('leitor-manual').value = ''; desenharCasas();
     visto = {};
     renderTela();
