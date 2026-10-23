@@ -1750,7 +1750,8 @@
       </div>
       <!-- digitar à mão: o E e o Q já vêm prontos, é só digitar os 8 números (o leitor USB também cai aqui) -->
       <div class="leitor-manual-wrap" id="leitor-manual-wrap">
-        <div class="leitor-manual-barra">
+        <button type="button" class="leitor-manual-abrir" id="leitor-manual-abrir">⌨️ Digitar etiqueta</button>
+        <div class="leitor-manual-barra" id="leitor-manual-barra" hidden>
           <span class="leitor-manual-fixo">E</span>
           <!-- um campo só por baixo (o teclado não fecha entre um número e outro); os quadradinhos mostram cada número -->
           <div class="leitor-manual-casas" id="leitor-manual-casas">
@@ -1821,6 +1822,8 @@
       .leitor-mira{ position:absolute; left:7%; right:7%; top:40%; height:20%; border:4px solid rgba(113,200,44,0.95); border-radius:14px; box-shadow:0 0 0 999px rgba(0,0,0,0.3); pointer-events:none; }
       .leitor-aviso-camera{ position:absolute; left:16px; right:16px; bottom:16px; text-align:center; font-size:14px; color:#fff; text-shadow:0 1px 3px #000; }
       .leitor-manual-wrap{ padding:10px 14px 0; }
+      .leitor-manual-abrir{ display:block; width:100%; padding:13px; border-radius:14px; border:1px solid rgba(255,255,255,0.25); background:rgba(255,255,255,0.08); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); color:rgba(255,255,255,0.9); font-size:16px; font-weight:700; cursor:pointer; }
+      .leitor-manual-abrir[hidden], .leitor-manual-barra[hidden]{ display:none; }
       .leitor-manual-barra{ display:flex; align-items:center; gap:6px; padding:8px 10px; border-radius:14px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.22); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
       .leitor-manual-fixo{ flex:0 0 auto; font:800 22px ui-monospace, Consolas, monospace; color:rgba(255,255,255,0.85); }
       .leitor-manual-casas{ position:relative; flex:1 1 auto; min-width:0; display:grid; grid-template-columns:repeat(8, 1fr); gap:5px; }
@@ -22110,6 +22113,8 @@ var SIGNATURES = {
     // as etiquetas da RIPACK são sempre E + 8 números + Q (ex.: E02086114Q): leitura fora disso
     // é erro da câmera ou outro código — não guarda e pede para bipar de novo
     if (!/^E[0-9]{8}Q$/.test(codigo)){ som(false); pop('erro', 'Leitura errada — bipe a etiqueta novamente', codigo); return; }
+    // e sempre começam com E0: um E4, E5... é a câmera (ou a digitação) errando o 0 — fica E0
+    codigo = 'E0' + codigo.slice(2);
     var dia = hojeISO();
     var ja = docs.filter(function(x){ return x.data === dia && String(x.codigo).toUpperCase() === codigo; })[0];
     if (ja){ som(false); pop('ja', 'Já lida hoje às ' + horaCurta(ja.lidoEm), codigo); return; }
@@ -22179,11 +22184,31 @@ var SIGNATURES = {
         : nome === 'NotFoundError' ? 'Nenhuma câmera neste aparelho.' : 'Não foi possível abrir a câmera agora.');
     });
   }
+  // "⌨️ Digitar etiqueta" abre os quadradinhos (e o teclado); fechou o teclado sem nada digitado, volta o botão.
+  // Sem câmera (ex.: PC com leitor USB) os quadradinhos ficam sempre abertos.
+  var digitarSempre = false;
+  function abrirDigitar(){
+    $('leitor-manual-abrir').hidden = true;
+    $('leitor-manual-barra').hidden = false;
+    try { $('leitor-manual').focus(); } catch (e){}
+    desenharCasas();
+  }
+  function fecharDigitar(){
+    if (digitarSempre) return;
+    $('leitor-manual').value = '';
+    $('leitor-manual-barra').hidden = true;
+    $('leitor-manual-abrir').hidden = false;
+  }
+  $('leitor-manual-abrir').addEventListener('click', abrirDigitar);
+  $('leitor-manual').addEventListener('blur', function(){ var c = this; setTimeout(function(){ if (document.activeElement !== c && !c.value) fecharDigitar(); }, 150); });
   // sem câmera (ex.: PC): campo para digitar ou usar o leitor USB
   function semCamera(texto){
     avisoCamera(texto + ' Use o campo abaixo.');
+    digitarSempre = true;
     $('leitor-manual-wrap').hidden = false;
-    setTimeout(function(){ try { $('leitor-manual').focus(); } catch (e){} }, 50);
+    $('leitor-manual-abrir').hidden = true;
+    $('leitor-manual-barra').hidden = false;
+    setTimeout(function(){ try { $('leitor-manual').focus(); } catch (e){} desenharCasas(); }, 50);
   }
   // os quadradinhos mostram os números digitados; o da vez fica marcado (apagar volta para o anterior)
   function desenharCasas(){
@@ -22230,7 +22255,7 @@ var SIGNATURES = {
     tela.hidden = false;
     document.documentElement.style.overflow = 'hidden';
     avisarLeitorAberto(true);
-    $('leitor-manual').value = ''; desenharCasas();
+    digitarSempre = false; fecharDigitar(); desenharCasas();
     visto = {};
     renderTela();
     ligarCamera();
@@ -22268,18 +22293,36 @@ var SIGNATURES = {
           '<span class="r-qtd"><b>' + n + '</b>' + (n === 1 ? 'etiqueta' : 'etiquetas') + (g.pcs ? '<br>' + g.pcs + ' pç' : '') + '</span>' +
           '<span class="r-seta">▶</span>' +
         '</button>' +
-        (aberto ? '<div class="leitor-rp-itens">' + g.itens.map(itemLeitura).join('') + '</div>' : '') +
+        (aberto ? '<div class="leitor-rp-itens">' + g.itens.map(itemLeitura).join('') +
+          (g.chave === 'nao' ? '<div style="padding:10px 0 8px;"><button type="button" class="add-btn" data-leitor-rebuscar="1" style="width:100%;">🔄 Buscar de novo no sistema</button></div>' : '') +
+        '</div>' : '') +
       '</div>';
     }).join('');
   }
-  var rpAbertos = {};
+  var rpAbertos = {}, editandoLeitura = null;
+  // número digitado na edição: os 8 números, ou o código inteiro; sempre fica E0 + 7 números + Q
+  function codigoEditado(v){
+    v = String(v || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (/^[0-9]{8}$/.test(v)) v = 'E' + v + 'Q';
+    if (!/^E[0-9]{8}Q$/.test(v)) return '';
+    return 'E0' + v.slice(2);
+  }
   function itemLeitura(x){
+      if (editandoLeitura === x._id){
+        return '<div class="leitor-item"><div class="l-txt">' +
+          '<input type="text" data-leitor-edit-campo="' + esc(x._id) + '" value="' + esc(x.codigo) + '" autocomplete="off" autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:8px 10px; font:700 16px ui-monospace, Consolas, monospace; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-primary);">' +
+          '<div class="l-sub">E + 8 números + Q (ou só os 8 números)</div></div>' +
+          '<button type="button" class="add-btn btn-destaque-verde" data-leitor-edit-salvar="' + esc(x._id) + '">Salvar</button>' +
+          '<button type="button" class="add-btn btn-destaque-vermelho" data-leitor-edit-cancelar="1">Cancelar</button>' +
+        '</div>';
+      }
       var sis = x.sistema;
       var dados = sis ? '<div class="l-dados">' + (sis.of ? 'OF ' + esc(sis.of) : '') + (sis.qtd != null ? (sis.of ? ' · ' : '') + esc(sis.qtd) + ' pç' : '') + '</div>'
         : x.naoAchada ? '' : x._pendente ? '' : '';
       return '<div class="leitor-item"><div class="l-txt"><div class="l-cod">' + esc(x.codigo) + '</div>' + dados +
         '<div class="l-sub">' + esc(horaDe(x.lidoEm)) + (x.lidoPor ? ' · ' + esc(x.lidoPor) : '') + (x.origem === 'manual' ? ' · digitado/leitor USB' : ' · câmera') + (x._pendente ? ' · guardando...' : '') + '</div></div>' +
         '<button type="button" class="add-btn" data-leitor-copiar="' + esc(x.codigo) + '">Copiar</button>' +
+        (x._pendente ? '' : '<button type="button" class="add-btn btn-destaque-branco" data-leitor-editar="' + esc(x._id) + '">✏️ Editar</button>') +
         (x._pendente ? '' : '<button type="button" class="add-btn btn-destaque-vermelho" data-leitor-excluir="' + esc(x._id) + '">Excluir</button>') +
       '</div>';
   }
@@ -22288,6 +22331,27 @@ var SIGNATURES = {
     if (!b) return;
     var rp = b.getAttribute('data-leitor-rp');
     if (rp){ if (rpAbertos[rp]) delete rpAbertos[rp]; else rpAbertos[rp] = true; renderLista(); return; }
+    // ✏️ Editar: troca o número da etiqueta; os dados do sistema saem e ela é procurada de novo
+    var ed = b.getAttribute('data-leitor-editar');
+    if (ed){
+      editandoLeitura = ed; renderLista();
+      var campo = $('leituras-lista').querySelector('[data-leitor-edit-campo]');
+      if (campo){ campo.focus(); campo.select(); }
+      return;
+    }
+    if (b.getAttribute('data-leitor-edit-cancelar')){ editandoLeitura = null; status(''); renderLista(); return; }
+    var sv = b.getAttribute('data-leitor-edit-salvar');
+    if (sv){ salvarEdicaoLeitura(sv); return; }
+    // 🔄 Buscar de novo: as "não encontradas" do dia voltam para a busca no sistema
+    if (b.getAttribute('data-leitor-rebuscar')){
+      var nao = doDia().filter(function(x){ return x.naoAchada && !x.sistema && !x._pendente; });
+      if (!nao.length || !dbL) return;
+      b.disabled = true;
+      Promise.all(nao.map(function(x){ x.naoAchada = false; return dbL.collection(COL).doc(x._id).update({ naoAchada: false, completadoEm: null }); }))
+        .then(function(){ status('Procurando de novo no sistema' + (oracleOk ? '...' : ' — precisa de um PC com o app aberto.')); completar(); })
+        .catch(function(){ b.disabled = false; status('Não foi possível agora. Tente de novo.', true); });
+      return;
+    }
     var cod = b.getAttribute('data-leitor-copiar');
     if (cod){
       try { navigator.clipboard.writeText(cod).then(function(){ status('Copiado: ' + cod); }).catch(function(){ status('Não deu pra copiar aqui.', true); }); } catch (e){ status('Não deu pra copiar aqui.', true); }
@@ -22299,6 +22363,31 @@ var SIGNATURES = {
       b.disabled = true;
       dbL.collection(COL).doc(id).delete().catch(function(){ b.disabled = false; status('Não foi possível excluir agora.', true); });
     }
+  });
+  function salvarEdicaoLeitura(id){
+    var campo = $('leituras-lista').querySelector('[data-leitor-edit-campo]');
+    var x = docs.filter(function(d){ return d._id === id; })[0];
+    if (!campo || !x || !dbL) return;
+    var novo = codigoEditado(campo.value);
+    if (!novo){ status('Número inválido: precisa ser E + 8 números + Q (ex.: E02089711Q).', true); campo.focus(); return; }
+    if (novo === x.codigo){ editandoLeitura = null; status(''); renderLista(); return; }
+    var ja = docs.filter(function(d){ return d._id !== id && d.data === x.data && String(d.codigo).toUpperCase() === novo; })[0];
+    if (ja){ status(novo + ' já foi lida neste dia (às ' + horaCurta(ja.lidoEm) + ').', true); campo.focus(); return; }
+    var antes = x.codigoOriginal || x.codigo;
+    editandoLeitura = null;
+    // já mostra o número novo "buscando os dados"; o PC com o app procura no sistema
+    Object.assign(x, { codigo: novo, sistema: null, naoAchada: false });
+    renderLista();
+    dbL.collection(COL).doc(id).update({ codigo: novo, codigoOriginal: antes, sistema: null, naoAchada: false, completadoEm: null,
+      editadoPor: quem() || null, editadoEm: new Date().toISOString() })
+      .then(function(){ status('Etiqueta corrigida para ' + novo + (oracleOk ? ' — procurando no sistema...' : ' — a busca no sistema precisa de um PC com o app aberto.')); completar(); })
+      .catch(function(){ status('Não foi possível salvar agora. Tente de novo.', true); });
+  }
+  $('leituras-lista').addEventListener('keydown', function(ev){
+    var campo = ev.target.closest ? ev.target.closest('[data-leitor-edit-campo]') : null;
+    if (!campo) return;
+    if (ev.key === 'Enter'){ ev.preventDefault(); salvarEdicaoLeitura(campo.getAttribute('data-leitor-edit-campo')); }
+    else if (ev.key === 'Escape'){ editandoLeitura = null; status(''); renderLista(); }
   });
   $('leitor-exportar-btn').addEventListener('click', function(){
     var itens = doDia().filter(function(x){ return !x._pendente; }).slice().reverse();
