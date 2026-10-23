@@ -358,6 +358,7 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
               key={`new-${i}`}
               date={date}
               index={sortedEntregas.length + i}
+              linhas={sortedEntregas}
               backgroundImageEnabled={backgroundImageEnabled}
               acrylicEnabled={acrylicEnabled}
             />
@@ -1122,17 +1123,24 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 // New Delivery Row
 // ----------------------------------------------------------------------
 
+// clientes que ficam sempre na parte de baixo da programação e entram como FILIAL
+const CLIENTE_FUNDO = /^\s*(\d+\s+)?(SIEMENS|MBB|PPC|PAL+ADIUM|ZF\s*SOROCABA)\b/i;
+const ehClienteFundo = (cliente: string | null | undefined) => CLIENTE_FUNDO.test(cliente ?? "");
+const vaiPraBaixo = (e: Entrega) => String(e.unidade ?? "").toUpperCase() === "FILIAL" || ehClienteFundo(e.cliente);
+
 interface NewDeliveryRowProps {
   date: string;
   index: number;
+  linhas: Entrega[];
   backgroundImageEnabled: boolean;
   acrylicEnabled: boolean;
 }
 
-function NewDeliveryRow({ date, index, backgroundImageEnabled, acrylicEnabled }: NewDeliveryRowProps) {
+function NewDeliveryRow({ date, index, linhas, backgroundImageEnabled, acrylicEnabled }: NewDeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const createEntrega = useCreateEntrega();
+  const reorderEntregas = useReorderEntregas();
   const [isCreating, setIsCreating] = useState(false);
   const [newCliente, setNewCliente] = useState("");
   const [popupNovo, setPopupNovo] = useState(false);
@@ -1144,12 +1152,23 @@ function NewDeliveryRow({ date, index, backgroundImageEnabled, acrylicEnabled }:
 
     // sem internet ou com o servidor fora, o cliente da API guarda na fila e responde na hora
     setIsCreating(true);
+    const fundo = ehClienteFundo(value);
+    const queryKey = getListEntregasQueryKey({ date });
     createEntrega.mutate(
-      { data: { date, cliente: value, sortOrder: index, checked: "none", unidade: "MATRIZ", cg: "none" } },
+      { data: { date, cliente: value, sortOrder: index, checked: "none", unidade: fundo ? "FILIAL" : "MATRIZ", cg: "none" } },
       {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListEntregasQueryKey({ date }) });
+        onSuccess: (nova) => {
           setNewCliente("");
+          // o bloco de baixo são as últimas linhas do dia que são Filial / clientes de baixo (uma arrastada
+          // para cima fica onde está); um cliente comum entra logo acima dele
+          let corte = linhas.length;
+          while (corte > 0 && vaiPraBaixo(linhas[corte - 1])) corte--;
+          if (!fundo && corte < linhas.length && nova?.id != null && nova.id > 0) {
+            const ids = [...linhas.slice(0, corte).map(e => e.id), nova.id, ...linhas.slice(corte).map(e => e.id)];
+            reorderEntregas.mutate({ data: { ids } }, { onSettled: () => queryClient.invalidateQueries({ queryKey }) });
+          } else {
+            queryClient.invalidateQueries({ queryKey });
+          }
         },
         onSettled: () => setIsCreating(false),
       }

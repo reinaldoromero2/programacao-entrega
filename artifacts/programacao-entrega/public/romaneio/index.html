@@ -1969,8 +1969,8 @@
         <div class="prog-topo">
           <label class="add-btn prog-btn-atualizar" style="cursor:pointer; margin:0;" title="Escolher o arquivo da RQ C 008 e carregar a programação">🔄 INSERIR<input type="file" id="prog-arquivo" accept=".xlsm,.xlsx,.xls" style="display:none;"></label>
           <button type="button" class="add-btn prog-btn-rqc008" id="rqc008-atualizar-btn" title="Roda a atualização da RQ C 008 neste computador" style="margin:0;">📗 ATUALIZAR</button>
-          <button type="button" class="add-btn" id="prog-logi-btn" title="Informações de logística de um RP (qtd por fardo, empilhamento, carga, encavalado...) — a aba Logística da planilha" style="margin:0; background:#0f766e; border-color:#0f766e; color:#fff;">🚚 Logística</button>
           <button type="button" class="add-btn prog-btn-ins" id="prog-ins-btn" aria-pressed="false" title="Marcar pedidos para lançar na Programação de Entrega" style="margin:0;">📋 Inserir programação</button>
+          <button type="button" class="add-btn" id="prog-logi-btn" title="Informações de logística de um RP (qtd por fardo, empilhamento, carga, encavalado...) — a aba Logística da planilha" style="margin:0; background:#dc2626; border-color:#dc2626; color:#fff;">🚚 Logística</button>
           <button type="button" class="add-btn prog-btn-conj" id="prog-ins-conj" hidden aria-pressed="false" title="Juntar dois ou mais clientes numa mesma linha da Programação" style="margin:0;">🔗 Conjugar carga</button>
           <button type="button" class="add-btn prog-btn-ins-enviar" id="prog-ins-enviar" hidden style="margin:0;">ENVIAR</button>
           <div class="prog-filtro">
@@ -20462,7 +20462,7 @@ var SIGNATURES = {
   .pg th.h-ok{ background:#92d050 !important; }
   .pg th.h-atr{ background:#ff0000 !important; color:#fff; }
   .pg th.h-dia{ min-width:50px; font-size:20px; }
-  .pg th[data-dia-col], .pg th[data-estq]{ cursor:pointer; }
+  .pg th[data-dia-col], .pg th[data-estq], .pg tbody td.c-cli{ cursor:pointer; }
   .pg th[data-estq]:hover{ filter:brightness(0.92); }
   /* mouse em cima: a linha fica destacada da 1ª coluna até a célula do mouse */
   .pg tbody td.hov-linha{ background-color:#cfd8e6 !important; }
@@ -20795,6 +20795,11 @@ var SIGNATURES = {
       // "Estq BLQ" / "Estq OK" clicado: só as linhas com saldo bloqueado / liberado
       if (filtroEstq === 'blq' && !((Number(x.it.blqM) || 0) + (Number(x.it.blqF) || 0) > 0)) return false;
       if (filtroEstq === 'ok' && !((Number(x.it.okM) || 0) + (Number(x.it.okF) || 0) > 0)) return false;
+      // MAT / FIL de cada um: só o saldo daquela unidade
+      if (filtroEstq === 'blqM' && !((Number(x.it.blqM) || 0) > 0)) return false;
+      if (filtroEstq === 'blqF' && !((Number(x.it.blqF) || 0) > 0)) return false;
+      if (filtroEstq === 'okM' && !((Number(x.it.okM) || 0) > 0)) return false;
+      if (filtroEstq === 'okF' && !((Number(x.it.okF) || 0) > 0)) return false;
       var it = x.it;
       // caixa "Siemens": marcada mostra só as Siemens; desmarcada esconde as Siemens
       if (comSiemens !== ehSiemens(it.cliente)) return false;
@@ -20823,7 +20828,7 @@ var SIGNATURES = {
       '<th class="h-blq' + (filtroEstq === 'blq' ? ' h-filtro' : '') + '" colspan="2" data-estq="blq" title="Mostrar só as linhas com saldo bloqueado (clique de novo para mostrar tudo)">Estq BLQ</th>' +
       '<th class="h-ok' + (filtroEstq === 'ok' ? ' h-filtro' : '') + '" colspan="3" data-estq="ok" title="Mostrar só as linhas com saldo liberado (clique de novo para mostrar tudo)">Estq OK</th><th class="h-atr' + (filtroDiaCol === 0 ? ' h-filtro' : '') + '" data-dia-col="0" title="Mostrar só o que está em atraso (clique de novo para mostrar tudo)">Atr</th>' +
       d.map(function(x, i){ return '<th class="h-dia' + (x.fds ? ' h-fds' : '') + (filtroDiaCol === i + 1 ? ' h-filtro' : '') + '" data-dia-col="' + (i + 1) + '" title="Mostrar só os pedidos deste dia (clique de novo para mostrar tudo)">' + x.dia + '</th>'; }).join('') + '<th rowspan="3">prog<br>próx<br>15 d</th></tr>' +
-      '<tr class="h2"><th class="h-blq" rowspan="2">MAT</th><th class="h-blq" rowspan="2">FIL</th><th class="h-ok" rowspan="2">MAT</th><th class="h-ok" rowspan="2">FIL</th><th class="h-ok" rowspan="2">TOT</th><th class="h-atr">aso</th>' +
+      '<tr class="h2"><th class="h-blq' + (filtroEstq === 'blqM' ? ' h-filtro' : '') + '" rowspan="2" data-estq="blqM" title="Mostrar só as linhas com saldo bloqueado na Matriz (clique de novo para mostrar tudo)">MAT</th><th class="h-blq' + (filtroEstq === 'blqF' ? ' h-filtro' : '') + '" rowspan="2" data-estq="blqF" title="Mostrar só as linhas com saldo bloqueado na Filial (clique de novo para mostrar tudo)">FIL</th><th class="h-ok' + (filtroEstq === 'okM' ? ' h-filtro' : '') + '" rowspan="2" data-estq="okM" title="Mostrar só as linhas com saldo liberado na Matriz (clique de novo para mostrar tudo)">MAT</th><th class="h-ok' + (filtroEstq === 'okF' ? ' h-filtro' : '') + '" rowspan="2" data-estq="okF" title="Mostrar só as linhas com saldo liberado na Filial (clique de novo para mostrar tudo)">FIL</th><th class="h-ok" rowspan="2">TOT</th><th class="h-atr">aso</th>' +
       d.map(function(x){ return '<th class="h-sem' + (x.fds ? ' h-fds' : '') + '">' + x.mes + '</th>'; }).join('') + '</tr>' +
       '<tr class="h3"><th class="h-atr"></th>' + d.map(function(x){ return '<th class="h-sem' + (x.fds ? ' h-fds' : '') + '">' + x.sem + '</th>'; }).join('') + '</tr>' +
       '</thead><tbody>';
@@ -21072,6 +21077,20 @@ var SIGNATURES = {
   }
   // número do dia (ou "Atr") no cabeçalho: filtra as linhas daquele dia; clicar de novo mostra tudo
   $('prog-grade').addEventListener('click', function(ev){
+    // nome do cliente na grade: filtra só os itens dele (o nome vai para o campo Cliente); clicar de novo mostra tudo
+    var tdCli = ev.target.closest ? ev.target.closest('tbody td.c-cli') : null;
+    if (tdCli){
+      ev.stopImmediatePropagation();
+      var nomeCli = tdCli.getAttribute('title') || tdCli.textContent.trim();
+      var campoCli = $('prog-filtro-cli');
+      if (escolhaClientes && Object.keys(escolhaClientes).length === 1 && escolhaClientes[nomeCli] && campoCli.value === nomeCli){
+        campoCli.value = ''; escolhaClientes = null;
+      } else {
+        campoCli.value = nomeCli; escolhaClientes = {}; escolhaClientes[nomeCli] = true;
+      }
+      renderGrade();
+      return;
+    }
     var thE = ev.target.closest ? ev.target.closest('th[data-estq]') : null;
     if (thE){
       ev.stopImmediatePropagation();
@@ -21110,6 +21129,8 @@ var SIGNATURES = {
     var k = td.getAttribute('data-k'), it = prog.itens[+k.split('|')[0]];
     // modo "Inserir programação": só marca, sem abrir a carga
     if (modoIns){
+      // 0005 RIPACK (estoque da própria Ripack) não entra na Programação de Entrega
+      if (/^0*5\b/.test(String(it.cliente || '').trim()) && /RIPACK/i.test(it.cliente || '')){ setStatus('0005 RIPACK não entra na Programação de Entrega — escolha o pedido do cliente.', true); return; }
       if (conjOrigem){
         // "Conjugar carga": o toque escolhe o cliente que vai junto
         if (it.cliente === conjOrigem){ setStatus('Toque na quantidade de OUTRO cliente para conjugar com ' + conjOrigem + '.'); return; }
@@ -21313,6 +21334,9 @@ var SIGNATURES = {
     if (bases.F && !bases.M) return 'FILIAL';
     return 'MATRIZ';
   }
+  // clientes que ficam sempre na parte de baixo da Programação e entram como FILIAL
+  function ehClienteFundo(n){ return /^\s*(\d+\s+)?(SIEMENS|MBB|PPC|PAL+ADIUM|ZF\s*SOROCABA)\b/i.test(String(n || '')); }
+  function unidadeNova(n){ return ehClienteFundo(n.cliente) ? 'FILIAL' : unidadeDe(n.bases); }
   function proximoDiaUtil(){
     var d = new Date(); d.setDate(d.getDate() + 1);
     while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
@@ -21386,7 +21410,7 @@ var SIGNATURES = {
       });
       var novos = Object.keys(porDestino).map(function(k){ var x = porDestino[k]; x.cliente = x.nomes.join(' + '); return x; });
       // o que é só da Filial vai por último (a ordem da grade vale dentro de cada parte)
-      novos = novos.filter(function(n){ return unidadeDe(n.bases) !== 'FILIAL'; }).concat(novos.filter(function(n){ return unidadeDe(n.bases) === 'FILIAL'; }));
+      novos = novos.filter(function(n){ return unidadeNova(n) !== 'FILIAL'; }).concat(novos.filter(function(n){ return unidadeNova(n) === 'FILIAL'; }));
       if (!novos.length){ msg.textContent = 'Nenhum cliente para inserir.'; return; }
       var btn = this; btn.disabled = true; msg.textContent = 'Inserindo...';
       fetch(apiBase() + '/api/entregas?date=' + data, { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(existentes){
@@ -21402,17 +21426,20 @@ var SIGNATURES = {
         return criar.reduce(function(p, n){
           return p.then(function(){
             return fetch(apiBase() + '/api/entregas', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ date: data, cliente: n.cliente, unidade: unidadeDe(n.bases) }) })
+              body: JSON.stringify({ date: data, cliente: n.cliente, unidade: unidadeNova(n) }) })
               .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json().catch(function(){ return null; }); })
               .then(function(e){ if (e && e.id != null) criadas.push(e); });
           });
         }, Promise.resolve()).then(function(){
-          // a Filial fica sempre por último no dia: as que já estavam (na ordem em que estavam), depois
-          // as novas — primeiro tudo que não é só Filial, depois o que é só Filial
-          var ehFilial = function(e){ return String(e.unidade || '').toUpperCase() === 'FILIAL'; };
+          // a Filial (e SIEMENS, MBB, PPC, PALADIUM, ZF SOROCABA) fica no bloco de baixo do dia: as novas comuns
+          // entram logo acima dele e as novas de baixo no fim. O bloco de baixo são as últimas linhas do dia
+          // desse tipo — uma que foi arrastada para cima fica onde está
+          var ehFilial = function(e){ return String(e.unidade || '').toUpperCase() === 'FILIAL' || ehClienteFundo(e.cliente); };
           var dia = (existentes || []).slice().sort(function(a, b){ return (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id; });
-          var ordem = dia.filter(function(e){ return !ehFilial(e); }).concat(criadas.filter(function(e){ return !ehFilial(e); }),
-            dia.filter(ehFilial), criadas.filter(ehFilial)).map(function(e){ return e.id; });
+          var corte = dia.length;
+          while (corte > 0 && ehFilial(dia[corte - 1])) corte--;
+          var ordem = dia.slice(0, corte).concat(criadas.filter(function(e){ return !ehFilial(e); }),
+            dia.slice(corte), criadas.filter(ehFilial)).map(function(e){ return e.id; });
           var atual = dia.concat(criadas).map(function(e){ return e.id; });
           if (!criadas.length || ordem.join() === atual.join()) return;
           return fetch(apiBase() + '/api/entregas/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ordem }) })
