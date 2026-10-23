@@ -114,6 +114,14 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
   const [conjugarId, setConjugarId] = useState<number | null>(null);
   // a linha guarda o que foi digitado só ao montar: depois de conjugar, remonta a linha do alvo pra mostrar o cliente novo
   const [versaoLinha, setVersaoLinha] = useState<Record<number, number>>({});
+  // 1 clique no ⋮⋮ marca a carga para mudar de lugar; o clique seguinte, em outra carga, leva ela para lá
+  const [moverId, setMoverId] = useState<number | null>(null);
+  useEffect(() => {
+    if (moverId === null) return;
+    const aoTeclar = (e: KeyboardEvent) => { if (e.key === "Escape") setMoverId(null); };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [moverId]);
 
   // "S" do cabeçalho: volta todos os quadradinhos S do dia para branco (grava em cada entrega marcada)
   const limparColunaS = () => {
@@ -250,8 +258,16 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
       conjugar(origem, targetId);
       return;
     }
-    const fromIndex = sortedEntregas.findIndex(e => e.id === draggedId);
-    const toIndex   = sortedEntregas.findIndex(e => e.id === targetId);
+    mover(draggedId, targetId);
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
+  // leva a carga `origemId` para a posição da carga `alvoId` (o mesmo que soltar uma em cima da outra)
+  const mover = (origemId: number, alvoId: number) => {
+    const fromIndex = sortedEntregas.findIndex(e => e.id === origemId);
+    const toIndex   = sortedEntregas.findIndex(e => e.id === alvoId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
     const newOrder  = [...sortedEntregas];
     const [moved]   = newOrder.splice(fromIndex, 1);
     newOrder.splice(toIndex, 0, moved);
@@ -272,8 +288,6 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
         onSuccess: () => queryClient.invalidateQueries({ queryKey }),
       }
     );
-    setDraggedId(null);
-    setDragOverId(null);
   };
 
   const template = gridTemplate(colWidths);
@@ -350,6 +364,10 @@ export function DeliveryTable({ entregas, date, backgroundImageEnabled, rowTheme
               conjugarAtivo={conjugarId !== null}
               onConjugar={() => setConjugarId((atual) => (atual === entrega.id ? null : entrega.id))}
               onArrastarCliente={() => { conjugarPorArrastoRef.current = true; setConjugarId(entrega.id); }}
+              movendo={moverId === entrega.id}
+              moverAtivo={moverId !== null}
+              onMoverClique={() => setMoverId((atual) => (atual === entrega.id ? null : entrega.id))}
+              onMoverParaCa={() => { const origem = moverId; setMoverId(null); if (origem !== null && origem !== entrega.id) mover(origem, entrega.id); }}
             />
           ))}
 
@@ -383,6 +401,12 @@ interface DeliveryRowProps {
   onConjugar?: () => void;
   /** começou a arrastar o cliente desta linha (soltar em cima de outra linha conjuga) */
   onArrastarCliente?: () => void;
+  /** esta carga foi marcada (clique no ⋮⋮) para mudar de lugar */
+  movendo?: boolean;
+  /** alguma carga está marcada para mudar de lugar: o clique numa linha leva ela para cá */
+  moverAtivo?: boolean;
+  onMoverClique?: () => void;
+  onMoverParaCa?: () => void;
   onDragEnter: () => void;
   onDrop: () => void;
   onDragEnd: () => void;
@@ -472,7 +496,7 @@ function estadoDaEntrega(entrega: Entrega) {
   };
 }
 
-function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection, conjugando, conjugarAtivo, onConjugar, onArrastarCliente }: DeliveryRowProps) {
+function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop, onDragEnd, isDragging, isDragOver, isSelected, backgroundImageEnabled, rowThemeColor, acrylicEnabled, selectionMode, onToggleSelection, conjugando, conjugarAtivo, onConjugar, onArrastarCliente, movendo, moverAtivo, onMoverClique, onMoverParaCa }: DeliveryRowProps) {
   const colWidths = useColWidths();
   const queryClient = useQueryClient();
   const updateEntrega = useUpdateEntrega();
@@ -680,6 +704,13 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
       onDragEnd={() => { disableDrag(); onDragEnd(); }}
+      // com uma carga marcada para mudar de lugar, o clique na linha (fora do ⋮⋮) não abre nada: só leva a carga para cá
+      onClickCapture={(e) => {
+        if (!moverAtivo || (e.target as HTMLElement).closest("[data-mover]")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onMoverParaCa?.();
+      }}
       className={cn(
         "delivery-row border-b border-slate-200 group hover:bg-slate-50 transition-colors items-stretch",
         acrylicEnabled && "app-acrylic-row",
@@ -695,8 +726,12 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
         isDragOver && !conjugarAtivo && "border-t-2 border-blue-500",
         isDragOver && conjugarAtivo && !conjugando && "ring-2 ring-inset ring-emerald-500 bg-emerald-50",
         conjugando && "ring-2 ring-inset ring-blue-600 bg-blue-100 cursor-grab",
+        movendo && "ring-2 ring-inset ring-amber-500 bg-amber-50",
+        moverAtivo && !movendo && "cursor-pointer hover:border-t-2 hover:border-t-amber-500",
       )}
-      title={conjugando ? "Solte em cima do cliente com que esta carga vai ser conjugada" : undefined}
+      title={conjugando ? "Solte em cima do cliente com que esta carga vai ser conjugada"
+        : movendo ? "Clique na carga onde esta vai ficar (Esc ou clicar aqui de novo cancela)"
+        : moverAtivo ? "Levar a carga marcada para esta posição" : undefined}
       style={{
         display: "grid",
         gridTemplateColumns: template,
@@ -1095,12 +1130,15 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
             />
           </label>
         )}
-        <div className={cn("absolute right-0 inset-y-0 flex items-center justify-center gap-0.5 pl-7 pr-1 bg-white/90 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity print:hidden", conjugando && "opacity-100 pointer-events-auto")}>
+        <div className={cn("absolute right-0 inset-y-0 flex items-center justify-center gap-0.5 pl-7 pr-1 bg-white/90 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity print:hidden", (conjugando || movendo) && "opacity-100 pointer-events-auto")}>
           <div
+            data-mover=""
             onMouseDown={enableDrag}
             onMouseUp={disableDrag}
-            className="cursor-grab active:cursor-grabbing p-1 rounded text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors"
-            title="Arrastar para reordenar"
+            onClick={(e) => { e.stopPropagation(); onMoverClique?.(); }}
+            className={cn("cursor-grab active:cursor-grabbing p-1 rounded text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors", movendo && "text-amber-600 bg-amber-100")}
+            title={movendo ? "Cancelar (ou clique na carga onde esta vai ficar)" : "Arrastar para reordenar · ou clique aqui e depois na carga onde esta vai ficar"}
+            data-testid={`button-mover-${entrega.id}`}
           >
             <GripVertical className="w-4 h-4" />
           </div>
