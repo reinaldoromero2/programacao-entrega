@@ -1748,8 +1748,17 @@
         <div class="leitor-mira"></div>
         <div class="leitor-aviso-camera" id="leitor-aviso-camera"></div>
       </div>
-      <div class="leitor-manual-wrap" id="leitor-manual-wrap" hidden>
-        <input type="text" id="leitor-manual" autocomplete="off" placeholder="Digite ou use o leitor USB e aperte Enter">
+      <!-- digitar à mão: o E e o Q já vêm prontos, é só digitar os 8 números (o leitor USB também cai aqui) -->
+      <div class="leitor-manual-wrap" id="leitor-manual-wrap">
+        <div class="leitor-manual-barra">
+          <span class="leitor-manual-fixo">E</span>
+          <!-- um campo só por baixo (o teclado não fecha entre um número e outro); os quadradinhos mostram cada número -->
+          <div class="leitor-manual-casas" id="leitor-manual-casas">
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            <input type="text" id="leitor-manual" inputmode="numeric" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Os 8 números da etiqueta">
+          </div>
+          <span class="leitor-manual-fixo">Q</span>
+        </div>
       </div>
       <div class="leitor-lidos-tit"><span id="leitor-contagem">0 lidas hoje</span></div>
       <div class="leitor-lidos" id="leitor-lidos"></div>
@@ -1812,7 +1821,14 @@
       .leitor-mira{ position:absolute; left:7%; right:7%; top:40%; height:20%; border:4px solid rgba(113,200,44,0.95); border-radius:14px; box-shadow:0 0 0 999px rgba(0,0,0,0.3); pointer-events:none; }
       .leitor-aviso-camera{ position:absolute; left:16px; right:16px; bottom:16px; text-align:center; font-size:14px; color:#fff; text-shadow:0 1px 3px #000; }
       .leitor-manual-wrap{ padding:10px 14px 0; }
-      .leitor-manual-wrap input{ width:100%; box-sizing:border-box; padding:12px; font-size:16px; border-radius:10px; border:0; }
+      .leitor-manual-barra{ display:flex; align-items:center; gap:6px; padding:8px 10px; border-radius:14px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.22); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
+      .leitor-manual-fixo{ flex:0 0 auto; font:800 22px ui-monospace, Consolas, monospace; color:rgba(255,255,255,0.85); }
+      .leitor-manual-casas{ position:relative; flex:1 1 auto; min-width:0; display:grid; grid-template-columns:repeat(8, 1fr); gap:5px; }
+      .leitor-manual-casas span{ height:44px; display:flex; align-items:center; justify-content:center; border-radius:8px; font:800 22px ui-monospace, Consolas, monospace; color:#fff; background:rgba(255,255,255,0.08); border:1.5px solid rgba(255,255,255,0.25); box-sizing:border-box; }
+      .leitor-manual-casas span.cheia{ background:rgba(255,255,255,0.16); }
+      .leitor-manual-casas span.vez{ border-color:#71c82c; box-shadow:0 0 0 2px rgba(113,200,44,0.35); }
+      .leitor-manual-casas input{ position:absolute; inset:0; width:100%; height:100%; opacity:0; border:0; padding:0; font-size:16px; color:transparent; caret-color:transparent; background:transparent; }
+
       .leitor-lidos-tit{ padding:10px 14px 4px; font-size:13px; color:#c9cdd6; }
       .leitor-lidos{ flex:0 0 auto; max-height:28vh; overflow-y:auto; padding:0 14px 12px; }
       .leitor-lidos div{ font-family:ui-monospace, Consolas, monospace; font-size:17px; font-weight:700; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.12); }
@@ -1831,6 +1847,16 @@
       .leitor-item .l-dados b{ color:var(--text-primary); }
       .leitor-item .l-txt{ flex:1 1 auto; min-width:0; }
       .leitor-item button{ flex:0 0 auto; padding:5px 10px; min-width:0; font-size:12px; }
+      .leitor-rp{ border:1px solid var(--border); border-radius:12px; margin-bottom:8px; overflow:hidden; background:var(--surface); }
+      .leitor-rp-cab{ display:flex; gap:10px; align-items:center; width:100%; padding:11px 12px; border:0; background:transparent; text-align:left; cursor:pointer; color:var(--text-primary); font:inherit; }
+      .leitor-rp-cab .r-txt{ flex:1 1 auto; min-width:0; }
+      .leitor-rp-cab .r-rp{ font-size:16px; font-weight:800; }
+      .leitor-rp-cab .r-sub{ font-size:12.5px; color:var(--text-secondary); margin-top:2px; line-height:1.35; }
+      .leitor-rp-cab .r-qtd{ flex:0 0 auto; text-align:right; font-size:12px; color:var(--text-muted); }
+      .leitor-rp-cab .r-qtd b{ display:block; font-size:18px; color:var(--text-primary); }
+      .leitor-rp-cab .r-seta{ flex:0 0 auto; font-size:14px; color:var(--text-muted); transition:transform .15s; }
+      .leitor-rp.aberto .r-seta{ transform:rotate(90deg); }
+      .leitor-rp-itens{ padding:0 12px 4px; border-top:1px solid var(--grid); }
     </style>
 
     <div class="rom-modal-overlay" id="patio-modal" hidden>
@@ -22139,12 +22165,32 @@ var SIGNATURES = {
     $('leitor-manual-wrap').hidden = false;
     setTimeout(function(){ try { $('leitor-manual').focus(); } catch (e){} }, 50);
   }
+  // os quadradinhos mostram os números digitados; o da vez fica marcado (apagar volta para o anterior)
+  function desenharCasas(){
+    var campo = $('leitor-manual'), v = campo.value, foco = document.activeElement === campo;
+    [].forEach.call($('leitor-manual-casas').querySelectorAll('span'), function(c, i){
+      c.textContent = v.charAt(i);
+      c.className = (v.charAt(i) ? 'cheia' : '') + (foco && i === Math.min(v.length, 7) ? ' vez' : '');
+    });
+  }
+  // fica só com os números (o E e o Q do leitor USB caem fora); com 8 registra E + números + Q sozinho
+  function enviarManual(){
+    var campo = $('leitor-manual'), v = campo.value;
+    campo.value = ''; desenharCasas();
+    if (v) registrar('E' + v + 'Q', 'manual');
+  }
   $('leitor-manual').addEventListener('keydown', function(ev){
     if (ev.key !== 'Enter') return;
     ev.preventDefault();
-    var v = this.value; this.value = '';
-    registrar(v, 'manual');
+    enviarManual();
   });
+  $('leitor-manual').addEventListener('input', function(){
+    var so = this.value.replace(/[^0-9]/g, '').slice(0, 8);
+    if (so !== this.value) this.value = so;
+    desenharCasas();
+    if (so.length === 8) enviarManual();
+  });
+  ['focus', 'blur'].forEach(function(t){ $('leitor-manual').addEventListener(t, desenharCasas); });
 
   // ---- tela de leitura: só os códigos lidos hoje ----
   function renderTela(){
@@ -22161,7 +22207,7 @@ var SIGNATURES = {
   $('leitor-abrir-btn').addEventListener('click', function(){
     tela.hidden = false;
     document.documentElement.style.overflow = 'hidden';
-    $('leitor-manual-wrap').hidden = true;
+    $('leitor-manual').value = ''; desenharCasas();
     visto = {};
     renderTela();
     ligarCamera();
@@ -22177,22 +22223,48 @@ var SIGNATURES = {
     if (!carregou){ el.innerHTML = '<p class="foot-note">Carregando leituras...</p>'; return; }
     if (!dbL){ el.innerHTML = '<p class="foot-note">O banco compartilhado não está disponível aqui agora.</p>'; return; }
     if (!itens.length){ el.innerHTML = '<p class="foot-note">Nenhuma leitura neste dia.</p>'; return; }
-    el.innerHTML = itens.map(function(x){
+    // um cartão por RP (o da leitura mais recente primeiro); as etiquetas só aparecem ao clicar no RP
+    var grupos = [], porRp = {};
+    itens.forEach(function(x){
       var sis = x.sistema;
-      var dados = sis ? '<div class="l-dados"><b>' + esc(sis.codpro) + '</b>' + (sis.of ? ' · OF ' + esc(sis.of) : '') + (sis.qtd != null ? ' · ' + esc(sis.qtd) + ' pç' : '') +
-          '<div>' + esc(sis.descricao) + '</div><div>' + esc(sis.cliente) + '</div></div>'
-        : x.naoAchada ? '<div class="l-dados" style="color:var(--critical);">Etiqueta não encontrada no sistema</div>'
-        : x._pendente ? '' : '<div class="l-dados" style="color:var(--text-muted);">buscando os dados no sistema… (precisa de um PC com o app aberto)</div>';
+      var chave = sis && sis.codpro ? 'rp:' + sis.codpro : x.naoAchada ? 'nao' : 'busca';
+      var g = porRp[chave];
+      if (!g){ g = porRp[chave] = { chave: chave, sis: sis, itens: [], pcs: 0 }; grupos.push(g); }
+      g.itens.push(x);
+      if (sis && sis.qtd != null) g.pcs += Number(sis.qtd) || 0;
+    });
+    el.innerHTML = grupos.map(function(g){
+      var aberto = !!rpAbertos[g.chave], n = g.itens.length;
+      var titulo = g.chave === 'nao' ? '<span style="color:var(--critical);">Etiquetas não encontradas no sistema</span>'
+        : g.chave === 'busca' ? '<span style="color:var(--text-muted);">Buscando os dados no sistema…</span>' : esc(g.sis.codpro);
+      var sub = g.sis && g.sis.codpro ? '<div class="r-sub">' + esc(g.sis.descricao || '') + (g.sis.cliente ? '<br>' + esc(g.sis.cliente) : '') + '</div>'
+        : g.chave === 'busca' ? '<div class="r-sub">precisa de um PC com o app aberto</div>' : '';
+      return '<div class="leitor-rp' + (aberto ? ' aberto' : '') + '">' +
+        '<button type="button" class="leitor-rp-cab" data-leitor-rp="' + esc(g.chave) + '">' +
+          '<span class="r-txt"><div class="r-rp">' + titulo + '</div>' + sub + '</span>' +
+          '<span class="r-qtd"><b>' + n + '</b>' + (n === 1 ? 'etiqueta' : 'etiquetas') + (g.pcs ? '<br>' + g.pcs + ' pç' : '') + '</span>' +
+          '<span class="r-seta">▶</span>' +
+        '</button>' +
+        (aberto ? '<div class="leitor-rp-itens">' + g.itens.map(itemLeitura).join('') + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+  var rpAbertos = {};
+  function itemLeitura(x){
+      var sis = x.sistema;
+      var dados = sis ? '<div class="l-dados">' + (sis.of ? 'OF ' + esc(sis.of) : '') + (sis.qtd != null ? (sis.of ? ' · ' : '') + esc(sis.qtd) + ' pç' : '') + '</div>'
+        : x.naoAchada ? '' : x._pendente ? '' : '';
       return '<div class="leitor-item"><div class="l-txt"><div class="l-cod">' + esc(x.codigo) + '</div>' + dados +
         '<div class="l-sub">' + esc(horaDe(x.lidoEm)) + (x.lidoPor ? ' · ' + esc(x.lidoPor) : '') + (x.origem === 'manual' ? ' · digitado/leitor USB' : ' · câmera') + (x._pendente ? ' · guardando...' : '') + '</div></div>' +
         '<button type="button" class="add-btn" data-leitor-copiar="' + esc(x.codigo) + '">Copiar</button>' +
         (x._pendente ? '' : '<button type="button" class="add-btn btn-destaque-vermelho" data-leitor-excluir="' + esc(x._id) + '">Excluir</button>') +
       '</div>';
-    }).join('');
   }
   $('leituras-lista').addEventListener('click', function(ev){
     var b = ev.target.closest ? ev.target.closest('button') : null;
     if (!b) return;
+    var rp = b.getAttribute('data-leitor-rp');
+    if (rp){ if (rpAbertos[rp]) delete rpAbertos[rp]; else rpAbertos[rp] = true; renderLista(); return; }
     var cod = b.getAttribute('data-leitor-copiar');
     if (cod){
       try { navigator.clipboard.writeText(cod).then(function(){ status('Copiado: ' + cod); }).catch(function(){ status('Não deu pra copiar aqui.', true); }); } catch (e){ status('Não deu pra copiar aqui.', true); }
