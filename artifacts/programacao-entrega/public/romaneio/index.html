@@ -1969,6 +1969,7 @@
         <div class="prog-topo">
           <label class="add-btn prog-btn-atualizar" style="cursor:pointer; margin:0;" title="Escolher o arquivo da RQ C 008 e carregar a programação">🔄 INSERIR<input type="file" id="prog-arquivo" accept=".xlsm,.xlsx,.xls" style="display:none;"></label>
           <button type="button" class="add-btn prog-btn-rqc008" id="rqc008-atualizar-btn" title="Roda a atualização da RQ C 008 neste computador" style="margin:0;">📗 ATUALIZAR</button>
+          <button type="button" class="add-btn" id="prog-logi-btn" title="Informações de logística de um RP (qtd por fardo, empilhamento, carga, encavalado...) — a aba Logística da planilha" style="margin:0; background:#0f766e; border-color:#0f766e; color:#fff;">🚚 Logística</button>
           <button type="button" class="add-btn prog-btn-ins" id="prog-ins-btn" aria-pressed="false" title="Marcar pedidos para lançar na Programação de Entrega" style="margin:0;">📋 Inserir programação</button>
           <button type="button" class="add-btn prog-btn-conj" id="prog-ins-conj" hidden aria-pressed="false" title="Juntar dois ou mais clientes numa mesma linha da Programação" style="margin:0;">🔗 Conjugar carga</button>
           <button type="button" class="add-btn prog-btn-ins-enviar" id="prog-ins-enviar" hidden style="margin:0;">ENVIAR</button>
@@ -20461,7 +20462,11 @@ var SIGNATURES = {
   .pg th.h-ok{ background:#92d050 !important; }
   .pg th.h-atr{ background:#ff0000 !important; color:#fff; }
   .pg th.h-dia{ min-width:50px; font-size:20px; }
-  .pg th[data-dia-col]{ cursor:pointer; }
+  .pg th[data-dia-col], .pg th[data-estq]{ cursor:pointer; }
+  .pg th[data-estq]:hover{ filter:brightness(0.92); }
+  /* mouse em cima: a linha fica destacada da 1ª coluna até a célula do mouse */
+  .pg tbody td.hov-linha{ background-color:#cfd8e6 !important; }
+  .pg tbody td.hov-cel{ background-color:#cfd8e6 !important; outline:2px solid #2563eb; outline-offset:-2px; }
   .pg th[data-dia-col]:hover{ filter:brightness(0.92); }
   .pg th.h-filtro{ background:#2563eb !important; color:#fff !important; box-shadow:inset 0 0 0 3px #1e3a8a; }
   .pg th.h-fds{ background:#ff0000 !important; color:#fff; }
@@ -20787,6 +20792,9 @@ var SIGNATURES = {
     var dia = (filtroDiaCol != null && filtroDiaCol <= prog.dias.length) ? filtroDiaCol : null;
     return prog.itens.map(function(it, idx){ return { it: it, idx: idx }; }).filter(function(x){
       if (dia != null && !(qEf(x.idx, dia) > 0)) return false;
+      // "Estq BLQ" / "Estq OK" clicado: só as linhas com saldo bloqueado / liberado
+      if (filtroEstq === 'blq' && !((Number(x.it.blqM) || 0) + (Number(x.it.blqF) || 0) > 0)) return false;
+      if (filtroEstq === 'ok' && !((Number(x.it.okM) || 0) + (Number(x.it.okF) || 0) > 0)) return false;
       var it = x.it;
       // caixa "Siemens": marcada mostra só as Siemens; desmarcada esconde as Siemens
       if (comSiemens !== ehSiemens(it.cliente)) return false;
@@ -20802,6 +20810,8 @@ var SIGNATURES = {
 
   // coluna do dia escolhido no cabeçalho (0 = Atr; 1.. = dias), ou null para todos
   var filtroDiaCol = null;
+  // "blq" = só com saldo bloqueado, "ok" = só com saldo liberado, null = todas
+  var filtroEstq = null;
   function renderGrade(){
     var limpar = $('prog-filtro-limpar');
     if (limpar) limpar.hidden = !$('prog-filtro-cli').value;
@@ -20810,7 +20820,8 @@ var SIGNATURES = {
     var d = prog.dias;
     var h = '<table class="pg"><thead>' +
       '<tr class="h1"><th class="c-cli" rowspan="3"><span class="cli-nome">Cliente</span></th><th class="c-prod" rowspan="3">Produto</th><th rowspan="3">Un</th><th rowspan="3">Descr</th><th rowspan="3">Base<br>fatura</th>' +
-      '<th class="h-blq" colspan="2">Estq BLQ</th><th class="h-ok" colspan="3">Estq OK</th><th class="h-atr' + (filtroDiaCol === 0 ? ' h-filtro' : '') + '" data-dia-col="0" title="Mostrar só o que está em atraso (clique de novo para mostrar tudo)">Atr</th>' +
+      '<th class="h-blq' + (filtroEstq === 'blq' ? ' h-filtro' : '') + '" colspan="2" data-estq="blq" title="Mostrar só as linhas com saldo bloqueado (clique de novo para mostrar tudo)">Estq BLQ</th>' +
+      '<th class="h-ok' + (filtroEstq === 'ok' ? ' h-filtro' : '') + '" colspan="3" data-estq="ok" title="Mostrar só as linhas com saldo liberado (clique de novo para mostrar tudo)">Estq OK</th><th class="h-atr' + (filtroDiaCol === 0 ? ' h-filtro' : '') + '" data-dia-col="0" title="Mostrar só o que está em atraso (clique de novo para mostrar tudo)">Atr</th>' +
       d.map(function(x, i){ return '<th class="h-dia' + (x.fds ? ' h-fds' : '') + (filtroDiaCol === i + 1 ? ' h-filtro' : '') + '" data-dia-col="' + (i + 1) + '" title="Mostrar só os pedidos deste dia (clique de novo para mostrar tudo)">' + x.dia + '</th>'; }).join('') + '<th rowspan="3">prog<br>próx<br>15 d</th></tr>' +
       '<tr class="h2"><th class="h-blq" rowspan="2">MAT</th><th class="h-blq" rowspan="2">FIL</th><th class="h-ok" rowspan="2">MAT</th><th class="h-ok" rowspan="2">FIL</th><th class="h-ok" rowspan="2">TOT</th><th class="h-atr">aso</th>' +
       d.map(function(x){ return '<th class="h-sem' + (x.fds ? ' h-fds' : '') + '">' + x.mes + '</th>'; }).join('') + '</tr>' +
@@ -21061,6 +21072,14 @@ var SIGNATURES = {
   }
   // número do dia (ou "Atr") no cabeçalho: filtra as linhas daquele dia; clicar de novo mostra tudo
   $('prog-grade').addEventListener('click', function(ev){
+    var thE = ev.target.closest ? ev.target.closest('th[data-estq]') : null;
+    if (thE){
+      ev.stopImmediatePropagation();
+      var e = thE.getAttribute('data-estq');
+      filtroEstq = filtroEstq === e ? null : e;
+      renderGrade();
+      return;
+    }
     var th = ev.target.closest ? ev.target.closest('th[data-dia-col]') : null;
     if (!th) return;
     ev.stopImmediatePropagation();
@@ -21465,6 +21484,22 @@ var SIGNATURES = {
   });
   // arrastar com o botão esquerdo seleciona a faixa (como no Excel); soltar não conta como clique
   var arrasteInicio = null, arrastou = false;
+  // destaque da linha do mouse (da 1ª coluna até a célula onde ele está)
+  var hovMarcadas = [];
+  function limparHov(){ hovMarcadas.forEach(function(td){ td.classList.remove('hov-linha', 'hov-cel'); }); hovMarcadas = []; }
+  $('prog-grade').addEventListener('mouseover', function(ev){
+    var td = ev.target.closest ? ev.target.closest('tbody td') : null;
+    if (!td || (hovMarcadas.length && hovMarcadas[hovMarcadas.length - 1] === td)) return;
+    limparHov();
+    var tds = td.parentNode.children;
+    for (var i = 0; i < tds.length; i++){
+      var c = tds[i];
+      c.classList.add(c === td ? 'hov-cel' : 'hov-linha');
+      hovMarcadas.push(c);
+      if (c === td) break;
+    }
+  });
+  $('prog-grade').addEventListener('mouseleave', limparHov);
   $('prog-grade').addEventListener('mousedown', function(ev){
     if (somenteVer || ev.button !== 0 || ev.shiftKey) return;
     if (ev.target.closest && ev.target.closest('[data-rm-ins]')) return;
@@ -21623,9 +21658,10 @@ var SIGNATURES = {
       progresso(45, 'Abrindo a planilha (pode levar alguns segundos)...');
       depoisDePintar(function(){
         try {
-          var wb = XLSX.read(new Uint8Array(rd.result), { type: 'array', cellDates: true, sheets: ['planilha.geral'] });
+          var wb = XLSX.read(new Uint8Array(rd.result), { type: 'array', cellDates: true, sheets: ['planilha.geral', 'import.detalhes'] });
           var ws = wb.Sheets['planilha.geral'];
           if (!ws) throw new Error('Este arquivo não tem a aba "planilha.geral".');
+          try { var logiNova = lerLogistica(wb); if (logiNova){ aplicarLogistica(logiNova); publicarLogistica(logiNova, f.name); } } catch (eL){}
           progresso(80, 'Organizando os dados...');
           depoisDePintar(function(){
             try {
@@ -21712,6 +21748,130 @@ var SIGNATURES = {
     }).catch(function(){});
   }
   receberPlanilha();
+
+  // ---- Logística (aba import.detalhes da RQ C 008): publicada pelo PC junto com a programação ----
+  var COL_LOGI = 'prog_logistica', CHAVE_LOGI = 'ripack_prog_logistica', logi = null, verLogiLocal = '';
+  try { var rawLogi = localStorage.getItem(CHAVE_LOGI); if (rawLogi){ var lj = JSON.parse(rawLogi); logi = lj.dados; verLogiLocal = lj.ver || ''; } } catch (e){}
+  function lerLogistica(wb2){
+    var ws2 = wb2.Sheets['import.detalhes'];
+    if (!ws2) return null;
+    var rows = XLSX.utils.sheet_to_json(ws2, { header: 1, raw: true, defval: null });
+    var tx = function(c){ return String(c == null ? '' : c).trim().toUpperCase(); };
+    var hi = -1;
+    for (var i = 0; i < rows.length; i++){ var r = rows[i] || []; if (r.some(function(c){ return tx(c) === 'PRODUTO'; }) && r.some(function(c){ return tx(c).indexOf('QTD FARDO') !== -1; })){ hi = i; break; } }
+    if (hi < 0) return null;
+    var cab = rows[hi].map(tx), ip = cab.indexOf('PRODUTO');
+    var linhas = rows.slice(hi + 1).filter(function(r){ return r && r[ip] != null && tx(r[ip]) && !/^(PRV|PRO|ITV|CNP)_/.test(tx(r[ip])); });
+    return { cab: cab, linhas: linhas };
+  }
+  function aplicarLogistica(dados, ver){
+    logi = dados;
+    if (ver) verLogiLocal = ver;
+    try { localStorage.setItem(CHAVE_LOGI, JSON.stringify({ ver: verLogiLocal, dados: dados })); } catch (e){}
+    if (ovLogi) renderLogi();
+  }
+  function publicarLogistica(dados, nome){
+    var ver = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    verLogiLocal = ver;
+    return dbPl().then(function(db){
+      if (!db) return;
+      return comprimirPl(JSON.stringify(dados)).then(function(pk){
+        var partes = []; for (var i = 0; i < pk.b.length; i += 150000) partes.push(pk.b.slice(i, i + 150000));
+        return Promise.all(partes.map(function(t, i){ return db.collection(COL_LOGI).doc('l' + ver + '_' + i).set({ ver: ver, i: i, d: t }); }))
+          .then(function(){ return db.collection(COL_LOGI).doc('meta').set({ ver: ver, n: partes.length, z: pk.z, nome: nome || '', qtd: dados.linhas.length, em: new Date().toISOString() }); })
+          .then(function(){ return db.collection(COL_LOGI).get().then(function(snap){ (snap.docs || []).forEach(function(d){ var x = d.data() || {}; if (d.id !== 'meta' && x.ver !== ver) db.collection(COL_LOGI).doc(d.id).delete().catch(function(){}); }); }); });
+      });
+    }).catch(function(){});
+  }
+  (function receberLogistica(){
+    var recebendo = false, meta = null;
+    dbPl().then(function(db){
+      if (!db) return;
+      function tentar(){
+        var m = meta;
+        if (!m || !m.ver || m.ver === verLogiLocal || recebendo) return;
+        recebendo = true;
+        db.collection(COL_LOGI).where('ver', '==', m.ver).get().then(function(q){
+          var ds = (q.docs || []).map(function(d){ return d.data(); }).filter(function(x){ return x && typeof x.i === 'number'; }).sort(function(a, b){ return a.i - b.i; });
+          if (ds.length !== m.n) throw new Error('incompleta');
+          return descomprimirPl(ds.map(function(d){ return d.d; }).join(''), m.z);
+        }).then(function(texto){ aplicarLogistica(JSON.parse(texto), m.ver); }).catch(function(){}).then(function(){ recebendo = false; });
+      }
+      db.collection(COL_LOGI).doc('meta').onSnapshot(function(snap){ meta = (snap && snap.exists) ? snap.data() : null; tentar(); }, function(){});
+    }).catch(function(){});
+  })();
+
+  var ovLogi = null, buscaLogi = '';
+  function soAlnum(t){ return String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function fmtLogi(v){
+    if (v == null || v === '') return '—';
+    if (typeof v === 'number') return v.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+    return String(v);
+  }
+  // nome do cliente pelo código (00443 → "0443 UNIPAR INDUPA"), com a programação carregada
+  function nomeClienteLogi(cod){
+    var n = parseInt(String(cod || '').replace(/\D/g, ''), 10);
+    if (!isFinite(n) || !prog) return '';
+    var it = prog.itens.filter(function(x){ return parseInt(String(x.cliente || '').split(' ')[0], 10) === n; })[0];
+    return it ? it.cliente : '';
+  }
+  function renderLogi(){
+    if (!ovLogi) return;
+    var corpo = ovLogi.querySelector('[data-logi-corpo]');
+    if (!logi || !logi.linhas || !logi.linhas.length){
+      corpo.innerHTML = '<p class="foot-note">Ainda não chegou a aba "Logística" da planilha. No PC da expedição, aperte <b>📗 ATUALIZAR</b> (ou <b>🔄 INSERIR</b> com o arquivo) e ela aparece aqui.</p>';
+      return;
+    }
+    var cab = logi.cab, col = function(nome){ return cab.indexOf(nome); };
+    var iCli = col('CLIENTE'), iProd = col('PRODUTO'), iDesc = col('DESCRIÇÃO'), iUn = col('UNID');
+    var campos = [['QTD FARDO', 'Qtd por fardo'], ['EMPILHAM', 'Empilhamento'], ['QTD CARGA', 'Qtd por carga'], ['CARGA COMP', 'Carga completa'], ['ENCAVAL', 'Encavalado'], ['TRANSP', 'Transporte'], ['PESO UNIT', 'Peso unit. (kg)'], ['LOCAL', 'Local']];
+    var t = soAlnum(buscaLogi);
+    if (!t){ corpo.innerHTML = '<p class="foot-note" style="text-align:center;">Digite o RP (ex.: 0443-013/21 ou 044301321) ou o nome do cliente.</p>'; return; }
+    var achados = logi.linhas.filter(function(r){
+      return soAlnum(r[iProd]).indexOf(t) !== -1 || soAlnum(nomeClienteLogi(r[iCli])).indexOf(t) !== -1 || soAlnum(r[iDesc]).indexOf(t) !== -1;
+    });
+    if (!achados.length){ corpo.innerHTML = '<p class="foot-note" style="text-align:center; color:var(--critical); font-weight:700;">Nenhum RP encontrado na aba Logística.</p>'; return; }
+    corpo.innerHTML = (achados.length > 30 ? '<p class="foot-note" style="margin:0 0 8px;">' + achados.length + ' encontrados — mostrando os 30 primeiros; digite mais do RP para achar o certo.</p>' : '') +
+      achados.slice(0, 30).map(function(r){
+        var cli = nomeClienteLogi(r[iCli]);
+        return '<div style="border:2px solid var(--border); border-radius:12px; padding:12px 14px; margin:0 0 10px; background:var(--surface-1);">' +
+          '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><b style="font-size:18px; font-family:ui-monospace, Consolas, monospace;">' + esc(fmtLogi(r[iProd])) + '</b>' +
+            '<span style="font-size:14px; font-weight:600;">' + esc(fmtLogi(r[iDesc])) + '</span></div>' +
+          '<div class="foot-note" style="margin:2px 0 10px;">Cliente ' + esc(cli || fmtLogi(r[iCli])) + (iUn >= 0 ? ' · Unid ' + esc(fmtLogi(r[iUn])) : '') + '</div>' +
+          '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px;">' +
+            campos.map(function(c){
+              var i = col(c[0]); if (i < 0) return '';
+              var v = fmtLogi(r[i]), sim = /^sim$/i.test(v), nao = /^n[aã]o$/i.test(v);
+              return '<div style="border:1px solid var(--border); border-radius:8px; padding:6px 10px;"><div style="font-size:11px; color:var(--text-secondary);">' + c[1] + '</div>' +
+                '<div style="font-size:15px; font-weight:800;' + (sim ? ' color:var(--good);' : nao ? ' color:var(--text-secondary);' : '') + '">' + esc(v) + '</div></div>';
+            }).join('') +
+          '</div></div>';
+      }).join('');
+  }
+  function abrirLogistica(rp){
+    buscaLogi = rp || buscaLogi || '';
+    if (!ovLogi){
+      ovLogi = document.createElement('div');
+      ovLogi.className = 'rom-modal-overlay';
+      ovLogi.style.zIndex = '700';
+      ovLogi.innerHTML = '<div class="rom-modal-card" style="max-width:820px; max-height:92vh; overflow-y:auto;">' +
+        '<div class="rom-modal-head" style="display:flex; justify-content:space-between; align-items:center;"><h3>🚚 Logística</h3><button class="rom-modal-close" type="button" data-logi-fechar>Sair</button></div>' +
+        '<div style="padding:12px 18px 18px;">' +
+          '<input type="text" data-logi-busca autocomplete="off" placeholder="RP ou cliente" style="width:100%; box-sizing:border-box; border:2px solid var(--border); border-radius:10px; padding:12px 14px; font-size:22px; font-weight:800; text-align:center; text-transform:uppercase; background:var(--surface-2); color:var(--text-primary); margin:0 0 12px;">' +
+          '<div data-logi-corpo></div>' +
+        '</div></div>';
+      (modal.closest('.app-root') || document.querySelector('.app-root') || document.body).appendChild(ovLogi);
+      ovLogi.addEventListener('click', function(ev){
+        if (ev.target === ovLogi || (ev.target.closest && ev.target.closest('[data-logi-fechar]'))){ ovLogi.parentNode.removeChild(ovLogi); ovLogi = null; }
+      });
+      ovLogi.querySelector('[data-logi-busca]').addEventListener('input', function(){ buscaLogi = this.value; renderLogi(); });
+    }
+    var inp = ovLogi.querySelector('[data-logi-busca]');
+    inp.value = buscaLogi;
+    setTimeout(function(){ inp.focus(); inp.select(); }, 30);
+    renderLogi();
+  }
+  $('prog-logi-btn').addEventListener('click', function(){ abrirLogistica(''); });
   $('prog-abrir-btn').addEventListener('click', function(){
     if (!prog){ try { var raw = localStorage.getItem(CHAVE); if (raw) prog = JSON.parse(raw); } catch (e){ prog = null; } }
     if (prog && verProg() !== consVer) assinarCons();
