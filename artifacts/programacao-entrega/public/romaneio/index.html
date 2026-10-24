@@ -12230,6 +12230,83 @@ var SIGNATURES = {
   // o encaixe de um jeito mais simples (sem essas zonas/faixas), errando o
   // máximo real (sempre pra baixo) quando havia item "só de um lado" na
   // carga.
+  // arruma as caixas já montadas, como faria quem carrega:
+  //  1) encosta cada fardo o mais para frente possível na sua coluna (não fica buraco no meio);
+  //  2) se tirar um fardo de onde está e pôr num buraco (ex.: ao lado do último fardo de um item
+  //     mais largo) deixar a carga mais curta, faz isso — e encosta tudo de novo.
+  // Não mexe nos fardos do "2 fardos por trás" nem nos itens "só de um lado"; os que o usuário
+  // arrastou ficam na coluna onde ele pôs (só encostam para frente).
+  function cfOtimizarCaixas(caminhao, boxes, itensCarga){
+    var W = caminhao.largura || 0, EPS = 0.001;
+    if (!boxes.length || !W) return boxes;
+    var ladoFixo = {};
+    itensCarga.forEach(function(ic){ if (ic.item && ic.item.ladoFixo) ladoFixo[ic.item.id] = true; });
+    function idsDaCaixa(b){
+      return b.slot && b.slot.tipo === 'combo' ? (b.slot.partes || []).map(function(pt){ return pt.itemId; }) : [b.slot ? b.slot.itemId : null];
+    }
+    function fixa(b){
+      if (!b.slot || b.slot.ehModoTras) return true;
+      if (b.slot.tipo === 'combo' && (b.slot.partes || []).some(function(pt){ return pt.ehModoTras; })) return true;
+      return idsDaCaixa(b).some(function(id){ return ladoFixo[id]; });
+    }
+    function presa(b){ return fixa(b) || !!cfManualPos[b.key]; }
+    function sobrepoe(a, x, y, w, h){
+      return x < a.xM + a.wM - EPS && a.xM < x + w - EPS && y < a.yM + a.hM - EPS && a.yM < y + h - EPS;
+    }
+    function livre(lista, x, y, w, h){
+      if (x < -EPS || x + w > W + EPS || y < -EPS) return false;
+      for (var i = 0; i < lista.length; i++) if (sobrepoe(lista[i], x, y, w, h)) return false;
+      return true;
+    }
+    function fim(lista){ return lista.reduce(function(m, b){ return Math.max(m, b.yM + b.hM); }, 0); }
+    function encostar(lista){
+      var ord = lista.slice().sort(function(a, b){ return a.yM - b.yM || a.xM - b.xM; });
+      var postas = [];
+      ord.forEach(function(b){
+        var nb = Object.assign({}, b);
+        if (!fixa(b)){
+          var cands = [0];
+          postas.forEach(function(pb){ var e = pb.yM + pb.hM; if (e < b.yM - EPS) cands.push(e); });
+          cands.sort(function(a, c){ return a - c; });
+          for (var i = 0; i < cands.length; i++){
+            if (cands[i] > b.yM + EPS) break;
+            if (livre(postas, b.xM, cands[i], b.wM, b.hM)){ nb.yM = cands[i]; break; }
+          }
+        }
+        postas.push(nb);
+      });
+      return postas;
+    }
+    var atual = encostar(boxes);
+    if (atual.length > 90) return atual;
+    for (var volta = 0; volta < atual.length; volta++){
+      var total = fim(atual), melhorou = false;
+      var ordem = atual.map(function(b, i){ return i; }).sort(function(i, j){ return (atual[j].yM + atual[j].hM) - (atual[i].yM + atual[i].hM); });
+      for (var k = 0; k < ordem.length && !melhorou; k++){
+        var b = atual[ordem[k]];
+        if (presa(b)) continue;
+        var resto = encostar(atual.filter(function(x, i){ return i !== ordem[k]; }));
+        var xs = [0, W - b.wM], ys = [0];
+        resto.forEach(function(pb){ xs.push(pb.xM + pb.wM, pb.xM - b.wM); ys.push(pb.yM + pb.hM); });
+        var melhor = null;
+        ys.forEach(function(y){
+          xs.forEach(function(x){
+            if (!livre(resto, x, y, b.wM, b.hM)) return;
+            var e = y + b.hM;
+            if (!melhor || e < melhor.e - EPS || (Math.abs(e - melhor.e) <= EPS && x < melhor.x)) melhor = { x: x, y: y, e: e };
+          });
+        });
+        if (!melhor) continue;
+        if (Math.max(fim(resto), melhor.e) < total - 0.01){
+          resto.push(Object.assign({}, b, { xM: melhor.x, yM: melhor.y }));
+          atual = encostar(resto);
+          melhorou = true;
+        }
+      }
+      if (!melhorou) break;
+    }
+    return atual;
+  }
   function cfCalcularResultadoTotal(caminhao, itensCarga, empilhamentoMax){
     var itensLadoEsq = itensCarga.filter(function(ic){ return ic.item && ic.item.ladoFixo === 'esquerdo'; });
     var itensLadoDir = itensCarga.filter(function(ic){ return ic.item && ic.item.ladoFixo === 'direito'; });
@@ -12372,6 +12449,13 @@ var SIGNATURES = {
     // Resolve aqui, depois de juntar as caixas de todas as faixas, com
     // acesso a todas elas de uma vez.
     resultado.boxes = cfResolverParesForcadosCruzados(itensCarga, resultado.boxes);
+    // sem buraco no meio e aproveitando os buracos de trás (ver cfOtimizarCaixas)
+    resultado.boxes = cfOtimizarCaixas(caminhao, resultado.boxes, itensCarga);
+    var ocupadoOtim = resultado.boxes.length ? Math.max.apply(null, resultado.boxes.map(function(b){ return b.yM + b.hM; })) : 0;
+    resultado.comprimentoOcupado = ocupadoOtim;
+    resultado.espacoRestante = Math.max(0, (caminhao.comprimento || 0) - ocupadoOtim);
+    resultado.compativel = ocupadoOtim <= (caminhao.comprimento || 0) + 0.001 && !((plano && plano.itemSemEspaco) || []).length;
+    if (plano){ plano.comprimentoTotal = ocupadoOtim; plano.espacoRestante = resultado.espacoRestante; plano.compativel = resultado.compativel; }
     return { temLado: temLado, plano: plano, resultado: resultado };
   }
   // resolve pares "arrastar em cima de" (item.paresForcados) cujos 2 itens
