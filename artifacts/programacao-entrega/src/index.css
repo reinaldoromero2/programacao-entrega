@@ -387,6 +387,23 @@ html.app-acrylic-modals [role="dialog"] [data-fundo-solido] {
   background-color: rgba(255, 255, 255, 0.97) !important;
 }
 
+/* cartão em destaque dos Relatórios (fundo na cor, texto branco): o texto cinza fica claro e o
+   trilho da barra escurece — em qualquer tema (por isso o !important, que vence o tema transparente) */
+/* no tema transparente, o cartão em destaque vira "vidro colorido": a cor dele, translúcida e desfocada */
+html.app-acrylic-modals [role="dialog"] [data-destaque] {
+  background-color: color-mix(in srgb, var(--cor-destaque) 68%, transparent) !important;
+  border-color: rgba(255, 255, 255, 0.55) !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+html [role="dialog"] [data-destaque][data-destaque] .text-slate-400 {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+html [role="dialog"] [data-destaque] .bg-slate-100 {
+  background-color: rgba(0, 0, 0, 0.25) !important;
+}
+
 html.app-acrylic-modals [role="dialog"] [class*="text-slate-300"],
 html.app-acrylic-modals [role="dialog"] [class*="text-slate-400"],
 html.app-acrylic-modals [role="dialog"] [class*="text-slate-500"],

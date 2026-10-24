@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FileText, Download, Loader2, BarChart2, Truck, LayoutList, History } from "lucide-react";
 import {
   Dialog,
@@ -383,6 +383,7 @@ function ResumoMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) 
   const [cartao, setCartao] = useState<CartaoResumo | null>(null);
   const [listas, setListas] = useState<ListasResumo | null>(null);
   const [carregandoLista, setCarregandoLista] = useState(false);
+  const [calcAberta, setCalcAberta] = useState(false);
   useEffect(() => { setCartao(null); setListas(null); }, [mes]);
   // Esc com o pop-up aberto fecha só o pop-up (não os Relatórios inteiros)
   useEffect(() => {
@@ -528,6 +529,7 @@ function ResumoMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) 
 
   return (
     <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-auto">
+      {calcAberta && <Calculadora onFechar={() => setCalcAberta(false)} />}
       {/* Month navigator */}
       <div className="flex items-center justify-between">
         <button onClick={prevMes} className="px-3 py-1 rounded border border-slate-300 text-sm hover:bg-slate-100">‹</button>
@@ -552,8 +554,8 @@ function ResumoMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) 
                 <Pct conta={{ num: data.total - data.coleta.total, nomeNum: "entregas, sem coletas", den: data.total, nomeDen: "total de cargas no mês" }} color="#16a34a" label="das cargas" />
               </Card>
               {/* Ripack + Campos&Massari sem os cancelados (um cancelamento sem frete não está nas cargas do mês, não desconta) */}
-              <Card accent="#16a34a" label="ENTREGAS REALIZADAS" value={data.ripack.total + data.terceiros.total} sub="excluindo coletas e cancelamentos" ativo={cartao === "realizadas"} onClick={() => abrirCartao("realizadas")}>
-                <Pct conta={{ num: data.ripack.total + data.terceiros.total, nomeNum: "entregas realizadas", den: data.total - data.coleta.total, nomeDen: "total de entregas no mês, sem coletas" }} color="#16a34a" label="do total" />
+              <Card accent="#15803d" destaque label="ENTREGAS REALIZADAS" value={data.ripack.total + data.terceiros.total} sub="excluindo coletas e cancelamentos" ativo={cartao === "realizadas"} onClick={() => abrirCartao("realizadas")}>
+                <Pct conta={{ num: data.ripack.total + data.terceiros.total, nomeNum: "entregas realizadas", den: data.total - data.coleta.total, nomeDen: "total de entregas no mês, sem coletas" }} color="#ffffff" label="do total" />
               </Card>
               <Card accent="#7c3aed" label="COLETA" value={data.coleta.total} ativo={cartao === "coleta"} onClick={() => abrirCartao("coleta")}>
                 <Pct conta={{ num: data.coleta.total, nomeNum: "coletas", den: data.ativasTotal, nomeDen: "cargas do mês sem as canceladas" }} color="#7c3aed" />
@@ -578,6 +580,10 @@ function ResumoMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) 
               <Card accent="#dc2626" label="Cancelamentos RIPACK" value={data.canceladasRipack} ativo={cartao === "rip-cancel"} onClick={() => abrirCartao("rip-cancel")}>
                 <Pct conta={{ num: data.canceladasRipack, nomeNum: "cancelamentos Ripack", den: data.ripack.total + data.canceladasRipack, nomeDen: "Ripack total" }} color="#dc2626" label="das cargas Ripack" />
               </Card>
+              {/* quanto das cargas da Ripack ela realmente fez: realizadas ÷ total × 100 */}
+              <Card accent="#15803d" label="Desempenho da Ripack"
+                value={`${((data.ripack.total / ((data.ripack.total + data.canceladasRipack) || 1)) * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+                conta={{ num: data.ripack.total, nomeNum: "Ripack realizadas", den: data.ripack.total + data.canceladasRipack, nomeDen: "Ripack total" }} />
             </Bloco>
 
             {/* Campos&Massari (transportadora) + 3º (o total que vem do servidor já é sem os cancelados) */}
@@ -591,17 +597,221 @@ function ResumoMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) 
               <Card accent="#dc2626" label={`Cancelamentos ${NOME_TRANSPORTADORA} + 3º`} value={data.canceladasTerceiros} ativo={cartao === "cm-cancel"} onClick={() => abrirCartao("cm-cancel")}>
                 <Pct conta={{ num: data.canceladasTerceiros, nomeNum: `cancelamentos ${NOME_TRANSPORTADORA} + 3º`, den: data.terceiros.total + data.canceladasTerceiros, nomeDen: `${NOME_TRANSPORTADORA} + 3º total` }} color="#dc2626" label={`das cargas ${NOME_TRANSPORTADORA} + 3º`} />
               </Card>
+              {/* quanto das cargas dadas à transportadora ela realmente fez: realizadas ÷ total × 100 */}
+              <Card accent="#1d4ed8" destaque label="Desempenho da Transportadora"
+                value={`${((data.terceiros.total / ((data.terceiros.total + data.canceladasTerceiros) || 1)) * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+                conta={{ num: data.terceiros.total, nomeNum: `${NOME_TRANSPORTADORA} + 3º realizadas`, den: data.terceiros.total + data.canceladasTerceiros, nomeDen: `${NOME_TRANSPORTADORA} + 3º total` }} />
             </Bloco>
           </div>
 
-          <div className="flex justify-end pt-1">
-            <Button size="sm" onClick={exportExcel} className="gap-2 bg-green-700 hover:bg-green-800 text-white">
-              <Download className="w-4 h-4" />
-              Exportar para Excel
+          {/* Calculadora grande no meio; Exportar no canto direito */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pt-6">
+            <span />
+            <Button onClick={() => setCalcAberta(true)} className="h-14 gap-3 rounded-xl px-10 text-lg font-bold bg-slate-700 hover:bg-slate-800 text-white shadow-md" data-testid="abrir-calculadora">
+              <span className="text-2xl leading-none">🧮</span> Calculadora
             </Button>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={exportExcel} className="gap-2 bg-green-700 hover:bg-green-800 text-white">
+                <Download className="w-4 h-4" />
+                Exportar para Excel
+              </Button>
+            </div>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Calculadora ───────────────────────────────────────────────────────────────
+// Calculadora simples (como a do Windows): digita um número, a operação, o outro número e "=".
+// Teclado: números, , ou . (decimal), + - * / (ou x), Enter ou = (resultado), Backspace (apaga um),
+// Delete ou C (zera) e % (porcentagem). Fecha só no botão Sair.
+type OpCalc = "+" | "-" | "×" | "÷";
+function numeroCalc(t: string) { return parseFloat(t.replace(/\./g, "").replace(",", ".")) || 0; }
+function textoCalc(n: number) {
+  if (!Number.isFinite(n)) return "Erro";
+  const r = Math.round(n * 1e10) / 1e10;
+  return String(r).replace(".", ",");
+}
+function mostrarCalc(t: string) {
+  if (t === "Erro") return t;
+  const [int, dec] = t.split(",");
+  const neg = int.startsWith("-");
+  const digitos = (neg ? int.slice(1) : int).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return (neg ? "-" : "") + digitos + (dec !== undefined ? "," + dec : "");
+}
+function fazerConta(a: number, op: OpCalc, b: number) {
+  return op === "+" ? a + b : op === "-" ? a - b : op === "×" ? a * b : b === 0 ? NaN : a / b;
+}
+// o que estava na calculadora fica guardado ao sair (enquanto o app estiver aberto); só o C zera
+const memoriaCalc = {
+  entrada: "0", acumulado: null as number | null, operador: null as OpCalc | null, nova: true,
+  conta: "", historico: [] as string[], desloc: { x: 0, y: 0 },
+};
+function Calculadora({ onFechar }: { onFechar: () => void }) {
+  const [entrada, setEntrada] = useState(memoriaCalc.entrada);
+  const [acumulado, setAcumulado] = useState<number | null>(memoriaCalc.acumulado);
+  const [operador, setOperador] = useState<OpCalc | null>(memoriaCalc.operador);
+  const [nova, setNova] = useState(memoriaCalc.nova);
+  const [conta, setConta] = useState(memoriaCalc.conta);
+  const [historico, setHistorico] = useState<string[]>(memoriaCalc.historico);
+  const ref = useRef({ entrada, acumulado, operador, nova });
+  ref.current = { entrada, acumulado, operador, nova };
+  // arrastar: segurando o botão esquerdo numa parte branca (não nas teclas) a calculadora vai junto,
+  // sem sair da tela. Ela fecha só no botão Sair.
+  const [desloc, setDesloc] = useState(memoriaCalc.desloc);
+  useEffect(() => {
+    Object.assign(memoriaCalc, { entrada, acumulado, operador, nova, conta, historico, desloc });
+  }, [entrada, acumulado, operador, nova, conta, historico, desloc]);
+  const cartaoRef = useRef<HTMLDivElement>(null);
+  const comecarArrasto = (ev: React.MouseEvent) => {
+    if (ev.button !== 0 || (ev.target as HTMLElement).closest("button")) return;
+    const card = cartaoRef.current;
+    if (!card) return;
+    ev.preventDefault();
+    const inicio = { mx: ev.clientX, my: ev.clientY, x: desloc.x, y: desloc.y };
+    const r = card.getBoundingClientRect();
+    const limites = { minX: inicio.x - r.left, maxX: inicio.x + (window.innerWidth - r.right), minY: inicio.y - r.top, maxY: inicio.y + (window.innerHeight - r.bottom) };
+    const mover = (e: MouseEvent) => {
+      const dx = e.clientX - inicio.mx, dy = e.clientY - inicio.my;
+      setDesloc({
+        x: Math.min(limites.maxX, Math.max(limites.minX, inicio.x + dx)),
+        y: Math.min(limites.maxY, Math.max(limites.minY, inicio.y + dy)),
+      });
+    };
+    const soltar = () => {
+      window.removeEventListener("mousemove", mover);
+      window.removeEventListener("mouseup", soltar);
+    };
+    window.addEventListener("mousemove", mover);
+    window.addEventListener("mouseup", soltar);
+  };
+
+  const digito = (d: string) => {
+    const { entrada: e, nova: n } = ref.current;
+    if (n || e === "0" || e === "Erro") { setEntrada(d); setNova(false); return; }
+    if (e.replace(/[-,]/g, "").length >= 15) return;
+    setEntrada(e + d);
+  };
+  const virgula = () => {
+    const { entrada: e, nova: n } = ref.current;
+    if (n || e === "Erro") { setEntrada("0,"); setNova(false); return; }
+    if (!e.includes(",")) setEntrada(e + ",");
+  };
+  const operacao = (op: OpCalc) => {
+    const { entrada: e, acumulado: a, operador: o, nova: n } = ref.current;
+    const atual = numeroCalc(e);
+    let base = atual;
+    if (a !== null && o && !n) {
+      base = fazerConta(a, o, atual);
+      setEntrada(textoCalc(base));
+    } else if (a !== null && o && n) {
+      base = a; // trocou de operação antes de digitar o 2º número
+    }
+    setAcumulado(base);
+    setOperador(op);
+    setConta(`${mostrarCalc(textoCalc(base))} ${op}`);
+    setNova(true);
+  };
+  const igual = () => {
+    const { entrada: e, acumulado: a, operador: o } = ref.current;
+    if (a === null || !o) return;
+    const b = numeroCalc(e);
+    const r = fazerConta(a, o, b);
+    const linha = `${mostrarCalc(textoCalc(a))} ${o} ${mostrarCalc(textoCalc(b))} = ${mostrarCalc(textoCalc(r))}`;
+    setConta(`${mostrarCalc(textoCalc(a))} ${o} ${mostrarCalc(textoCalc(b))} =`);
+    setHistorico((h) => [linha, ...h].slice(0, 6));
+    setEntrada(textoCalc(r));
+    setAcumulado(null); setOperador(null); setNova(true);
+  };
+  const porcento = () => {
+    const { entrada: e, acumulado: a, operador: o } = ref.current;
+    const atual = numeroCalc(e);
+    // 200 + 10% = 220 (10% de 200); 200 × 10% = 20; sozinho: 10% = 0,1
+    const r = a !== null && (o === "+" || o === "-") ? (a * atual) / 100 : atual / 100;
+    setEntrada(textoCalc(r)); setNova(false);
+  };
+  const apagar = () => {
+    const { entrada: e, nova: n } = ref.current;
+    if (n || e === "Erro") return;
+    const r = e.slice(0, -1);
+    setEntrada(r === "" || r === "-" ? "0" : r);
+  };
+  const zerar = () => { setEntrada("0"); setAcumulado(null); setOperador(null); setNova(true); setConta(""); };
+  const zerarTudo = () => { zerar(); setHistorico([]); };
+  const sinal = () => { const e = ref.current.entrada; if (e !== "0" && e !== "Erro") setEntrada(e.startsWith("-") ? e.slice(1) : "-" + e); };
+
+  // teclado do computador (enquanto a calculadora está aberta, as teclas são só dela)
+  useEffect(() => {
+    const aoTeclar = (ev: KeyboardEvent) => {
+      const k = ev.key;
+      let feito = true;
+      if (/^[0-9]$/.test(k)) digito(k);
+      else if (k === "," || k === "." || k === "Decimal") virgula();
+      else if (k === "+") operacao("+");
+      else if (k === "-") operacao("-");
+      else if (k === "*" || k === "x" || k === "X") operacao("×");
+      else if (k === "/") operacao("÷");
+      else if (k === "Enter" || k === "=") igual();
+      else if (k === "Backspace") apagar();
+      else if (k === "Delete" || k === "c" || k === "C") zerarTudo();
+      else if (k === "%") porcento();
+      else if (k === "Escape") { /* com a calculadora aberta o Esc não fecha nada (ela fecha só no Sair) */ }
+      else feito = false;
+      if (feito) { ev.preventDefault(); ev.stopPropagation(); }
+    };
+    window.addEventListener("keydown", aoTeclar, true);
+    return () => window.removeEventListener("keydown", aoTeclar, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const tecla = (rotulo: string, acao: () => void, cor: "num" | "op" | "fn" | "igual" | "zerar" = "num", extra = "") => (
+    <button type="button" onClick={acao}
+      className={`h-12 cursor-pointer rounded-lg text-lg font-semibold shadow-sm active:scale-95 transition hover:brightness-95 ${extra}`}
+      style={cor === "zerar" ? { background: "rgba(220, 38, 38, 0.92)", color: "#fff", border: "1.5px solid #991b1b" }
+        : cor === "igual" ? { background: "rgba(22, 163, 74, 0.92)", color: "#fff", border: "1.5px solid #166534" }
+        : cor === "op" ? { background: "rgba(37, 99, 235, 0.92)", color: "#fff", border: "1.5px solid #1e3a8a" }
+        : cor === "fn" ? { background: "rgba(203, 213, 225, 0.85)", color: "#1e293b", border: "1.5px solid rgba(71, 85, 105, 0.6)" }
+        : { background: "rgba(255, 255, 255, 0.82)", color: "#0f172a", border: "1.5px solid rgba(100, 116, 139, 0.55)" }}>
+      {rotulo}
+    </button>
+  );
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center p-4" data-testid="calculadora">
+      <div ref={cartaoRef} className="pointer-events-auto w-full max-w-sm rounded-2xl p-4 select-none"
+        style={{
+          transform: `translate(${desloc.x}px, ${desloc.y}px)`,
+          background: "rgba(255, 255, 255, 0.62)",
+          border: "1px solid rgba(255, 255, 255, 0.75)",
+          boxShadow: "0 24px 60px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8)",
+          backdropFilter: "blur(26px) saturate(1.6)",
+          WebkitBackdropFilter: "blur(26px) saturate(1.6)",
+        }}
+        onMouseDown={comecarArrasto}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-sm font-bold uppercase tracking-wide text-slate-700">🧮 Calculadora</span>
+          <button type="button" onClick={onFechar} className="rounded-md border border-red-600 bg-red-600 px-3.5 py-2 text-xs font-bold leading-none text-white hover:opacity-90">Sair</button>
+        </div>
+        <div className="mb-3 rounded-lg px-3 py-2 text-right" style={{ background: "rgba(255, 255, 255, 0.85)", border: "1px solid rgba(255,255,255,0.9)", boxShadow: "inset 0 1px 3px rgba(15,23,42,0.12)" }}>
+          <div className="h-4 text-xs text-slate-500" data-testid="calc-conta">{conta}</div>
+          <div className="truncate text-3xl font-bold text-slate-900" data-testid="calc-visor">{mostrarCalc(entrada)}</div>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {tecla("C", zerarTudo, "zerar")}{tecla("⌫", apagar, "fn")}{tecla("%", porcento, "fn")}{tecla("÷", () => operacao("÷"), "op")}
+          {tecla("7", () => digito("7"))}{tecla("8", () => digito("8"))}{tecla("9", () => digito("9"))}{tecla("×", () => operacao("×"), "op")}
+          {tecla("4", () => digito("4"))}{tecla("5", () => digito("5"))}{tecla("6", () => digito("6"))}{tecla("−", () => operacao("-"), "op")}
+          {tecla("1", () => digito("1"))}{tecla("2", () => digito("2"))}{tecla("3", () => digito("3"))}{tecla("+", () => operacao("+"), "op")}
+          {tecla("±", sinal, "fn")}{tecla("0", () => digito("0"))}{tecla(",", virgula)}{tecla("=", igual, "igual")}
+        </div>
+        {historico.length > 0 && (
+          <div className="mt-3 border-t border-white/70 pt-2 text-right text-xs text-slate-700">
+            {historico.map((h, i) => <div key={i}>{h}</div>)}
+          </div>
+        )}
+        <p className="mt-2 text-[11px] text-slate-600">Use o teclado: números, + − * /, Enter, Backspace, Delete e %.</p>
+      </div>
     </div>
   );
 }
@@ -622,17 +832,53 @@ function Bloco({ titulo, detalhe, cor, children, rodape, colunas = 2 }: { titulo
 }
 
 function Card({
-  accent, label, value, sub, children, onClick, ativo,
+  accent, label, value, sub, children, onClick, ativo, destaque, conta,
 }: {
   accent: string;
   label: string;
-  value: number;
+  value: number | string;
   sub?: string;
   children?: React.ReactNode;
   /** clicar no cartão mostra a lista das entregas que ele conta */
   onClick?: () => void;
   ativo?: boolean;
+  /** cartão de resultado (desempenho): fundo na cor, texto branco, número maior */
+  destaque?: boolean;
+  /** o valor grande é uma porcentagem: clicar nele mostra a conta */
+  conta?: ContaPct;
 }) {
+  const [verConta, setVerConta] = useState(false);
+  const fmtN = (n: number) => n.toLocaleString("pt-BR");
+  const valorClicavel = conta ? {
+    onClick: (e: React.MouseEvent) => { e.stopPropagation(); setVerConta((v) => !v); },
+    title: "Ver como chegou nesse valor",
+    role: "button" as const,
+    style: { cursor: "pointer" },
+    "data-testid": "pct-valor",
+  } : {};
+  const caixaConta = conta && verConta ? (
+    <div className="mt-1 rounded-md border px-3 py-2 text-xs" style={destaque ? { borderColor: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.15)", color: "#fff" } : { borderColor: accent + "55", background: accent + "12", color: "#334155" }} onClick={(e) => e.stopPropagation()} data-testid="pct-conta">
+      <b>{fmtN(conta.num)}</b> ({conta.nomeNum}) ÷ <b>{fmtN(conta.den)}</b> ({conta.nomeDen}) × 100 = <b>{value}</b>
+    </div>
+  ) : null;
+  if (destaque) {
+    return (
+      <div
+        data-destaque
+        className={`rounded-lg px-3 py-2.5 flex flex-col gap-0.5 shadow-md text-white${onClick ? " cursor-pointer hover:brightness-110" : ""}`}
+        style={{ background: accent, border: `2px solid ${accent}`, ["--cor-destaque" as string]: accent, ...(ativo ? { outline: `3px solid ${accent}`, outlineOffset: 2 } : {}) } as React.CSSProperties}
+        onClick={onClick}
+        role={onClick ? "button" : undefined}
+        title={onClick ? "Ver as entregas" : undefined}
+      >
+        <p className="text-xs font-bold uppercase tracking-wide leading-tight text-white/90">{label}</p>
+        <p className="text-4xl font-extrabold leading-tight text-white" {...valorClicavel}>{value}</p>
+        {sub && <p className="text-xs text-white/85">{sub}</p>}
+        {caixaConta}
+        {children}
+      </div>
+    );
+  }
   return (
     <div
       className={`rounded-lg border border-slate-200 bg-white px-3 py-2.5 flex flex-col gap-0.5 shadow-sm${onClick ? " cursor-pointer hover:shadow-md transition-shadow" : ""}`}
@@ -642,8 +888,9 @@ function Card({
       title={onClick ? "Ver as entregas" : undefined}
     >
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide leading-tight">{label}</p>
-      <p className="text-2xl font-bold leading-tight" style={{ color: accent }}>{value}</p>
+      <p className="text-2xl font-bold leading-tight" {...valorClicavel} style={{ color: accent, ...(conta ? { cursor: "pointer" } : {}) }}>{value}</p>
       {sub && <p className="text-xs text-slate-400">{sub}</p>}
+      {caixaConta}
       {children}
     </div>
   );
