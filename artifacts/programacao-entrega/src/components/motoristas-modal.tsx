@@ -31,6 +31,8 @@ interface EditState {
 }
 
 const FRETE_OPTIONS = ["RIPACK", "TRANSPORTADORA", "3º", "COLETA"] as const;
+// a transportadora é a Campos&Massari: só o nome mostrado muda (o frete gravado continua "TRANSPORTADORA")
+const nomeFrete = (frete: string) => (frete === "TRANSPORTADORA" ? "Campos&Massari" : frete);
 
 function parseFrete(value: string): MotoristasInputFrete {
   return value === "" ? null : value as MotoristasInputFrete;
@@ -167,8 +169,8 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
             aria-label="Frete padrão do motorista"
             data-testid="select-frete-motorista"
           >
-            <option value="">Transportadora/Frete</option>
-            {FRETE_OPTIONS.map((frete) => <option key={frete} value={frete}>{frete}</option>)}
+            <option value="">Frete</option>
+            {FRETE_OPTIONS.map((frete) => <option key={frete} value={frete}>{nomeFrete(frete)}</option>)}
           </select>
           <Button
             size="sm"
@@ -221,7 +223,7 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
                     aria-label="Frete padrão do motorista"
                   >
                     <option value="">Sem frete</option>
-                    {FRETE_OPTIONS.map((frete) => <option key={frete} value={frete}>{frete}</option>)}
+                    {FRETE_OPTIONS.map((frete) => <option key={frete} value={frete}>{nomeFrete(frete)}</option>)}
                   </select>
                   <Button
                     size="icon"
@@ -248,7 +250,7 @@ export function MotoristasModal({ open: controlledOpen, onOpenChange: controlled
                   <span className="text-xs font-mono text-slate-500 bg-slate-200 px-2 py-0.5 rounded">
                     {m.placa}
                   </span>
-                  {m.frete && <span className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded">{m.frete}</span>}
+                  {m.frete && <span className="text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded">{nomeFrete(m.frete)}</span>}
                   <Button
                     size="icon"
                     variant="ghost"

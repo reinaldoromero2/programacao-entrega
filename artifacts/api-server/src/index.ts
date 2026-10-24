@@ -58,6 +58,24 @@ async function assertSchema(): Promise<void> {
         criado_em timestamptz NOT NULL DEFAULT NOW()
       )
     `);
+    // histórico das entregas (quem criou/alterou/apagou e o que mudou) — ver routes/entregas.ts.
+    // Tabela própria: não entra na sincronização dos aparelhos; guarda 6 meses.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS entregas_historico (
+        id bigserial PRIMARY KEY,
+        entrega_id integer NOT NULL,
+        acao text NOT NULL,
+        em timestamptz NOT NULL DEFAULT NOW(),
+        por text,
+        data_entrega date,
+        cliente text,
+        antes jsonb,
+        depois jsonb
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS entregas_historico_data_idx ON entregas_historico (data_entrega)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS entregas_historico_entrega_idx ON entregas_historico (entrega_id)`);
+    await client.query(`DELETE FROM entregas_historico WHERE em < NOW() - INTERVAL '6 months'`);
     // foto do ticket de cada agendamento (ver routes/agendamento-fotos.ts); apagada quando o dia passa
     await client.query(`
       CREATE TABLE IF NOT EXISTS agendamento_fotos (

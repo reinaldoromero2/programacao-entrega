@@ -21,6 +21,69 @@ import {
 
 const router: IRouter = Router();
 
+// ---- histórico das entregas: quem criou, alterou ou apagou, e o que mudou (antes → depois) ----
+// A ordem (sortOrder) e o quadradinho S (checked) ficam de fora: mudam o tempo todo e não dizem nada.
+const CAMPOS_HISTORICO = ["date", "cliente", "hrs", "obs", "motorista", "placa", "unidade", "nf", "cg", "v", "divergencias", "frete", "agendamento", "statusManual"] as const;
+type LinhaEntrega = Record<string, unknown> & { id: number; date?: unknown; cliente?: unknown };
+function quemFez(req: { get(nome: string): string | undefined }): string | null {
+  const q = req.get("x-ripack-quem");
+  if (!q) return null;
+  try { return decodeURIComponent(q).slice(0, 80); } catch { return q.slice(0, 80); }
+}
+function soCampos(linha: LinhaEntrega | null | undefined): Record<string, unknown> | null {
+  if (!linha) return null;
+  const r: Record<string, unknown> = {};
+  for (const c of CAMPOS_HISTORICO) if (linha[c] != null && linha[c] !== "") r[c] = linha[c];
+  return r;
+}
+async function registrarHistorico(
+  req: { get(nome: string): string | undefined },
+  acao: "criou" | "alterou" | "apagou",
+  antes: LinhaEntrega | null,
+  depois: LinhaEntrega | null,
+): Promise<void> {
+  try {
+    const base = (depois ?? antes) as LinhaEntrega;
+    let a: Record<string, unknown> | null = null;
+    let d: Record<string, unknown> | null = null;
+    if (acao === "alterou") {
+      a = {}; d = {};
+      for (const c of CAMPOS_HISTORICO) {
+        const x = antes?.[c] ?? null, y = depois?.[c] ?? null;
+        if (String(x ?? "") !== String(y ?? "")) { a[c] = x; d[c] = y; }
+      }
+      if (!Object.keys(d).length) return;
+    } else if (acao === "criou") d = soCampos(depois);
+    else a = soCampos(antes);
+    await pool.query(
+      `INSERT INTO entregas_historico (entrega_id, acao, por, data_entrega, cliente, antes, depois) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [base.id, acao, quemFez(req), base.date ?? null, base.cliente ?? null, a ? JSON.stringify(a) : null, d ? JSON.stringify(d) : null],
+    );
+  } catch {
+    // o histórico nunca atrapalha a gravação da entrega
+  }
+}
+
+// histórico de um mês (pela data da entrega, antes ou depois da mudança) ou de uma entrega
+router.get("/entregas/historico", async (req, res): Promise<void> => {
+  const mes = typeof req.query.mes === "string" && /^\d{4}-\d{2}$/.test(req.query.mes) ? req.query.mes : new Date().toISOString().slice(0, 7);
+  const entrega = typeof req.query.entrega === "string" ? parseInt(req.query.entrega, 10) : NaN;
+  const r = Number.isFinite(entrega)
+    ? await pool.query(`SELECT * FROM entregas_historico WHERE entrega_id = $1 ORDER BY em DESC LIMIT 500`, [entrega])
+    : await pool.query(
+      `SELECT * FROM entregas_historico
+        WHERE (data_entrega >= $1::date AND data_entrega <= $2::date)
+           OR (antes->>'date' >= $3 AND antes->>'date' <= $4)
+        ORDER BY em DESC LIMIT 3000`,
+      [`${mes}-01`, getMonthEnd(mes), `${mes}-01`, getMonthEnd(mes)],
+    );
+  res.json(r.rows.map((x) => ({
+    id: Number(x.id), entregaId: x.entrega_id, acao: x.acao, em: x.em, por: x.por,
+    data: x.data_entrega instanceof Date ? x.data_entrega.toISOString().slice(0, 10) : x.data_entrega,
+    cliente: x.cliente, antes: x.antes, depois: x.depois,
+  })));
+});
+
 function getMonthEnd(mes: string): string {
   const [year, month] = mes.split("-").map(Number);
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -79,6 +142,7 @@ router.post("/entregas", async (req, res): Promise<void> => {
     })
     .returning();
 
+  void registrarHistorico(req, "criou", null, entrega as unknown as LinhaEntrega);
   res.status(201).json(CreateEntregaResponse.parse(entrega));
 });
 
@@ -158,9 +222,7 @@ router.get("/entregas/cancelados", async (req, res): Promise<void> => {
     .where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
-        OR ${entregasTable.nf} = 'x'
-        OR ${entregasTable.cg} = 'x'
+        UPPER(COALESCE(${entregasTable.obs}, '')) LIKE '%CANCEL%'
       )
     `)
     .orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
@@ -183,6 +245,8 @@ router.get("/entregas/por-frete", async (req, res): Promise<void> => {
     obs:          entregasTable.obs,
     frete:        entregasTable.frete,
     divergencias: entregasTable.divergencias,
+    nf:           entregasTable.nf,
+    cg:           entregasTable.cg,
   };
 
   let rows;
@@ -191,9 +255,7 @@ router.get("/entregas/por-frete", async (req, res): Promise<void> => {
       .where(sql`
         ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
         AND (
-          UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
-          OR ${entregasTable.nf} = 'x'
-          OR ${entregasTable.cg} = 'x'
+          UPPER(COALESCE(${entregasTable.obs}, '')) LIKE '%CANCEL%'
         )
       `)
       .orderBy(asc(entregasTable.date), asc(entregasTable.sortOrder));
@@ -228,16 +290,14 @@ router.get("/entregas/frete-mensal", async (req, res): Promise<void> => {
     .where(sql`${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end} AND ${entregasTable.frete} IS NOT NULL`)
     .orderBy(asc(entregasTable.date));
 
-  // Cancelados: OBS LIKE 'CANCELADO%'/'CANCELADA%' OR nf = 'x' OR cg = 'x'
+  // Cancelados: OBS com "CANCEL" em qualquer parte (o X em NF/CG não conta)
   const cancelRows = await db
     .select({ date: entregasTable.date })
     .from(entregasTable)
     .where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
-        OR ${entregasTable.nf} = 'x'
-        OR ${entregasTable.cg} = 'x'
+        UPPER(COALESCE(${entregasTable.obs}, '')) LIKE '%CANCEL%'
       )
     `)
     .orderBy(asc(entregasTable.date));
@@ -353,9 +413,7 @@ router.get("/entregas/resumo-mensal", async (req, res): Promise<void> => {
     .where(sql`
       ${entregasTable.date} >= ${start} AND ${entregasTable.date} <= ${end}
       AND (
-        UPPER(${entregasTable.obs}) LIKE 'CANCELADO%' OR UPPER(${entregasTable.obs}) LIKE 'CANCELADA%'
-        OR ${entregasTable.nf} = 'x'
-        OR ${entregasTable.cg} = 'x'
+        UPPER(COALESCE(${entregasTable.obs}, '')) LIKE '%CANCEL%'
       )
     `);
 
@@ -480,8 +538,7 @@ router.get("/entregas/cliente-relatorio", async (req, res): Promise<void> => {
 
   // NULL-safe cancel filter: use COALESCE + LIKE to handle "CANCELADO - motivo" variants.
   const notCancelled = sql`
-    UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADO%'
-    AND UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADA%'
+    UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE '%CANCEL%'
     AND COALESCE(${entregasTable.nf}, '') <> 'x'
     AND COALESCE(${entregasTable.cg}, '') <> 'x'
   `;
@@ -548,8 +605,7 @@ router.get("/entregas/cliente-datas", async (req, res): Promise<void> => {
   const cliente = typeof req.query.cliente === "string" ? req.query.cliente.toUpperCase() : "";
 
   const notCancelled = sql`
-    UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADO%'
-    AND UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE 'CANCELADA%'
+    UPPER(COALESCE(${entregasTable.obs}, '')) NOT LIKE '%CANCEL%'
     AND COALESCE(${entregasTable.nf}, '') <> 'x'
     AND COALESCE(${entregasTable.cg}, '') <> 'x'
   `;
@@ -760,6 +816,8 @@ router.patch("/entregas/:id", async (req, res): Promise<void> => {
   // fila do PC): grava texto vazio
   if (parsed.data.cliente === null) parsed.data.cliente = "";
 
+  const [antesDaMudanca] = await db.select().from(entregasTable).where(eq(entregasTable.id, params.data.id));
+
   const [entrega] = await db
     .update(entregasTable)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -772,6 +830,7 @@ router.patch("/entregas/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  void registrarHistorico(req, "alterou", (antesDaMudanca ?? null) as unknown as LinhaEntrega | null, entrega as unknown as LinhaEntrega);
   res.json(UpdateEntregaResponse.parse(entrega));
 });
 
@@ -793,6 +852,7 @@ router.delete("/entregas/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  void registrarHistorico(req, "apagou", entrega as unknown as LinhaEntrega, null);
   res.sendStatus(204);
 });
 

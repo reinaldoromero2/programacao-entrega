@@ -666,7 +666,8 @@ function DeliveryRow({ entrega, date, rowIndex, onDragStart, onDragEnter, onDrop
 
   const isRipack    = localState.frete === "RIPACK";
   const obsUpper    = localState.obs?.toUpperCase() ?? "";
-  const isCancelled  = obsUpper.startsWith("CANCELADA") || obsUpper.startsWith("CANCELADO");
+  // cancelada = "CANCEL" em qualquer parte da OBS (mesma regra dos relatórios)
+  const isCancelled  = obsUpper.includes("CANCEL");
   const isDevolution = obsUpper.startsWith("DEVOLUÇÃO");
   const prefixoMotivo = isDevolution ? "DEVOLUÇÃO" : (obsUpper.startsWith("CANCELADA") ? "CANCELADA" : "CANCELADO");
   const salvarObs = (val: string) => {

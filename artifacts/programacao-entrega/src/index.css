@@ -381,6 +381,12 @@ html.app-acrylic-modals [role="alertdialog"] [class*="bg-background"] {
   border-color: rgba(255, 255, 255, 0.42);
 }
 
+/* pop-up por cima de um modal (ex.: lista de entregas de um cartão dos Relatórios): fundo
+   sólido mesmo no tema transparente, senão o que está atrás aparece por baixo e não dá pra ler */
+html.app-acrylic-modals [role="dialog"] [data-fundo-solido] {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+}
+
 html.app-acrylic-modals [role="dialog"] [class*="text-slate-300"],
 html.app-acrylic-modals [role="dialog"] [class*="text-slate-400"],
 html.app-acrylic-modals [role="dialog"] [class*="text-slate-500"],

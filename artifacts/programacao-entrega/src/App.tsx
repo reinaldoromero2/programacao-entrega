@@ -10,6 +10,19 @@ import Home from "@/pages/home";
 import { applyAppZoom } from "@/components/opcoes-menu";
 import { RomaneioFrame, RomaneioSync, TelaProgramacao, enviarZoomAoRomaneio, rotaDaTelaInicial, zoomDaTelaInicialAtivo, type AcaoZoom } from "@/components/romaneio-frame";
 
+// "quem fez" cada gravação (vai para o histórico das entregas): o usuário logado no Romaneio
+// neste aparelho e, no app do PC, o nome do computador
+if (typeof window !== "undefined") {
+  (window as unknown as { __ripackQuem?: () => string | null }).__ripackQuem = () => {
+    let nome = "";
+    try { nome = String(JSON.parse(localStorage.getItem("ripackRomaneioSessao") || "null")?.nome || ""); } catch { /* sem sessão */ }
+    let pc = "";
+    try { pc = String((window as any).require?.("os")?.hostname?.() || ""); } catch { /* fora do app do PC */ }
+    const r = [nome, pc && `(${pc})`].filter(Boolean).join(" ");
+    return r || null;
+  };
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { networkMode: "always" },

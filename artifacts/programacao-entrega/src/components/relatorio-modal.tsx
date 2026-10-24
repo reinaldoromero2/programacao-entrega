@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { FileText, Download, Loader2, BarChart2, Truck, LayoutList } from "lucide-react";
+import { FileText, Download, Loader2, BarChart2, Truck, LayoutList, History } from "lucide-react";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -37,7 +38,8 @@ function extractMotivo(obs: string | null): string {
 // ─── API helper ───────────────────────────────────────────────────────────────
 function isCancelled(delivery: Record<string, unknown>) {
   const obs = String(delivery.obs ?? "").toUpperCase();
-  return obs.startsWith("CANCELADO") || obs.startsWith("CANCELADA") || delivery.nf === "x" || delivery.cg === "x";
+  // cancelada = "CANCEL" em qualquer parte da OBS (o X em NF/CG não conta)
+  return obs.includes("CANCEL");
 }
 
 function localReport<T>(path: string, snapshot: ReturnType<typeof getOfflineSnapshot>): T | undefined {
@@ -252,6 +254,12 @@ interface CanceladoItem {
   obs: string | null;
   frete: string | null;
   divergencias: string | null;
+  nf?: string | null;
+  cg?: string | null;
+}
+// cancelada (CANCEL na OBS) mas com NF ou CG marcados como OK: conta só como cancelada; o aviso é para conferir
+function canceladaComNfCg(c: { obs?: string | null; nf?: string | null; cg?: string | null }) {
+  return String(c.obs ?? "").toUpperCase().includes("CANCEL") && (c.nf === "check" || c.cg === "check");
 }
 
 interface MotoristaResult {
@@ -304,6 +312,12 @@ const FRETE_CORES: Record<string, string> = {
 
 const TIPOS = ["RIPACK", "TRANSPORTADORA", "3º", "COLETA"];
 
+// a transportadora é a Campos&Massari: só o nome mostrado muda (o frete gravado continua "TRANSPORTADORA")
+const NOME_TRANSPORTADORA = "Campos&Massari";
+function nomeFrete(frete: string) {
+  return frete === "TRANSPORTADORA" ? NOME_TRANSPORTADORA : frete;
+}
+
 function mesAtual() {
   return new Date().toISOString().slice(0, 7);
 }
@@ -330,11 +344,131 @@ type FiltroTipo = "dia" | "mes" | "ano";
 
 // ─── Resumo Mensal tab ────────────────────────────────────────────────────────
 
-function ResumoMensalTab() {
+// as entregas do mês por frete (e as canceladas), para a lista de cada cartão do Resumo Mensal
+interface ListasResumo { porFrete: Record<string, CanceladoItem[]>; canceladas: CanceladoItem[] }
+type CartaoResumo = "cargas" | "entregas" | "realizadas" | "coleta" | "cancel" | "rip" | "rip-ok" | "rip-cancel" | "cm" | "cm-ok" | "cm-cancel";
+const TITULO_CARTAO: Record<CartaoResumo, string> = {
+  cargas: "Total de cargas no mês", entregas: "Total de entregas no mês", realizadas: "Entregas realizadas",
+  coleta: "Coleta", cancel: "Cancelamentos no mês",
+  rip: "Ripack (incluindo cancelamentos)", "rip-ok": "Ripack sem cancelamentos", "rip-cancel": "Cancelamentos Ripack",
+  cm: `${NOME_TRANSPORTADORA} + 3º (incluindo cancelamentos)`, "cm-ok": `${NOME_TRANSPORTADORA} + 3º sem cancelamentos`, "cm-cancel": `Cancelamentos ${NOME_TRANSPORTADORA} + 3º`,
+};
+function entregasDoCartao(cartao: CartaoResumo, l: ListasResumo): CanceladoItem[] {
+  const cancel = new Set(l.canceladas.map((e) => e.id));
+  const de = (...fretes: string[]) => fretes.flatMap((f) => l.porFrete[f] ?? []);
+  const ordem = (lista: CanceladoItem[]) => lista.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const ok = (e: CanceladoItem) => !cancel.has(e.id);
+  const cancelada = (e: CanceladoItem) => cancel.has(e.id);
+  switch (cartao) {
+    case "cargas": return ordem(de("RIPACK", "TRANSPORTADORA", "3º", "COLETA"));
+    case "entregas": return ordem(de("RIPACK", "TRANSPORTADORA", "3º"));
+    case "realizadas": return ordem(de("RIPACK", "TRANSPORTADORA", "3º").filter(ok));
+    case "coleta": return ordem(de("COLETA"));
+    case "cancel": return ordem(l.canceladas);
+    case "rip": return ordem(de("RIPACK"));
+    case "rip-ok": return ordem(de("RIPACK").filter(ok));
+    case "rip-cancel": return ordem(de("RIPACK").filter(cancelada));
+    case "cm": return ordem(de("TRANSPORTADORA", "3º"));
+    case "cm-ok": return ordem(de("TRANSPORTADORA", "3º").filter(ok));
+    case "cm-cancel": return ordem(de("TRANSPORTADORA", "3º").filter(cancelada));
+  }
+}
+
+function ResumoMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) => void } = {}) {
   const [mes, setMes] = useState(mesAtual());
   const [data, setData] = useState<ResumoMensalData | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // cartão clicado e as listas do mês (buscadas no 1º clique)
+  const [cartao, setCartao] = useState<CartaoResumo | null>(null);
+  const [listas, setListas] = useState<ListasResumo | null>(null);
+  const [carregandoLista, setCarregandoLista] = useState(false);
+  useEffect(() => { setCartao(null); setListas(null); }, [mes]);
+  // Esc com o pop-up aberto fecha só o pop-up (não os Relatórios inteiros)
+  useEffect(() => {
+    if (!cartao) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      setCartao(null);
+    };
+    window.addEventListener("keydown", aoTeclar, true);
+    return () => window.removeEventListener("keydown", aoTeclar, true);
+  }, [cartao]);
+  const abrirCartao = (c: CartaoResumo) => {
+    if (cartao === c) { setCartao(null); return; }
+    setCartao(c);
+    if (listas || carregandoLista) return;
+    setCarregandoLista(true);
+    const buscar = (frete: string) => apiFetch<CanceladoItem[]>(`/api/entregas/por-frete?mes=${mes}&frete=${encodeURIComponent(frete)}`).catch(() => [] as CanceladoItem[]);
+    Promise.all([...TIPOS.map(buscar), buscar("CANCELADOS")])
+      .then((r) => {
+        const porFrete: Record<string, CanceladoItem[]> = {};
+        TIPOS.forEach((t, i) => { porFrete[t] = r[i]; });
+        setListas({ porFrete, canceladas: r[TIPOS.length] });
+      })
+      .finally(() => setCarregandoLista(false));
+  };
+  const [anoMes, numMes] = mes.split("-").map(Number);
+  const diasNoMes = new Date(anoMes, numMes, 0).getDate();
+  const listaDoBloco = (cartoes: CartaoResumo[], cor: string) => {
+    if (!cartao || !cartoes.includes(cartao)) return null;
+    const itens = listas ? entregasDoCartao(cartao, listas) : [];
+    // pop-up na frente dos cartões (clicar fora, Sair ou Esc fecham)
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setCartao(null)} data-testid="resumo-lista-popup">
+      <div data-fundo-solido className="flex max-h-[85vh] w-full max-w-5xl flex-col rounded-xl overflow-hidden bg-white shadow-2xl" style={{ border: `1px solid ${cor}55` }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b" style={{ background: cor + "1f", borderColor: cor + "40" }}>
+          <span className="text-sm font-bold uppercase tracking-wide" style={{ color: cor }}>
+            {TITULO_CARTAO[cartao]} — {mesLabel(mes)}{listas ? ` · ${itens.length}` : ""}
+          </span>
+          <button type="button" onClick={() => setCartao(null)} className="rounded-md border border-red-600 bg-red-600 px-3.5 py-2 text-xs font-bold leading-none text-white hover:opacity-90" data-testid="resumo-lista-sair">Sair</button>
+        </div>
+        {!listas ? (
+          <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin" style={{ color: cor }} /></div>
+        ) : !itens.length ? (
+          <p className="text-xs text-slate-400 text-center py-4 italic">Nenhuma entrega.</p>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full text-xs">
+              <thead data-fundo-solido className="sticky top-0 bg-white">
+                <tr>
+                  {["Data", "Cliente", "Motorista", "Placa", "Frete", "OBS"].map((h) => (
+                    <th key={h} className="text-left px-3 py-1.5 font-semibold" style={{ color: cor }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map((c, i) => (
+                  <tr key={c.id}
+                    className={`${i % 2 === 0 ? "bg-slate-50" : ""} ${onNavigateDia ? "cursor-pointer hover:bg-slate-100" : ""}`}
+                    onClick={onNavigateDia ? () => onNavigateDia(c.date) : undefined}
+                    title={onNavigateDia ? `Ir para ${c.date.slice(8)}/${c.date.slice(5, 7)}/${c.date.slice(0, 4)}` : undefined}
+                  >
+                    <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.date.slice(8)}/{c.date.slice(5, 7)}</td>
+                    <td className="px-3 py-1.5 font-medium text-slate-800 whitespace-nowrap">{c.cliente || "—"}</td>
+                    <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.motorista || "—"}</td>
+                    <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.placa || "—"}</td>
+                    <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{c.frete ? nomeFrete(c.frete) : "—"}</td>
+                    <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">
+                      {c.obs || ""}
+                      {canceladaComNfCg(c) && (
+                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-800" title="Tem CANCEL na OBS, mas NF ou CG estão marcados como OK. Conta só como cancelada.">
+                          ⚠ NF/CG marcados como OK
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      </div>
+    );
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -370,10 +504,10 @@ function ResumoMensalTab() {
       sep,
       row(["TOTAL DE CARGAS NO MÊS", data.total], [""]),
       row(["TOTAL DE ENTREGAS NO MÊS", data.total - data.coleta.total], [""]),
-      row(["ENTREGAS REALIZADAS", data.total - data.coleta.total - data.canceladas.total]),
+      row(["ENTREGAS REALIZADAS", data.ripack.total + data.terceiros.total]),
       sep,
-      row(["RIPACK — Total", data.ripack.total], ["Percentual", data.ripack.pct + "%"]),
-      row(["TRANSPORTADORA + 3º — Total", data.terceiros.total], ["Percentual", data.terceiros.pct + "%"]),
+      row(["RIPACK — sem cancelamentos", data.ripack.total], ["Percentual", data.ripack.pct + "%"]),
+      row(["CAMPOS&MASSARI + 3º — sem cancelamentos", data.terceiros.total], ["Percentual", data.terceiros.pct + "%"]),
       ...(data.coleta.total > 0 ? [row(["COLETA — Total", data.coleta.total], ["Percentual", data.coleta.pct + "%"])] : []),
       sep,
       row(["DIAS ÚTEIS NO MÊS", data.diasUteis]),
@@ -381,7 +515,7 @@ function ResumoMensalTab() {
       sep,
       row(["CANCELAMENTOS — Total", data.canceladas.total], ["Percentual sobre total", data.canceladas.pct + "%"]),
       row(["CANCELAMENTOS RIPACK", data.canceladasRipack]),
-      row(["CANCELAMENTOS TRANSPORTADORA + 3º", data.canceladasTerceiros]),
+      row(["CANCELAMENTOS CAMPOS&MASSARI + 3º", data.canceladasTerceiros]),
     ].join("");
 
     const ss = `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Resumo ${mes}"><Table>${rows}</Table></Worksheet></Workbook>`;
@@ -406,64 +540,58 @@ function ResumoMensalTab() {
 
       {data && !loading && (
         <>
-          {/* Grid de cards */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* os 3 blocos lado a lado (Geral mais largo); em tela estreita ficam um embaixo do outro */}
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-3 items-stretch">
+            {/* Geral: Ripack + Campos&Massari juntos */}
+            <Bloco titulo="Geral" detalhe="Ripack + Campos&Massari · clique no cartão para ver as entregas" cor="#475569"
+              rodape={listaDoBloco(["cargas", "entregas", "realizadas", "coleta", "cancel"], "#475569")}>
+              <Card accent="#2563eb" label="TOTAL DE CARGAS NO MES" value={data.total} sub="incluindo cancelamentos" ativo={cartao === "cargas"} onClick={() => abrirCartao("cargas")}>
+                <Pct conta={{ num: data.total, nomeNum: "total de cargas no mês", den: data.total, nomeDen: "total de cargas no mês" }} color="#2563eb" label="do total" />
+              </Card>
+              <Card accent="#16a34a" label="TOTAL DE ENTREGAS NO MES" value={data.total - data.coleta.total} sub="excluindo coletas" ativo={cartao === "entregas"} onClick={() => abrirCartao("entregas")}>
+                <Pct conta={{ num: data.total - data.coleta.total, nomeNum: "entregas, sem coletas", den: data.total, nomeDen: "total de cargas no mês" }} color="#16a34a" label="das cargas" />
+              </Card>
+              {/* Ripack + Campos&Massari sem os cancelados (um cancelamento sem frete não está nas cargas do mês, não desconta) */}
+              <Card accent="#16a34a" label="ENTREGAS REALIZADAS" value={data.ripack.total + data.terceiros.total} sub="excluindo coletas e cancelamentos" ativo={cartao === "realizadas"} onClick={() => abrirCartao("realizadas")}>
+                <Pct conta={{ num: data.ripack.total + data.terceiros.total, nomeNum: "entregas realizadas", den: data.total - data.coleta.total, nomeDen: "total de entregas no mês, sem coletas" }} color="#16a34a" label="do total" />
+              </Card>
+              <Card accent="#7c3aed" label="COLETA" value={data.coleta.total} ativo={cartao === "coleta"} onClick={() => abrirCartao("coleta")}>
+                <Pct conta={{ num: data.coleta.total, nomeNum: "coletas", den: data.ativasTotal, nomeDen: "cargas do mês sem as canceladas" }} color="#7c3aed" />
+              </Card>
+              <Card accent="#7c3aed" label="Dias Úteis no Mês" value={data.diasUteis} sub="excl. finais de semana e feriados">
+                <Pct conta={{ num: data.diasUteis, nomeNum: "dias úteis", den: diasNoMes, nomeDen: "dias do mês" }} color="#7c3aed" label={`dos ${diasNoMes} dias do mês`} />
+              </Card>
+              <Card accent="#0891b2" label="Média de Entregas / Dia Útil" value={data.mediaPorDia} />
+              <Card accent="#dc2626" label="Cancelamentos no Mês" value={data.canceladas.total} ativo={cartao === "cancel"} onClick={() => abrirCartao("cancel")}>
+                <Pct conta={{ num: data.canceladas.total, nomeNum: "cancelamentos no mês", den: data.total, nomeDen: "total de cargas no mês" }} color="#dc2626" label="do total" />
+              </Card>
+            </Bloco>
 
-            {/* Total de cargas */}
-            <Card accent="#2563eb" label="TOTAL DE CARGAS NO MES" value={data.total} sub="incluindo cancelamentos" />
-            <Card accent="#16a34a" label="TOTAL DE ENTREGAS NO MES" value={data.total - data.coleta.total} sub="excluindo coletas" />
+            {/* Ripack (o total que vem do servidor já é sem os cancelados) */}
+            <Bloco titulo="Ripack" detalhe="frota própria" cor="#16a34a" colunas={1} rodape={listaDoBloco(["rip", "rip-ok", "rip-cancel"], "#16a34a")}>
+              <Card accent="#16a34a" label="RIPACK TOTAL" value={data.ripack.total + data.canceladasRipack} sub="incluindo cancelamentos" ativo={cartao === "rip"} onClick={() => abrirCartao("rip")}>
+                <Pct conta={{ num: data.ripack.total + data.canceladasRipack, nomeNum: "Ripack total", den: data.total - data.coleta.total, nomeDen: "total de entregas no mês, sem coletas" }} color="#16a34a" label="do total" />
+              </Card>
+              <Card accent="#16a34a" label="RIPACK REALIZADAS" value={data.ripack.total} sub="sem cancelamentos" ativo={cartao === "rip-ok"} onClick={() => abrirCartao("rip-ok")}>
+                <Pct conta={{ num: data.ripack.total, nomeNum: "Ripack realizadas", den: data.total - data.coleta.total, nomeDen: "total de entregas no mês, sem coletas" }} color="#16a34a" label="do total" />
+              </Card>
+              <Card accent="#dc2626" label="Cancelamentos RIPACK" value={data.canceladasRipack} ativo={cartao === "rip-cancel"} onClick={() => abrirCartao("rip-cancel")}>
+                <Pct conta={{ num: data.canceladasRipack, nomeNum: "cancelamentos Ripack", den: data.ripack.total + data.canceladasRipack, nomeDen: "Ripack total" }} color="#dc2626" label="das cargas Ripack" />
+              </Card>
+            </Bloco>
 
-            {/* Entregas realizadas */}
-            <Card accent="#16a34a" label="ENTREGAS REALIZADAS" value={data.total - data.coleta.total - data.canceladas.total} sub="excluindo coletas e cancelamentos">
-              <Pct
-                value={((data.total - data.coleta.total - data.canceladas.total) / (data.total - data.coleta.total || 1)) * 100}
-                color="#16a34a"
-                label="do total"
-              />
-            </Card>
-
-            {/* Ripack */}
-            <Card accent="#16a34a" label="RIPACK" value={data.ripack.total}>
-              <Pct value={data.ripack.pct} color="#16a34a" />
-            </Card>
-
-            {/* Transportadora + 3º */}
-            <Card accent="#2563eb" label="TRANSPORTADORA + 3º" value={data.terceiros.total}>
-              <Pct
-                value={(data.terceiros.total / ((data.total - data.coleta.total) || 1)) * 100}
-                color="#2563eb"
-                label="do total"
-              />
-            </Card>
-            <Card accent="#2563eb" label="TRANSPORTADORA + 3º (cancelados)" value={data.terceiros.total - data.canceladasTerceiros} sub="sem cancelamentos">
-              <Pct
-                value={((data.terceiros.total - data.canceladasTerceiros) / ((data.total - data.coleta.total) || 1)) * 100}
-                color="#2563eb"
-                label="do total"
-              />
-            </Card>
-
-            {/* Coleta */}
-            <Card accent="#7c3aed" label="COLETA" value={data.coleta.total}>
-              <Pct value={data.coleta.pct} color="#7c3aed" />
-            </Card>
-
-            {/* Dias úteis */}
-            <Card accent="#7c3aed" label="Dias Úteis no Mês" value={data.diasUteis} sub="excl. finais de semana e feriados" />
-
-            {/* Média por dia */}
-            <Card accent="#0891b2" label="Média de Entregas / Dia Útil" value={data.mediaPorDia} />
-
-            {/* Cancelamentos totais */}
-            <Card accent="#dc2626" label="Cancelamentos no Mês" value={data.canceladas.total}>
-              <Pct value={data.canceladas.pct} color="#dc2626" label="do total" />
-            </Card>
-
-            {/* Cancelamentos Ripack */}
-            <div className="col-span-2 grid grid-cols-2 gap-3">
-              <Card accent="#dc2626" label="Cancelamentos RIPACK" value={data.canceladasRipack} />
-              <Card accent="#dc2626" label="Cancelamentos TRANSP. + 3º" value={data.canceladasTerceiros} />
-            </div>
+            {/* Campos&Massari (transportadora) + 3º (o total que vem do servidor já é sem os cancelados) */}
+            <Bloco titulo={NOME_TRANSPORTADORA} detalhe="transportadora + 3º" cor="#2563eb" colunas={1} rodape={listaDoBloco(["cm", "cm-ok", "cm-cancel"], "#2563eb")}>
+              <Card accent="#2563eb" label={`${NOME_TRANSPORTADORA} + 3º TOTAL`} value={data.terceiros.total + data.canceladasTerceiros} sub="incluindo cancelamentos" ativo={cartao === "cm"} onClick={() => abrirCartao("cm")}>
+                <Pct conta={{ num: data.terceiros.total + data.canceladasTerceiros, nomeNum: `${NOME_TRANSPORTADORA} + 3º total`, den: data.total - data.coleta.total, nomeDen: "total de entregas no mês, sem coletas" }} color="#2563eb" label="do total" />
+              </Card>
+              <Card accent="#2563eb" label={`${NOME_TRANSPORTADORA} + 3º REALIZADAS`} value={data.terceiros.total} sub="sem cancelamentos" ativo={cartao === "cm-ok"} onClick={() => abrirCartao("cm-ok")}>
+                <Pct conta={{ num: data.terceiros.total, nomeNum: `${NOME_TRANSPORTADORA} + 3º realizadas`, den: data.total - data.coleta.total, nomeDen: "total de entregas no mês, sem coletas" }} color="#2563eb" label="do total" />
+              </Card>
+              <Card accent="#dc2626" label={`Cancelamentos ${NOME_TRANSPORTADORA} + 3º`} value={data.canceladasTerceiros} ativo={cartao === "cm-cancel"} onClick={() => abrirCartao("cm-cancel")}>
+                <Pct conta={{ num: data.canceladasTerceiros, nomeNum: `cancelamentos ${NOME_TRANSPORTADORA} + 3º`, den: data.terceiros.total + data.canceladasTerceiros, nomeDen: `${NOME_TRANSPORTADORA} + 3º total` }} color="#dc2626" label={`das cargas ${NOME_TRANSPORTADORA} + 3º`} />
+              </Card>
+            </Bloco>
           </div>
 
           <div className="flex justify-end pt-1">
@@ -478,34 +606,77 @@ function ResumoMensalTab() {
   );
 }
 
+// grupo de cartões com título e faixa da cor (Geral / Ripack / Campos&Massari)
+function Bloco({ titulo, detalhe, cor, children, rodape, colunas = 2 }: { titulo: string; detalhe?: string; cor: string; children: React.ReactNode; rodape?: React.ReactNode; colunas?: 1 | 2 }) {
+  return (
+    <section className="h-full rounded-xl border-2 p-2.5 flex flex-col gap-2" style={{ borderColor: cor + "b3", background: cor + "26" }}>
+      <div className="flex items-baseline gap-2 px-1">
+        <span className="w-2.5 h-2.5 rounded-full inline-block self-center" style={{ background: cor }} />
+        <h3 className="text-sm font-bold uppercase tracking-wide" style={{ color: cor }}>{titulo}</h3>
+        {detalhe && <span className="text-xs text-slate-500">{detalhe}</span>}
+      </div>
+      <div className={`grid ${colunas === 1 ? "grid-cols-1" : "grid-cols-2"} gap-2`}>{children}</div>
+      {rodape}
+    </section>
+  );
+}
+
 function Card({
-  accent, label, value, sub, children,
+  accent, label, value, sub, children, onClick, ativo,
 }: {
   accent: string;
   label: string;
   value: number;
   sub?: string;
   children?: React.ReactNode;
+  /** clicar no cartão mostra a lista das entregas que ele conta */
+  onClick?: () => void;
+  ativo?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 flex flex-col gap-1 shadow-sm" style={{ borderLeftWidth: 4, borderLeftColor: accent }}>
+    <div
+      className={`rounded-lg border border-slate-200 bg-white px-3 py-2.5 flex flex-col gap-0.5 shadow-sm${onClick ? " cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+      style={{ borderLeftWidth: 4, borderLeftColor: accent, ...(ativo ? { outline: `2px solid ${accent}`, outlineOffset: 1 } : {}) }}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      title={onClick ? "Ver as entregas" : undefined}
+    >
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide leading-tight">{label}</p>
-      <p className="text-3xl font-bold" style={{ color: accent }}>{value}</p>
+      <p className="text-2xl font-bold leading-tight" style={{ color: accent }}>{value}</p>
       {sub && <p className="text-xs text-slate-400">{sub}</p>}
       {children}
     </div>
   );
 }
 
-function Pct({ value, color, label = "das realizadas" }: { value: number; color: string; label?: string }) {
-  const displayValue = Number.isFinite(value) ? Number(value.toFixed(1)) : 0;
+// a conta por trás da porcentagem: num ÷ den × 100 (aparece ao clicar no valor)
+interface ContaPct { num: number; nomeNum: string; den: number; nomeDen: string }
+function Pct({ value, color, label = "das realizadas", conta }: { value?: number; color: string; label?: string; conta?: ContaPct }) {
+  const [verConta, setVerConta] = useState(false);
+  const bruto = value ?? (conta && conta.den > 0 ? (conta.num / conta.den) * 100 : 0);
+  const displayValue = Number.isFinite(bruto) ? Number(bruto.toFixed(1)) : 0;
+  const fmt = (n: number) => n.toLocaleString("pt-BR");
   return (
-    <div className="flex items-center gap-2 mt-1">
-      <div className="flex-1 bg-slate-100 rounded-full h-2">
-        <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(displayValue, 100)}%`, background: color }} />
+    <div className="mt-1">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 bg-slate-100 rounded-full h-2">
+          <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(displayValue, 100)}%`, background: color }} />
+        </div>
+        <span
+          className={`text-2xl font-bold leading-none${conta ? " cursor-pointer hover:opacity-80" : ""}`}
+          style={{ color }}
+          onClick={conta ? (e) => { e.stopPropagation(); setVerConta((v) => !v); } : undefined}
+          title={conta ? "Ver como chegou nesse valor" : undefined}
+          role={conta ? "button" : undefined}
+          data-testid={conta ? "pct-valor" : undefined}
+        >{displayValue.toLocaleString("pt-BR")}%</span>
+        <span className="text-xs text-slate-400">{label}</span>
       </div>
-      <span className="text-xs font-semibold" style={{ color }}>{displayValue}%</span>
-      <span className="text-xs text-slate-400">{label}</span>
+      {conta && verConta && (
+        <div className="mt-2 rounded-md border px-3 py-2 text-xs text-slate-700" style={{ borderColor: color + "55", background: color + "12" }} onClick={(e) => e.stopPropagation()} data-testid="pct-conta">
+          <b>{fmt(conta.num)}</b> ({conta.nomeNum}) ÷ <b>{fmt(conta.den)}</b> ({conta.nomeDen}) × 100 = <b style={{ color }}>{displayValue.toLocaleString("pt-BR")}%</b>
+        </div>
+      )}
     </div>
   );
 }
@@ -734,10 +905,10 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
 
     const rows = [
       row(["TIPO DE FRETE", "TOTAL"]),
-      ...data.resumo.map((r) => row([r.frete, r.total])),
-      ...(data.canceladosTotal > 0 ? [row(["CANCELADOS / X", data.canceladosTotal])] : []),
+      ...data.resumo.map((r) => row([nomeFrete(r.frete), r.total])),
+      ...(data.canceladosTotal > 0 ? [row(["CANCELADOS", data.canceladosTotal])] : []),
       "<Row/>",
-      row(["DATA", ...allCols]),
+      row(["DATA", ...allCols.map(nomeFrete)]),
       ...data.porDia.map((d) =>
         row([d.date, ...allCols.map((c) => ((d as unknown as Record<string, number>)[c] ?? 0))])
       ),
@@ -797,7 +968,7 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                           />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value, name) => [`${value}`, name as string]} />
+                      <Tooltip formatter={(value, name) => [`${value}`, nomeFrete(name as string)]} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -812,11 +983,11 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                         background: selectedFrete === r.frete ? FRETE_CORES[r.frete] + "40" : FRETE_CORES[r.frete] + "18",
                         outline: selectedFrete === r.frete ? `2px solid ${FRETE_CORES[r.frete]}` : undefined,
                       }}
-                      title={`Clique para ver cargas ${r.frete}`}
+                      title={`Clique para ver cargas ${nomeFrete(r.frete)}`}
                     >
                       <span className="flex items-center gap-1.5 font-medium" style={{ color: FRETE_CORES[r.frete] }}>
                         <span className="w-2 h-2 rounded-full inline-block" style={{ background: FRETE_CORES[r.frete] }} />
-                        {r.frete}
+                        {nomeFrete(r.frete)}
                       </span>
                       <span className="font-bold text-slate-700">{r.total}</span>
                     </button>
@@ -835,7 +1006,7 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                     >
                       <span className="flex items-center gap-1.5 font-semibold text-red-600">
                         <span className="w-2 h-2 rounded-full inline-block bg-red-600" />
-                        CANCELADOS / X
+                        CANCELADOS
                       </span>
                       <span className="font-bold text-red-700">{canceladosTotal}</span>
                     </button>
@@ -876,7 +1047,7 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
                       <Tooltip contentStyle={{ fontSize: 12 }} labelFormatter={(v: string) => v} />
                       <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                       {activeFreteTipos.map((tipo) => (
-                        <Bar key={tipo} dataKey={tipo} stackId="a" fill={FRETE_CORES[tipo]} onClick={() => handleFreteClick(tipo)} style={{ cursor: "pointer" }} />
+                        <Bar key={tipo} dataKey={tipo} name={nomeFrete(tipo)} stackId="a" fill={FRETE_CORES[tipo]} onClick={() => handleFreteClick(tipo)} style={{ cursor: "pointer" }} />
                       ))}
                       {hasCanceladosBar && (
                         <Bar dataKey="CANCELADOS" stackId="b" fill={CANCELADOS_COR} onClick={() => handleFreteClick("CANCELADOS")} style={{ cursor: "pointer" }} />
@@ -897,7 +1068,7 @@ function FreteMensalTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) =
               const accent    = isCancel ? "#dc2626" : isDev ? DEVOLUÇÕES_COR : (FRETE_CORES[selectedFrete] ?? "#2563eb");
               const bgLight   = accent + "12";
               const bgMed     = accent + "25";
-              const label     = isCancel ? "Cargas Canceladas" : isDev ? "Devoluções" : `Cargas — ${selectedFrete}`;
+              const label     = isCancel ? "Cargas Canceladas" : isDev ? "Devoluções" : `Cargas — ${nomeFrete(selectedFrete)}`;
               return (
                 <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${accent}40` }}>
                   <div className="flex items-center justify-between px-3 py-2 border-b" style={{ background: bgMed, borderColor: accent + "40" }}>
@@ -2052,7 +2223,123 @@ function FaturamentoTab() {
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-type Tab = "resumo" | "divergencias" | "frete" | "motoristas" | "clientes" | "faturamento";
+// ─── Histórico tab ────────────────────────────────────────────────────────────
+
+interface HistoricoItem {
+  id: number;
+  entregaId: number;
+  acao: "criou" | "alterou" | "apagou";
+  em: string;
+  por: string | null;
+  data: string | null;
+  cliente: string | null;
+  antes: Record<string, unknown> | null;
+  depois: Record<string, unknown> | null;
+}
+const NOME_CAMPO: Record<string, string> = {
+  date: "Data", cliente: "Cliente", hrs: "Hora", obs: "OBS", motorista: "Motorista", placa: "Placa", unidade: "Unidade",
+  nf: "NF", cg: "CG", v: "V", divergencias: "Divergências", frete: "Frete", agendamento: "Agendamento", statusManual: "Status",
+};
+function valorCampo(campo: string, v: unknown): string {
+  if (v == null || v === "") return "(vazio)";
+  if (campo === "frete") return nomeFrete(String(v));
+  if (campo === "date") { const t = String(v); return `${t.slice(8, 10)}/${t.slice(5, 7)}/${t.slice(0, 4)}`; }
+  if (campo === "nf" || campo === "cg") return v === "x" ? "X (cancelado)" : v === "check" ? "✓" : v === "none" ? "(vazio)" : String(v);
+  if (typeof v === "boolean") return v ? "sim" : "não";
+  return String(v);
+}
+// a mudança mexe com cancelamento? (CANCEL na OBS ou X em NF/CG, entrando ou saindo)
+function mexeCancelamento(h: HistoricoItem): boolean {
+  const lados = [h.antes ?? {}, h.depois ?? {}];
+  return lados.some((l) => /CANCEL/i.test(String(l.obs ?? "")) || l.nf === "x" || l.cg === "x");
+}
+
+function HistoricoTab({ onNavigateDia }: { onNavigateDia?: (dateStr: string) => void }) {
+  const [mes, setMes] = useState(mesAtual());
+  const [itens, setItens] = useState<HistoricoItem[] | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
+  const [soCancel, setSoCancel] = useState(false);
+  useEffect(() => {
+    setItens(null); setErro(null);
+    apiFetch<HistoricoItem[]>(`/api/entregas/historico?mes=${mes}`)
+      .then((r) => setItens(Array.isArray(r) ? r : []))
+      .catch((e: unknown) => setErro(e instanceof Error ? e.message : "Erro ao carregar"));
+  }, [mes]);
+  const prevMes = () => { const [a, n] = mes.split("-").map(Number); setMes(`${n === 1 ? a - 1 : a}-${String(n === 1 ? 12 : n - 1).padStart(2, "0")}`); };
+  const nextMes = () => { const [a, n] = mes.split("-").map(Number); setMes(`${n === 12 ? a + 1 : a}-${String(n === 12 ? 1 : n + 1).padStart(2, "0")}`); };
+  const termo = semAcentoRel(busca.trim().toLowerCase());
+  const lista = (itens ?? []).filter((h) =>
+    (!soCancel || mexeCancelamento(h)) &&
+    (!termo || semAcentoRel(`${h.cliente ?? ""} ${h.por ?? ""}`.toLowerCase()).includes(termo)));
+  const quando = (iso: string) => { const d = new Date(iso); return isNaN(+d) ? "" : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); };
+  const corAcao = { criou: "#16a34a", alterou: "#2563eb", apagou: "#dc2626" } as const;
+  return (
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
+      <div className="flex items-center justify-between">
+        <button onClick={prevMes} className="px-3 py-1 rounded border border-slate-300 text-sm hover:bg-slate-100">‹</button>
+        <span className="text-sm font-semibold text-slate-700">{mesLabel(mes)}</span>
+        <button onClick={nextMes} className="px-3 py-1 rounded border border-slate-300 text-sm hover:bg-slate-100">›</button>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente ou quem fez"
+          className="h-9 w-72 rounded-md border border-slate-300 px-3 text-sm" />
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={soCancel} onChange={(e) => setSoCancel(e.target.checked)} /> Só o que mexeu em cancelamento
+        </label>
+        <span className="text-xs text-slate-500">
+          Quem criou, alterou ou apagou cada entrega deste mês, e o que mudou. Guardado desde a versão 1.3.24, por 6 meses.
+        </span>
+      </div>
+      {erro && <p className="text-sm text-red-500 text-center py-8">{erro}</p>}
+      {!itens && !erro && <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-blue-500 animate-spin" /></div>}
+      {itens && !lista.length && <p className="text-sm text-slate-400 text-center py-8 italic">Nenhuma alteração registrada{busca || soCancel ? " com esse filtro" : ""} em {mesLabel(mes)}.</p>}
+      {itens && lista.length > 0 && (
+        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-200">
+          <table className="w-full text-xs">
+            <thead data-fundo-solido className="sticky top-0 bg-white">
+              <tr>
+                {["Quando", "Quem", "Ação", "Entrega", "O que mudou"].map((h) => (
+                  <th key={h} className="text-left px-3 py-2 font-semibold text-slate-600">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lista.map((h, i) => {
+                const campos = h.acao === "alterou" ? Object.keys(h.depois ?? {}) : [];
+                const cancel = mexeCancelamento(h);
+                return (
+                  <tr key={h.id} className={`${i % 2 === 0 ? "bg-slate-50" : ""} align-top ${onNavigateDia && h.data ? "cursor-pointer hover:bg-slate-100" : ""}`}
+                    onClick={onNavigateDia && h.data ? () => onNavigateDia(h.data as string) : undefined}
+                    title={onNavigateDia && h.data ? "Ir para o dia da entrega" : undefined}>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{quando(h.em)}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-700">{h.por || "—"}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap font-semibold" style={{ color: corAcao[h.acao] }}>{h.acao}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-slate-800">
+                      {h.data ? `${h.data.slice(8, 10)}/${h.data.slice(5, 7)}` : ""} <b>{h.cliente || "—"}</b>
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-700" style={cancel ? { color: "#b91c1c" } : undefined}>
+                      {h.acao === "alterou"
+                        ? campos.map((c) => (
+                          <div key={c}><b>{NOME_CAMPO[c] ?? c}:</b> {valorCampo(c, h.antes?.[c])} → {valorCampo(c, h.depois?.[c])}</div>
+                        ))
+                        : Object.entries((h.acao === "criou" ? h.depois : h.antes) ?? {})
+                          .filter(([c]) => c !== "date" && c !== "cliente")
+                          .map(([c, v]) => `${NOME_CAMPO[c] ?? c}: ${valorCampo(c, v)}`).join(" · ") || "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+function semAcentoRel(t: string) { return t.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+
+type Tab = "resumo" | "divergencias" | "frete" | "motoristas" | "clientes" | "faturamento" | "historico";
 
 export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: string) => void } = {}) {
   const [open, setOpen] = useState(false);
@@ -2065,12 +2352,18 @@ export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: 
           <FileText className="w-5 h-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      {/* tela cheia (pelas bordas: com o zoom do app, 100vw/100vh ficariam menores que a tela) */}
+      <DialogContent semX className="inset-0 left-0 top-0 translate-x-0 translate-y-0 w-auto max-w-none max-h-none rounded-none sm:rounded-none flex flex-col data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0">
+        <DialogHeader className="flex flex-row items-center justify-between space-y-0">
           <DialogTitle className="flex items-center gap-2 text-slate-800">
             <FileText className="w-5 h-5 text-blue-600" />
             Relatórios
           </DialogTitle>
+          <DialogClose asChild>
+            <button type="button" className="rounded-md border border-red-600 bg-red-600 px-3.5 py-2 text-xs font-bold leading-none text-white hover:opacity-90" data-testid="relatorios-sair">
+              Sair
+            </button>
+          </DialogClose>
         </DialogHeader>
 
         {/* Tabs */}
@@ -2082,6 +2375,7 @@ export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: 
             { key: "motoristas",   label: "Viagens/Motorista", icon: <Truck className="w-3.5 h-3.5" /> },
             { key: "clientes",     label: "Clientes",           icon: <LayoutList className="w-3.5 h-3.5" /> },
             { key: "faturamento",  label: "Faturamento",        icon: <BarChart2 className="w-3.5 h-3.5" /> },
+            { key: "historico",    label: "Histórico",          icon: <History className="w-3.5 h-3.5" /> },
           ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(({ key, label, icon }) => (
             <button
               key={key}
@@ -2098,12 +2392,13 @@ export function RelatorioModal({ onNavigateDate }: { onNavigateDate?: (dateStr: 
         </div>
 
         <div className="flex-1 overflow-y-auto pt-1 min-h-0">
-          {open && tab === "resumo"       && <ResumoMensalTab />}
+          {open && tab === "resumo"       && <ResumoMensalTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "divergencias" && <DivergenciasTab />}
           {open && tab === "frete"        && <FreteMensalTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "motoristas"   && <MotoristaTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "clientes"     && <ClienteTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
           {open && tab === "faturamento"  && <FaturamentoTab />}
+          {open && tab === "historico"    && <HistoricoTab onNavigateDia={(d) => { setOpen(false); onNavigateDate?.(d); }} />}
         </div>
       </DialogContent>
     </Dialog>

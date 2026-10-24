@@ -992,6 +992,15 @@
 
 <div class="app-root">
   <script>
+  // "quem fez" nas gravações de entregas (vai para o histórico das entregas no servidor): o mesmo nome
+  // que o app do PC usa (usuário do Romaneio + nome do computador); fora do app, só o usuário
+  window.cabecalhoQuem = function(h){
+    var quem = '';
+    try { if (window.parent !== window && window.parent.__ripackQuem) quem = window.parent.__ripackQuem() || ''; } catch (e){}
+    if (!quem){ try { quem = (JSON.parse(localStorage.getItem('ripackRomaneioSessao') || 'null') || {}).nome || ''; } catch (e){} }
+    if (quem) h['X-Ripack-Quem'] = encodeURIComponent(quem);
+    return h;
+  };
   (function(){
     var TEMA_KEY = 'romaneioRipackTema';
     var ORDEM = ['light','dark','vidro'];
@@ -18853,7 +18862,7 @@ var SIGNATURES = {
         || (doCliente.length > 1 && doCliente.filter(function(e){ return !soLetras(e.placa); })[0])
         || doCliente[0];
       if (!alvo) return;
-      return fetch(base + '/api/entregas/' + alvo.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cg: 'check' }) }).then(function(r){
+      return fetch(base + '/api/entregas/' + alvo.id, { method: 'PATCH', headers: cabecalhoQuem({ 'Content-Type': 'application/json' }), body: JSON.stringify({ cg: 'check' }) }).then(function(r){
         if (r.ok) try { if (window.parent !== window) window.parent.postMessage({ ripack: 'entregas-mudaram' }, '*'); } catch (e){}
       });
     }).catch(function(){});
@@ -21558,7 +21567,7 @@ var SIGNATURES = {
         var criadas = [];
         return criar.reduce(function(p, n){
           return p.then(function(){
-            return fetch(apiBase() + '/api/entregas', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            return fetch(apiBase() + '/api/entregas', { method: 'POST', headers: cabecalhoQuem({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({ date: data, cliente: n.cliente, unidade: unidadeNova(n) }) })
               .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json().catch(function(){ return null; }); })
               .then(function(e){ if (e && e.id != null) criadas.push(e); });

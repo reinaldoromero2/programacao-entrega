@@ -679,6 +679,16 @@ export async function customFetch<T = unknown>(
     }
   }
 
+  // gravações levam "quem fez" (o app define window.__ripackQuem) — vai para o histórico das entregas
+  if (method !== "GET" && method !== "HEAD" && !headers.has("x-ripack-quem") && typeof window !== "undefined") {
+    try {
+      const quem = (window as unknown as { __ripackQuem?: () => string | null }).__ripackQuem?.();
+      if (quem) headers.set("x-ripack-quem", encodeURIComponent(quem));
+    } catch {
+      // sem nome, grava do mesmo jeito
+    }
+  }
+
   const requestInfo = { method, url: resolveUrl(input) };
 
   const isApiRequest = requestInfo.url.includes("/api/");
