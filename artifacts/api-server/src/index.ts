@@ -76,6 +76,16 @@ async function assertSchema(): Promise<void> {
     await client.query(`CREATE INDEX IF NOT EXISTS entregas_historico_data_idx ON entregas_historico (data_entrega)`);
     await client.query(`CREATE INDEX IF NOT EXISTS entregas_historico_entrega_idx ON entregas_historico (entrega_id)`);
     await client.query(`DELETE FROM entregas_historico WHERE em < NOW() - INTERVAL '6 months'`);
+    // trava dos meses fechados da Programação (ver routes/trava.ts): uma linha só
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS programacao_trava (
+        id integer PRIMARY KEY,
+        desbloqueado_dia date,
+        por text,
+        em timestamptz
+      )
+    `);
+    await client.query(`INSERT INTO programacao_trava (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
     // foto do ticket de cada agendamento (ver routes/agendamento-fotos.ts); apagada quando o dia passa
     await client.query(`
       CREATE TABLE IF NOT EXISTS agendamento_fotos (

@@ -14,6 +14,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RelatorioModal } from "@/components/relatorio-modal";
 import { OpcoesMenu } from "@/components/opcoes-menu";
+import { useTrava, nomeMes } from "@/lib/trava";
 import { ClientesAgendamentoModal } from "@/components/clientes-agendamento-modal";
 import { LembretesModal } from "@/components/lembretes-modal";
 import { useSavePdf } from "@/hooks/use-save-pdf";
@@ -88,6 +89,17 @@ export default function Home() {
 
   const dateStr = format(date, "yyyy-MM-dd");
   const dayReminders = reminders.filter((reminder) => reminder.date === dateStr);
+
+  // trava dos meses fechados: com o dia num mês fechado (e sem desbloqueio) a tabela é só consulta;
+  // tentar mexer faz o aviso vermelho piscar
+  const trava = useTrava();
+  const [piscarTrava, setPiscarTrava] = useState(false);
+  const barrarTravado = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPiscarTrava(true);
+    window.setTimeout(() => setPiscarTrava(false), 900);
+  };
 
   useEffect(() => {
     saveReminders(reminders);
@@ -665,6 +677,19 @@ export default function Home() {
         </div>
       )}
 
+      {/* Mês fechado (depois do 3º dia útil do mês seguinte): só consulta, a não ser que esteja desbloqueado */}
+      {trava.fechado(dateStr) && (
+        <div className={cn(
+          "print-hidden w-full px-6 py-2 flex items-center justify-center gap-2 text-sm font-semibold text-white",
+          trava.desbloqueado ? "bg-green-600" : "bg-red-600",
+          piscarTrava && "animate-pulse ring-4 ring-red-300"
+        )} data-testid="aviso-trava">
+          {trava.desbloqueado
+            ? <>🔓 {nomeMes(dateStr)} está fechado, mas foi desbloqueado hoje{trava.estado?.por ? ` por ${trava.estado.por}` : ""} — dá para alterar até a meia-noite.</>
+            : <>🔒 {nomeMes(dateStr)} está bloqueado — passou do 3º dia útil do mês seguinte.</>}
+        </div>
+      )}
+
       {/* Screen table */}
       <main className="print-hidden w-full max-w-[1400px] flex-1 p-6">
         <div className={cn(
@@ -686,16 +711,26 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <DeliveryTable
-              entregas={entregas || []}
-              date={dateStr}
-              backgroundImageEnabled={Boolean(bgImage)}
-              rowThemeColor={themeRows ? bgColor : null}
-              acrylicEnabled={acrylic}
-              selectedIds={selectedIds}
-              selectionMode={selectionMode}
-              onToggleSelection={toggleSelection}
-            />
+            // mês fechado e travado: a tabela fica só para consulta (clique, teclado e arrasto não fazem nada)
+            <div
+              className={cn(trava.bloqueado(dateStr) && "select-text")}
+              onPointerDownCapture={trava.bloqueado(dateStr) ? barrarTravado : undefined}
+              onClickCapture={trava.bloqueado(dateStr) ? barrarTravado : undefined}
+              onKeyDownCapture={trava.bloqueado(dateStr) ? barrarTravado : undefined}
+              onDragStartCapture={trava.bloqueado(dateStr) ? barrarTravado : undefined}
+              data-testid="tabela-programacao"
+            >
+              <DeliveryTable
+                entregas={entregas || []}
+                date={dateStr}
+                backgroundImageEnabled={Boolean(bgImage)}
+                rowThemeColor={themeRows ? bgColor : null}
+                acrylicEnabled={acrylic}
+                selectedIds={selectedIds}
+                selectionMode={selectionMode}
+                onToggleSelection={toggleSelection}
+              />
+            </div>
           )}
         </div>
       </main>

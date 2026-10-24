@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, asc, sql, inArray, and, gte, lte } from "drizzle-orm";
 import { db, entregasTable, pool } from "@workspace/db";
+import { motivoTrava, desbloqueadoAgora } from "./trava";
 import * as XLSX from "xlsx";
 import multer from "multer";
 
@@ -118,6 +119,8 @@ router.post("/entregas", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const travaCriar = await motivoTrava([parsed.data.date]);
+  if (travaCriar) { res.status(423).json({ error: travaCriar, travado: true }); return; }
 
   // Determine next sort order for the date
   const existing = await db
@@ -167,6 +170,9 @@ router.post("/entregas/reorder", async (req, res): Promise<void> => {
     res.status(400).json({ error: `IDs not found: ${invalid.join(", ")}` });
     return;
   }
+  const datasReordenar = await db.select({ date: entregasTable.date }).from(entregasTable).where(inArray(entregasTable.id, ids));
+  const travaReordenar = await motivoTrava(datasReordenar.map((r) => String(r.date)));
+  if (travaReordenar) { res.status(423).json({ error: travaReordenar, travado: true }); return; }
 
   // Single bulk UPDATE using UNNEST — avoids N round-trips to the DB
   const client = await pool.connect();
@@ -733,6 +739,11 @@ router.post("/entregas/import", upload.single("file"), async (req, res, next): P
       res.status(400).json({ error: "Nenhuma linha válida encontrada no arquivo" });
       return;
     }
+    // importar substitui tudo, inclusive os meses fechados: só com a trava desbloqueada
+    if (!(await desbloqueadoAgora())) {
+      res.status(423).json({ error: "Importar o backup substitui também os meses fechados. Peça para o Cristian ou o Reinaldo desbloquear a trava em Opções antes.", travado: true });
+      return;
+    }
 
     // Full replace — single transaction with UNNEST bulk insert
     const client = await pool.connect();
@@ -817,6 +828,8 @@ router.patch("/entregas/:id", async (req, res): Promise<void> => {
   if (parsed.data.cliente === null) parsed.data.cliente = "";
 
   const [antesDaMudanca] = await db.select().from(entregasTable).where(eq(entregasTable.id, params.data.id));
+  const travaAlterar = await motivoTrava([antesDaMudanca ? String(antesDaMudanca.date) : null, parsed.data.date ? String(parsed.data.date) : null]);
+  if (travaAlterar) { res.status(423).json({ error: travaAlterar, travado: true }); return; }
 
   const [entrega] = await db
     .update(entregasTable)
@@ -841,6 +854,10 @@ router.delete("/entregas/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  const [aApagar] = await db.select({ date: entregasTable.date }).from(entregasTable).where(eq(entregasTable.id, params.data.id));
+  const travaApagar = await motivoTrava([aApagar ? String(aApagar.date) : null]);
+  if (travaApagar) { res.status(423).json({ error: travaApagar, travado: true }); return; }
 
   const [entrega] = await db
     .delete(entregasTable)

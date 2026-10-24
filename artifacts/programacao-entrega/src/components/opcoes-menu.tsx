@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, Upload, Users, Ban, Settings, Loader2, Building2, Palette, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Download, Upload, Users, Ban, Settings, Loader2, Building2, Palette, ZoomIn, ZoomOut, RotateCcw, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,6 +24,7 @@ import { MotoristasModal } from "@/components/motoristas-modal";
 import { MotivosCancelamentoModal } from "@/components/motivos-cancelamento-modal";
 import { ClientesCadastroModal } from "@/components/clientes-cadastro-modal";
 import { BgColorModal } from "@/components/bg-color-modal";
+import { TravaModal } from "@/components/trava-modal";
 import type { BgColorSettings } from "@/hooks/use-bg-color";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "https://programa-odeentrega.onrender.com").replace(/\/+$/, "");
@@ -57,6 +58,7 @@ export function OpcoesMenu({ backgroundSettings }: { backgroundSettings: BgColor
   const [motivosOpen, setMotivosOpen] = useState(false);
   const [clientesOpen, setClientesOpen] = useState(false);
   const [bgColorOpen, setBgColorOpen] = useState(false);
+  const [travaOpen, setTravaOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
@@ -205,6 +207,14 @@ export function OpcoesMenu({ backgroundSettings }: { backgroundSettings: BgColor
             Clientes Cadastro
           </DropdownMenuItem>
 
+          <DropdownMenuItem
+            onClick={() => setTravaOpen(true)}
+            className="gap-2 cursor-pointer"
+          >
+            <Lock className="w-4 h-4" />
+            Trava dos meses fechados
+          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
@@ -222,6 +232,7 @@ export function OpcoesMenu({ backgroundSettings }: { backgroundSettings: BgColor
       <MotivosCancelamentoModal open={motivosOpen} onOpenChange={setMotivosOpen} />
       <ClientesCadastroModal open={clientesOpen} onOpenChange={setClientesOpen} />
       <BgColorModal open={bgColorOpen} onOpenChange={setBgColorOpen} settings={backgroundSettings} />
+      <TravaModal open={travaOpen} onOpenChange={setTravaOpen} />
       {/* Import confirmation */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>

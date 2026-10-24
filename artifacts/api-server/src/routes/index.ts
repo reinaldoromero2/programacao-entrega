@@ -8,6 +8,7 @@ import faturamentoRouter from "./faturamento";
 import lembretesRouter from "./lembretes";
 import romaneioRouter from "./romaneio";
 import agendamentoFotosRouter from "./agendamento-fotos";
+import travaRouter from "./trava";
 import { db, entregasTable, motoristasTable, motivosCancelamentoTable, clientesCadastroTable, faturamentoDiarioTable, faturamentoMetaTable, lembretesTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -21,6 +22,7 @@ router.use(faturamentoRouter);
 router.use(lembretesRouter);
 router.use(romaneioRouter);
 router.use(agendamentoFotosRouter);
+router.use(travaRouter);
 
 router.get("/sync/snapshot", async (_req, res, next): Promise<void> => {
 	try {
